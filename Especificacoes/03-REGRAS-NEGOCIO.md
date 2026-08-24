@@ -22,7 +22,7 @@ As exclusões técnicas obrigatórias incluem, no mínimo:
 - `node_modules`;
 - `.git`;
 - `_source_versions`;
-- o diretório temporário do Meminify em `Dados\Temporarios\`.
+- o diretório temporário do SelfMinifier em `Dados\Temporarios\`.
 
 Essas exclusões não podem ser desativadas pela configuração do usuário.
 

@@ -1,4 +1,4 @@
-# Manual Técnico — Meminify
+# Manual Técnico — SelfMinifier
 
 ## Arquitetura implementada
 
@@ -63,6 +63,6 @@ As fontes autoritativas ficam em `Documentacao\Fonte`. Execute `npm.cmd run buil
 
 ## Empacotamento local
 
-`publicar.cmd` delega para `scripts\release\publicar.ps1`. O pipeline valida ambiente, versão `package.json`, package/lock, dependências, UTF-8, testes e documentação antes de montar uma allowlist em `dist\Meminify-<version>`. Em seguida valida o conteúdo, cria um ZIP com uma única raiz versionada e grava o SHA-256 correspondente.
+`publicar.cmd` delega para `scripts\release\publicar.ps1`. O pipeline valida ambiente, versão `package.json`, package/lock, dependências, UTF-8, testes e documentação antes de montar uma allowlist em `dist\SelfMinifier-<version>`. Em seguida valida o conteúdo, cria um ZIP com uma única raiz versionada e grava o SHA-256 correspondente.
 
 O pacote inclui launcher, manifestos npm, `src`, `resources`, modelo de configuração, HTML offline e `node_modules` de runtime gerado de forma limpa. Exclui testes, especificações, `_ias`, scripts de desenvolvimento, dados locais, configuração pessoal, backups, `node_modules` do checkout e `dist` anterior. O `Executar.cmd` empacotado é validado em CRLF e respeita a Execution Policy, bloqueando sob `Restricted` sem bypass. O empacotamento não publica GitHub Release.

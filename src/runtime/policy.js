@@ -46,7 +46,7 @@ export function validateNodeRuntimeVersion(version, policy) {
   const parsed = parseNodeVersion(version);
   const validatedPolicy = validateRuntimePolicy(policy);
   if (parsed.major < validatedPolicy.minimumMajor || !validatedPolicy.supportedMajorLines.includes(parsed.major)) {
-    return { valid: false, code: 'NODE_MAJOR_NOT_SUPPORTED', version: parsed, message: `A linha Node.js ${parsed.major} não é suportada pelo Meminify. Versões suportadas: ${validatedPolicy.supportedMajorLines.map((major) => `Node.js ${major}.x`).join(', ')}.` };
+    return { valid: false, code: 'NODE_MAJOR_NOT_SUPPORTED', version: parsed, message: `A linha Node.js ${parsed.major} não é suportada pelo SelfMinifier. Versões suportadas: ${validatedPolicy.supportedMajorLines.map((major) => `Node.js ${major}.x`).join(', ')}.` };
   }
   const preferred = parsed.major === validatedPolicy.preferredMajor;
   const message = preferred

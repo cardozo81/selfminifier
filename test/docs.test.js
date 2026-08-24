@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { buildDocumentation } from '../scripts/docs/build-docs.mjs';
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-docs-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-docs-'));
   for (const manual of ['Manual-Usuario', 'Manual-Tecnico']) {
     await mkdir(join(root, 'Documentacao', 'Fonte', manual), { recursive: true });
     await writeFile(join(root, 'Documentacao', 'Fonte', manual, 'README.md'), `# ${manual}\n\nAção, acentuação e ç sobrevivem.\n\n- Item seguro\n`, 'utf8');

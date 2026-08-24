@@ -9,6 +9,8 @@
 - A validação completa do sistema é apropriada antes de release ou publicação e após mudanças transversais ou de alto risco.
 - A matriz futura é cumulativa; ela não determina que todos os testes sejam criados antecipadamente.
 - Validação de UTF-8 e mojibake é obrigatória quando texto destinado a pessoas ou codificação de arquivos for afetado.
+- A execução da suíte completa não é obrigatória a cada alteração de código; testes direcionados ao comportamento afetado costumam ser a evidência adequada.
+- Validação mais ampla é apropriada em marcos relevantes, releases, mudanças críticas ou quando a evidência direcionada for insuficiente.
 
 ## Matriz cumulativa
 

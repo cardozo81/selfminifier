@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import { scan } from '../src/scanner/index.js';
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-scanner-'));
-  const temporary = join(root, 'MeminifyTemp');
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-scanner-'));
+  const temporary = join(root, 'SelfMinifierTemp');
   await mkdir(join(root, 'sub'), { recursive: true });
   await mkdir(join(root, 'node_modules'), { recursive: true });
   await mkdir(join(root, '.git'), { recursive: true });

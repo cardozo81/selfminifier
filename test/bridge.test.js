@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { runBridgeRequest } from '../src/app/bridge.mjs';
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-bridge-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-bridge-'));
   const source = join(root, 'entrada.js');
   await writeFile(source, 'const valor = 1;\n', 'utf8');
   await mkdir(join(root, 'Configuracao'), { recursive: true });
@@ -29,7 +29,7 @@ test('bridge retorna análise estruturada e risco determinístico', async () => 
 });
 
 test('bridge propaga erro de configuração sem fallback', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-bridge-invalid-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-bridge-invalid-'));
   try {
     await mkdir(join(root, 'Configuracao'), { recursive: true });
     await writeFile(join(root, 'Configuracao', 'configuracao.ini'), '[Configuracao]\nMotor=nao-homologado\nPerfil=Padrao\n', 'utf8');

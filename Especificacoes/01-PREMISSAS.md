@@ -2,7 +2,7 @@
 
 ## Produto
 
-O Meminify é uma ferramenta para Windows destinada à minificação controlada e segura de arquivos JavaScript e CSS. A direção arquitetural aprovada é:
+O SelfMinifier é uma ferramenta para Windows destinada à minificação controlada e segura de arquivos JavaScript e CSS. A direção arquitetural aprovada é:
 
 `interface interativa em PowerShell` → `aplicação Node.js` → `núcleo` → `abstração neutra de minificador` → `adaptadores homologados`
 
@@ -45,6 +45,37 @@ As condutas proibidas e as proteções específicas estão em `10-SEGURANCA-E-IN
 - A codificação em PowerShell e Windows deve receber validação específica.
 - Scripts PowerShell executados pelo Windows PowerShell usam UTF-8 com BOM; launchers `.cmd` usam UTF-8 sem BOM e finais de linha CRLF.
 - A futura documentação HTML deve conter `<meta charset="utf-8">` e `<html lang="pt-BR">`.
+- Remover acentos para contornar um problema de encoding não é aceitável.
+- Substituir texto Unicode correto por ASCII não é uma solução aceitável.
+- Usar escapes Unicode desnecessários em texto destinado a pessoas também não é aceitável.
+- Problemas de encoding devem ser corrigidos na causa (arquivo, leitura ou escrita), nunca mascarados.
+
+Exemplos de texto correto:
+
+```text
+Configuração
+Minificação
+Não foi possível
+Usuário
+```
+
+Mojibake proibido (representado por pontos de código para não reintroduzir corrupção):
+
+```text
+Configura\u00C3\u00A7\u00C3\u00A3o
+Minifica\u00C3\u00A7\u00C3\u00A3o
+N\u00C3\u00A3o
+Usu\u00C3\u00A1rio
+```
+
+Não é aceitável normalizar o texto correto para:
+
+```text
+Configuracao
+Minificacao
+Nao foi possivel
+Usuario
+```
 
 ## Desenvolvimento
 

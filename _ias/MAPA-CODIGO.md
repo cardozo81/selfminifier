@@ -6,7 +6,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `package.json` | Metadados, modo ES module, scripts e dependências declaradas | `ini@7.0.0`, `esbuild@0.28.2`, `micromatch@4.0.8` |
+| `package.json` | Metadados, modo ES module, scripts e dependências declaradas | `ini@6.0.0`, `esbuild@0.28.2`, `micromatch@4.0.8` |
 | `package-lock.json` | Lockfile reproduzível das dependências | npm |
 | `Configuracao/configuracao.ini.example` | Exemplo versionado da estrutura de configuração aprovada | Especificação 06 |
 | `resources/minifier-registry.json` | Registro estático dos motores homologados da versão 1 | Especificação 07 |
@@ -15,12 +15,15 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `src/domain/index.js` | Constantes de perfis, modos, tipos e default aprovado | Nenhuma |
+| `src/domain/index.js` | Constantes de perfis, modos, tipos, schema V1/V2 e defaults aprovados | Nenhuma |
 | `src/configuration/errors.js` | Erro estruturado de configuração e códigos diagnósticos | Nenhuma |
-| `src/configuration/utf8.js` | Leitura de arquivo com decodificação UTF-8 fatal | Node.js `fs/promises`, `util` |
-| `src/configuration/parse.js` | Pré-detecção de duplicatas, parsing estrutural, listas numeradas e normalização INI | `ini@7.0.0` |
-| `src/configuration/validate.js` | Validação de domínio e conjunto de motores homologados injetado | `src/domain/index.js` |
-| `src/configuration/index.js` | API de carregamento, parsing e configuração efetiva temporária imutável | Módulos de configuração |
+| `src/configuration/utf8.js` | Leitura UTF-8 fatal e escrita atômica UTF-8 por temporário + rename | Node.js `fs/promises`, `util` |
+| `src/configuration/parse.js` | Pré-detecção de duplicatas, parsing estrutural, listas numeradas e normalização INI V1 | `ini@6.0.0` |
+| `src/configuration/validate.js` | Validação de domínio V1 e conjunto de motores homologados injetado | `src/domain/index.js` |
+| `src/configuration/v2.js` | Schema V2: parsing estrito, validação de raiz/tipos/exclusões, serialização e persistência | `src/domain/index.js`, `parse.js`, `utf8.js` |
+| `src/configuration/schema.js` | Identificação determinística de schema (legado/V2/versão não suportada/misto) | `src/domain/index.js`, `parse.js` |
+| `src/configuration/legacy.js` | Avaliação conservadora de configuração legada para futura migração | `src/domain/index.js` |
+| `src/configuration/index.js` | API de carregamento, parsing, configuração efetiva temporária e reexportação V2 | Módulos de configuração |
 
 ## Minificação
 
@@ -131,6 +134,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `test/version.test.js` | Testes de versão autoritativa e exposição na ponte/UI | `node:test`, runtime e bridge |
 | `scripts/quality/check-encoding.mjs` | Validação estrita de UTF-8 e sequências conhecidas de mojibake, ignorando dependências e saídas | Node.js built-ins |
 | `test/configuration.test.js` | Testes focados de domínio, INI, validação e configuração efetiva | `node:test`, módulos de configuração |
+| `test/configuration-v2.test.js` | Testes focados do schema V2, identificação, avaliação de legado e round-trip | `node:test`, módulos de configuração |
 | `test/encoding.test.js` | Testes focados de texto UTF-8 e detecção de mojibake | `node:test`, script de encoding |
 | `test/minifiers.test.js` | Testes focados de registry, adapter, perfis, JS, CSS e resultados neutros | `node:test`, adapter esbuild |
 | `test/scanner.test.js` | Testes focados de recursão, glob, exclusões, links, readonly e deduplicação | `node:test`, módulos do scanner |

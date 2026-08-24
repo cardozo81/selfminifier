@@ -50,7 +50,7 @@ test('aceita INI válido com múltiplas origens e texto pt-BR', () => {
 });
 
 test('lê arquivo INI em UTF-8 com decodificação estrita', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'meminify-config-'));
+  const directory = await mkdtemp(join(tmpdir(), 'selfminifier-config-'));
   const filePath = join(directory, 'configuracao.ini');
   try {
     await writeFile(filePath, validIni, 'utf8');

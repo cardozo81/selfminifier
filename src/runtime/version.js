@@ -18,5 +18,5 @@ export async function loadApplicationMetadata(root = defaultRoot) {
     error.code = 'INVALID_APPLICATION_VERSION';
     throw error;
   }
-  return Object.freeze({ name: metadata.name ?? 'meminify', version: metadata.version });
+  return Object.freeze({ name: metadata.name ?? 'selfminifier', version: metadata.version });
 }

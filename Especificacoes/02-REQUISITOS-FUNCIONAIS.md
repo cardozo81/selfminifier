@@ -2,7 +2,7 @@
 
 ## Capacidades do produto
 
-O Meminify deve permitir ao usuário:
+O SelfMinifier deve permitir ao usuário:
 
 - analisar, antes de qualquer alteração, o escopo efetivo de arquivos;
 - minificar JavaScript e CSS por meio de um motor homologado;

@@ -8,7 +8,7 @@ import { readTechnicalState } from '../src/integrity/state.js';
 import { createBackupRestorePlan, createLastMinRestorePlan, executeRestorePlan, listKnownBackups } from '../src/restore/index.js';
 
 async function executionFixture(mode, names = ['entrada.js'], executionId = 'exec-restore') {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-restore-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-restore-'));
   const sourceDirectory = join(root, 'fontes');
   await mkdir(join(root, 'Configuracao'), { recursive: true });
   await mkdir(sourceDirectory, { recursive: true });
@@ -83,7 +83,7 @@ test('seleção manual da pasta de backup funciona pelo bridge', async () => {
 });
 
 test('.min remove somente saída criada; saída preexistente permanece', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-restore-min-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-restore-min-'));
   try {
     const sourceDirectory = join(root, 'fontes');
     await mkdir(join(root, 'Configuracao'), { recursive: true });

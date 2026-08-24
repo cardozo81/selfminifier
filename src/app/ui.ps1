@@ -1,4 +1,4 @@
-﻿function Invoke-MeminifyBridge {
+﻿function Invoke-SelfMinifierBridge {
     param([hashtable]$Request)
     $json = $Request | ConvertTo-Json -Depth 30 -Compress
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -64,7 +64,7 @@ function Show-Analysis {
 function Invoke-Analyze {
     param([hashtable]$Adjustments)
     $request = @{ command = 'analyze'; adjustments = $Adjustments }
-    $response = Invoke-MeminifyBridge $request
+    $response = Invoke-SelfMinifierBridge $request
     if (-not $response.ok) {
         $message = if ($response.diagnostic -and $response.diagnostic.message) { $response.diagnostic.message } elseif ($response.message) { $response.message } elseif ($response.code -eq 'CONFIGURATION_MISSING') { "Configuração persistente ausente: $($response.configurationPath). Crie-a explicitamente pelo menu Configurações." } elseif ($response.code) { "A análise foi bloqueada ($($response.code))." } else { 'A análise foi bloqueada por uma resposta sem diagnóstico.' }
         Show-Mensagem "Erro: $message" Red
@@ -76,7 +76,7 @@ function Invoke-Analyze {
 
 function Show-Artefatos {
     param([ValidateSet('reports', 'logs')][string]$Kind)
-    $response = Invoke-MeminifyBridge @{ command = 'list-artifacts'; kind = $Kind }
+    $response = Invoke-SelfMinifierBridge @{ command = 'list-artifacts'; kind = $Kind }
     if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; return }
     if ($response.names.Count -eq 0) { Show-Mensagem $(if ($Kind -eq 'reports') { 'Nenhum relatório operacional disponível.' } else { 'Nenhum log técnico disponível.' }) Yellow; return }
     Show-Mensagem $(if ($Kind -eq 'reports') { 'Relatórios operacionais:' } else { 'Logs técnicos:' }) Cyan
@@ -85,7 +85,7 @@ function Show-Artefatos {
     if (-not $selected) { Show-Mensagem 'Visualização cancelada.' Yellow; return }
     $number = 0
     if (-not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $response.names.Count) { Show-Mensagem 'Seleção inválida; nenhum arquivo foi alterado.' Yellow; return }
-    $content = Invoke-MeminifyBridge @{ command = 'read-artifact'; kind = $Kind; name = $response.names[$number - 1] }
+    $content = Invoke-SelfMinifierBridge @{ command = 'read-artifact'; kind = $Kind; name = $response.names[$number - 1] }
     if ($content.ok) { Show-Mensagem "`n$($content.content)" White } else { Show-Mensagem "Erro: $($content.diagnostic.message)" Red }
 }
 
@@ -93,7 +93,7 @@ function Invoke-RestoreFlow {
     param([ValidateSet('backup', 'last-min')][string]$Kind, [string]$BackupDirectory = '')
     $request = @{ command = 'plan-restore'; kind = $Kind }
     if ($BackupDirectory) { $request.backupDirectory = $BackupDirectory }
-    $response = Invoke-MeminifyBridge $request
+    $response = Invoke-SelfMinifierBridge $request
     if (-not $response.ok) { Show-Mensagem "Restauração bloqueada: $($response.diagnostic.message)" Red; return }
     Show-Mensagem "`nPlano de restauração: $($response.plan.sourceExecutionId)" Cyan
     foreach ($item in $response.plan.items) { Show-Mensagem "- $($item.classification): $($item.destinationPath)" $(if ($item.requiresChangedConfirmation) { 'Yellow' } else { 'White' }) }
@@ -105,7 +105,7 @@ function Invoke-RestoreFlow {
     }
     $execute = @{ command = 'execute-restore'; kind = $Kind; confirmed = $true; confirmChanged = $confirmChanged }
     if ($BackupDirectory) { $execute.backupDirectory = $BackupDirectory }
-    $result = Invoke-MeminifyBridge $execute
+    $result = Invoke-SelfMinifierBridge $execute
     if (-not $result.ok) { Show-Mensagem "Falha de restauração: $($result.diagnostic.message)" Red; return }
     foreach ($item in $result.result.items) { Show-Mensagem "- $($item.status): $($item.path)" $(if ($item.status -in @('restored', 'deleted-min', 'already-absent')) { 'Green' } else { 'Yellow' }) }
     Show-Mensagem "Restauração: $($result.result.status)" $(if ($result.result.status -eq 'completed') { 'Green' } else { 'Yellow' })
@@ -119,7 +119,7 @@ function Show-RestoreMenu {
     $choice = (Read-Host 'Escolha').Trim()
     switch ($choice) {
         '1' {
-            $response = Invoke-MeminifyBridge @{ command = 'list-backups' }
+            $response = Invoke-SelfMinifierBridge @{ command = 'list-backups' }
             if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; return }
             $valid = @($response.backups | Where-Object { $_.status -eq 'valid' })
             if ($valid.Count -eq 0) { Show-Mensagem 'Nenhum backup válido conhecido.' Yellow; return }
@@ -154,7 +154,7 @@ function Get-BridgeErrorMessage {
 }
 
 function Invoke-TemporaryAdjustment {
-    $summary = Invoke-MeminifyBridge @{ command = 'summary' }
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; return }
     while ($true) {
         Write-Host "`nModo de saída somente para esta execução:"
@@ -175,15 +175,15 @@ function Invoke-TemporaryAdjustment {
 }
 
 function Invoke-PersistentConfiguration {
-    $summary = Invoke-MeminifyBridge @{ command = 'summary' }
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) {
         if ($summary.code -eq 'CONFIGURATION_MISSING') {
             Show-Mensagem "Configuração ausente: $($summary.configurationPath)" Yellow
             if (Confirmar-Acao 'Criar a configuração a partir do modelo, sem sobrescrever arquivo existente') {
-                $created = Invoke-MeminifyBridge @{ command = 'create-configuration'; confirmed = $true }
+                $created = Invoke-SelfMinifierBridge @{ command = 'create-configuration'; confirmed = $true }
                 if (-not $created.ok) { Show-Mensagem (Get-BridgeErrorMessage $created 'A configuração não foi criada.') Red; return }
                 Show-Mensagem "Configuração criada: $($created.configurationPath)" Green
-                $summary = Invoke-MeminifyBridge @{ command = 'summary' }
+                $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
             } else { return }
         }
         if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; return }
@@ -205,20 +205,20 @@ function Invoke-PersistentConfiguration {
         if ($newMode -eq $current) { Show-Mensagem 'O modo escolhido já está configurado; nenhuma alteração foi necessária.' Green; return }
         Show-Mensagem "`nNova configuração: $(Get-ModoSaidaDescricao $newMode)" Cyan
         if (-not (Confirmar-Acao 'Salvar esta configuração para as próximas execuções')) { Show-Mensagem 'Alteração cancelada; a configuração não foi modificada.' Yellow; return }
-        $saved = Invoke-MeminifyBridge @{ command = 'update-output-mode'; outputMode = $newMode; confirmed = $true }
+        $saved = Invoke-SelfMinifierBridge @{ command = 'update-output-mode'; outputMode = $newMode; confirmed = $true }
         if (-not $saved.ok) { Show-Mensagem (Get-BridgeErrorMessage $saved 'A configuração não foi salva.') Red; return }
         Show-Mensagem "Configuração persistente salva: $(Get-ModoSaidaDescricao $newMode)" Green
         return
     }
 }
 
-function Start-MeminifyUi {
-    $identity = Invoke-MeminifyBridge @{ command = 'version' }
-    if (-not $identity.ok) { Show-Mensagem "Não foi possível obter a versão do Meminify. $($identity.diagnostic.message)" Red; return }
-    Write-Host "`nMEMINIFY v$($identity.version)" -ForegroundColor Cyan
+function Start-SelfMinifierUi {
+    $identity = Invoke-SelfMinifierBridge @{ command = 'version' }
+    if (-not $identity.ok) { Show-Mensagem "Não foi possível obter a versão do SelfMinifier. $($identity.diagnostic.message)" Red; return }
+    Write-Host "`nSELFMINIFIER v$($identity.version)" -ForegroundColor Cyan
     $script:TemporaryAdjustments = @{}
     while ($true) {
-        Write-Host "`n=== Meminify ===" -ForegroundColor Cyan
+        Write-Host "`n=== SelfMinifier ===" -ForegroundColor Cyan
         Write-Host '1. Analisar arquivos'
         Write-Host '2. Minificar'
         Write-Host '3. Ajustar somente esta execução'
@@ -239,7 +239,7 @@ function Start-MeminifyUi {
                     $authorizeConflicts = $false
                     if ($analysis.conflicts.Count -gt 0) { $overwrite = Confirmar-Acao 'Autorizar globalmente a sobrescrita de todos os destinos .min listados'; $authorizeConflicts = $overwrite }
                     if (-not $overwrite) { Show-Mensagem 'Execução cancelada; nenhum arquivo foi alterado.' Yellow; break }
-                    $response = Invoke-MeminifyBridge @{ command = 'execute'; adjustments = $script:TemporaryAdjustments; confirmed = $true; authorizeOverwriteConflicts = $authorizeConflicts; confirmationFingerprint = $analysis.confirmationFingerprint }
+                    $response = Invoke-SelfMinifierBridge @{ command = 'execute'; adjustments = $script:TemporaryAdjustments; confirmed = $true; authorizeOverwriteConflicts = $authorizeConflicts; confirmationFingerprint = $analysis.confirmationFingerprint }
                     if ($response.ok -and $response.result.status -eq 'completed') { Show-Mensagem 'Minificação concluída.' Green } elseif ($response.ok -and $response.result.status -eq 'cancelled') { Show-Mensagem 'Execução cancelada.' Yellow } else { Show-Mensagem "Falha: $($response.diagnostic.message)" Red }
                 }
                 '3' { Invoke-TemporaryAdjustment }

@@ -14,6 +14,8 @@
 - Mensagens de commit e comentários destinados a pessoas devem ser escritos em pt-BR, UTF-8, com acentos e `ç` corretos.
 - Force-push nunca deve ser usado, salvo pedido explícito em uma tarefa futura.
 - A estrutura do repositório deve crescer incrementalmente, sem placeholders vazios para arquitetura futura.
+- Não reescanear repetidamente ou verificar arquivos não relacionados do repositório.
+- Usar o contexto persistente do projeto (`_ias`, `AGENTS.md`, especificações) em vez de reler todo o repositório.
 
 Verificações Git devem ser feitas quando forem relevantes a commit/push, release, operação destrutiva ou estado inesperado. Não se deve repetir sincronização remota sem motivo concreto.
 

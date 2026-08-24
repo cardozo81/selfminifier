@@ -6,6 +6,9 @@ import { ConfigurationError } from './errors.js';
 export { ConfigurationError } from './errors.js';
 export { parseWithIniLibrary } from './parse.js';
 export { validateConfiguration } from './validate.js';
+export { parseV2Configuration, parseV2ConfigurationText, loadV2Configuration, serializeV2Configuration, writeV2Configuration, validateV2Configuration } from './v2.js';
+export { identifyConfigurationSchema } from './schema.js';
+export { assessLegacyConfiguration } from './legacy.js';
 
 export function parseConfiguration(text, options = {}) {
   const parsed = parseConfigurationText(text);

@@ -28,12 +28,12 @@ Artefatos gerados ficam em `dist\`.
 
 ## Layout aprovado do pacote local
 
-`package.json` é a autoridade única de versão. O pacote usa a raiz versionada `dist\Meminify-<version>\` e gera `dist\Meminify-<version>.zip` e `dist\Meminify-<version>.zip.sha256`.
+`package.json` é a autoridade única de versão. O pacote usa a raiz versionada `dist\SelfMinifier-<version>\` e gera `dist\SelfMinifier-<version>.zip` e `dist\SelfMinifier-<version>.zip.sha256`.
 
 A montagem usa allowlist e preserva os caminhos relativos do runtime:
 
 ```text
-Meminify-<version>\
+SelfMinifier-<version>\
   Executar.cmd
   Executar.ps1
   package.json
@@ -47,7 +47,7 @@ Meminify-<version>\
   Documentacao\Gerada\Manual-Tecnico\index.html
 ```
 
-`src\` contém somente módulos JavaScript, MJS e PowerShell; `resources\` contém somente JSON requerido pelo runtime. `node_modules\` é gerado exclusivamente para a distribuição por instalação limpa e reproduzível em staging descartável, usando `package.json`, `package-lock.json` e somente dependências de produção. O checkout de desenvolvimento nunca é a fonte dessa árvore. O ZIP contém exatamente uma raiz `Meminify-<version>/`.
+`src\` contém somente módulos JavaScript, MJS e PowerShell; `resources\` contém somente JSON requerido pelo runtime. `node_modules\` é gerado exclusivamente para a distribuição por instalação limpa e reproduzível em staging descartável, usando `package.json`, `package-lock.json` e somente dependências de produção. O checkout de desenvolvimento nunca é a fonte dessa árvore. O ZIP contém exatamente uma raiz `SelfMinifier-<version>/`.
 
 `Executar.cmd` é a entrada recomendada para uso normal por duplo clique e delega para `Executar.ps1` relativo ao próprio pacote, sem alterar a política de execução. `LEIA-ME.txt` é a orientação prática destinada ao usuário; o README de desenvolvimento não integra o pacote.
 
@@ -57,7 +57,7 @@ O checksum usa SHA-256 em texto convencional: hash hexadecimal minúsculo, dois 
 
 ## Identidade de versão
 
-`package.json` é a fonte única da versão SemVer. A identidade validada mantém a invariância `package.json.version = Meminify-<version> = Meminify-<version>.zip = Meminify-<version>.zip.sha256 = futura tag v<version> = futura versão do GitHub Release`. A futura publicação deve reutilizar exatamente o ZIP e o checksum validados localmente. Tags publicadas são imutáveis; conteúdo alterado exige nova versão. Esta tarefa não cria tag nem release.
+`package.json` é a fonte única da versão SemVer. A identidade validada mantém a invariância `package.json.version = SelfMinifier-<version> = SelfMinifier-<version>.zip = SelfMinifier-<version>.zip.sha256 = futura tag v<version> = futura versão do GitHub Release`. A futura publicação deve reutilizar exatamente o ZIP e o checksum validados localmente. Tags publicadas são imutáveis; conteúdo alterado exige nova versão. Esta tarefa não cria tag nem release.
 
 ## Exclusões da distribuição
 

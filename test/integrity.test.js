@@ -17,7 +17,7 @@ import {
 import { scan } from '../src/scanner/index.js';
 
 async function temporaryTestDirectory() {
-  return mkdtemp(join(tmpdir(), 'meminify-integrity-'));
+  return mkdtemp(join(tmpdir(), 'selfminifier-integrity-'));
 }
 
 test('SHA-256 conhecido é hexadecimal minúsculo e arquivos reais falham explicitamente', async () => {

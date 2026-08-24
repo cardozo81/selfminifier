@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const manuals = Object.freeze([
-  { name: 'Manual-Usuario', title: 'Manual do Usuário — Meminify' },
-  { name: 'Manual-Tecnico', title: 'Manual Técnico — Meminify' },
+  { name: 'Manual-Usuario', title: 'Manual do Usuário — SelfMinifier' },
+  { name: 'Manual-Tecnico', title: 'Manual Técnico — SelfMinifier' },
 ]);
 
 function escapeHtml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'); }

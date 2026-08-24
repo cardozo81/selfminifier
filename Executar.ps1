@@ -55,4 +55,4 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $script:NodeExecutable = $node
 $script:BridgePath = Join-Path $projectRoot 'src\app\bridge.mjs'
 . (Join-Path $projectRoot 'src\app\ui.ps1')
-Start-MeminifyUi
+Start-SelfMinifierUi

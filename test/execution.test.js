@@ -22,7 +22,7 @@ async function exists(filePath) {
 }
 
 async function fixture(names = ['app.js']) {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-execution-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-execution-'));
   const sourceRoot = join(root, 'projeto');
   await mkdir(sourceRoot);
   const files = [];

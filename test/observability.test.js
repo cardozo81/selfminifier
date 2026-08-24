@@ -16,7 +16,7 @@ function plan(root, ignored = []) {
 }
 
 test('cria log técnico UTF-8, relatório TXT e CSV escapado', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-observability-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-observability-'));
   try {
     const output = join(root, 'saida.min.js');
     await mkdir(join(root, 'Dados'), { recursive: true });
@@ -38,7 +38,7 @@ test('cria log técnico UTF-8, relatório TXT e CSV escapado', async () => {
 });
 
 test('execução bem-sucedida gera relatório integrado sem alterar dados do plano', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-report-execution-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-report-execution-'));
   try {
     const source = join(root, 'entrada.js');
     await mkdir(join(root, 'Configuracao'), { recursive: true });
@@ -67,7 +67,7 @@ test('execução bem-sucedida gera relatório integrado sem alterar dados do pla
 });
 
 test('relatório representa falha, rollback e recovery-required sem declarar sucesso', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-report-status-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-report-status-'));
   try {
     for (const status of ['falha/rollback', 'recovery-required']) {
       const result = await writeOperationalReports({ projectRoot: root, plan: plan(root), resultStatus: status });
@@ -79,7 +79,7 @@ test('relatório representa falha, rollback e recovery-required sem declarar suc
 });
 
 test('listagem e leitura são read-only e diretórios ausentes são criados apenas na escrita', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-report-readonly-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-report-readonly-'));
   try {
     assert.deepEqual(await listArtifacts(root, 'reports'), []);
     assert.deepEqual(await listArtifacts(root, 'logs'), []);

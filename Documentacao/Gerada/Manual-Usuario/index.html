@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Manual do Usuário — Meminify</title>
+<title>Manual do Usuário — SelfMinifier</title>
 <style>
 :root { color-scheme: light; font-family: "Segoe UI", Arial, sans-serif; line-height: 1.55; color: #17212b; background: #f6f8fa; }
 body { max-width: 920px; margin: 0 auto; padding: 2rem; background: #fff; }
@@ -18,9 +18,9 @@ a { color: #005a9c; }
 </style>
 </head>
 <body>
-<h1>Manual do Usuário — Meminify</h1>
+<h1>Manual do Usuário — SelfMinifier</h1>
 <h2>Finalidade e segurança</h2>
-<p>O Meminify minifica arquivos JavaScript e CSS no Windows. Toda alteração exige confirmação explícita, validação prévia e prova de integridade por SHA-256. Em dúvida, erro de configuração, origem inacessível ou estado técnico não comprovado, a operação é bloqueada.</p>
+<p>O SelfMinifier minifica arquivos JavaScript e CSS no Windows. Toda alteração exige confirmação explícita, validação prévia e prova de integridade por SHA-256. Em dúvida, erro de configuração, origem inacessível ou estado técnico não comprovado, a operação é bloqueada.</p>
 <p>Não existe risco zero. O risco do perfil é exibido separadamente do risco estimado da execução, que sempre é calculado antes de uma execução válida. Se algum dado necessário não puder ser determinado, a execução é bloqueada sem autorização substituta.</p>
 <h2>Requisitos e primeira execução</h2>
 <ul>
@@ -30,7 +30,7 @@ a { color: #005a9c; }
 </ul>
 <p>Para o uso normal, execute <code>Executar.cmd</code> com duplo clique na raiz. Ele apenas inicia <code>Executar.ps1</code> relativo ao pacote, sem alterar a política de execução do PowerShell. <code>Executar.ps1</code> é a alternativa técnica/direta. O bootstrap valida Node, npm, <code>package.json</code>, <code>package-lock.json</code> e dependências. Se Node estiver ausente ou não homologado, pode oferecer a instalação exata autorizada via winget. Recusar a instalação não altera o sistema.</p>
 <p>As dependências de runtime já acompanham a distribuição. Com Node homologado instalado, o início normal funciona offline e não executa <code>npm ci</code> nem <code>npm install</code>. Dependência ausente ou divergente bloqueia a abertura; reextraia uma distribuição íntegra.</p>
-<p>A política do Windows PowerShell precisa permitir scripts locais. O Meminify não usa Bypass, não reduz e não altera permanentemente essa política. Sob <code>Restricted</code>, <code>Executar.cmd</code> mostra a restrição, aponta para este manual e termina com erro. Qualquer mudança apropriada de política deve ser decidida e executada explicitamente pelo usuário ou administrador conforme as regras da máquina ou organização.</p>
+<p>A política do Windows PowerShell precisa permitir scripts locais. O SelfMinifier não usa Bypass, não reduz e não altera permanentemente essa política. Sob <code>Restricted</code>, <code>Executar.cmd</code> mostra a restrição, aponta para este manual e termina com erro. Qualquer mudança apropriada de política deve ser decidida e executada explicitamente pelo usuário ou administrador conforme as regras da máquina ou organização.</p>
 <p>Após o bootstrap, o menu oferece análise, minificação, ajuste temporário, configurações, backups/restauração, relatórios e logs técnicos.</p>
 <h2>Configuração</h2>
 <p>A configuração persistente é <code>Configuracao\configuracao.ini</code>; o modelo versionado é <code>Configuracao\configuracao.ini.example</code>. Se o arquivo real não existir, o menu informa o caminho e só o cria a partir do modelo após confirmação. Ele nunca sobrescreve uma configuração existente.</p>
@@ -76,7 +76,7 @@ Incluir01=*.js</code></pre>
 <p>No modo <code>.min</code>, a opção restaura somente a última execução concluída removendo exatamente saídas que foram criadas nela. Saídas <code>.min</code> preexistentes e sobrescritas não são removidas nem restauradas. Uma saída já ausente é apenas reportada; uma saída alterada após a criação exige confirmação adicional antes da exclusão.</p>
 <p>Uma restauração interrompida ou ambígua entra em <code>recovery-required</code>. Nesse estado, não force nova minificação ou restauração: preserve os arquivos, consulte os logs e corrija o estado somente por um procedimento comprovado.</p>
 <h2>Relatórios e logs</h2>
-<p>Após análise, execução ou restauração, o Meminify pode gerar relatórios operacionais UTF-8 em <code>Dados\Relatorios</code> (TXT e CSV) e logs técnicos UTF-8 em <code>Dados\Logs</code>. O menu permite listar e visualizar esses arquivos em modo somente leitura.</p>
+<p>Após análise, execução ou restauração, o SelfMinifier pode gerar relatórios operacionais UTF-8 em <code>Dados\Relatorios</code> (TXT e CSV) e logs técnicos UTF-8 em <code>Dados\Logs</code>. O menu permite listar e visualizar esses arquivos em modo somente leitura.</p>
 <p>Relatórios mostram totais, itens ignorados com motivo, resultados de restauração e falhas. Logs técnicos podem conter caminhos, diagnósticos e stack traces; eles não são exibidos como mensagem normal do menu.</p>
 <h2>Problemas comuns</h2>
 <ul>
@@ -84,7 +84,7 @@ Incluir01=*.js</code></pre>
 <li>**Origem inacessível, link ou arquivo somente leitura:** o scanner informa o motivo e bloqueia quando o escopo não pode ser comprovado.</li>
 <li>**Conflito <code>.min</code>:** revise a lista e confirme globalmente somente se aceitar sobrescrever todos os destinos listados.</li>
 <li>**Node não homologado:** instale uma linha LTS homologada; não use versões Current, EOL ou globais.</li>
-<li>**PowerShell bloqueia scripts locais/Restricted:** o Meminify não contorna a política. Consulte o administrador ou a política da organização; qualquer alteração deve ser explícita e apropriada ao ambiente.</li>
+<li>**PowerShell bloqueia scripts locais/Restricted:** o SelfMinifier não contorna a política. Consulte o administrador ou a política da organização; qualquer alteração deve ser explícita e apropriada ao ambiente.</li>
 <li>**Dependências internas ausentes ou inválidas:** reextraia um pacote íntegro. A inicialização não baixa nem reinstala dependências.</li>
 <li>**<code>recovery-required</code>:** não tente contornar o bloqueio; consulte o log técnico e preserve o estado para recuperação comprovada.</li>
 </ul>

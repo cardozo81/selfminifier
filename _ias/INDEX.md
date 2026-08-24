@@ -21,3 +21,5 @@ Este arquivo direciona cada área à sua fonte autoritativa. Leia somente os doc
 | Decisões aprovadas e pendentes | `Especificacoes/15-DECISOES.md` |
 
 O mapa dos arquivos efetivamente implementados fica em `_ias/MAPA-CODIGO.md`.
+
+A auditoria dos invariantes permanentes de segurança e os limites do redesign ficam em `_ias/AUDITORIA-SEGURANCA.md`.

@@ -48,7 +48,7 @@ O manifesto deve mapear os identificadores às raízes originais e registrar, no
 
 - ID da execução;
 - timestamp;
-- versão do Meminify;
+- versão do SelfMinifier;
 - origem original;
 - caminho absoluto original;
 - caminho relativo no backup;
@@ -116,12 +116,14 @@ O controle deve conter informação suficiente para desfazer somente os efeitos 
 
 - versão do formato;
 - ID e timestamp da execução;
-- versão do Meminify;
+- versão do SelfMinifier;
 - modo de saída e status da execução;
 - caminhos exatos de origem e destino;
 - tipo da operação;
 - valores SHA-256 relevantes;
 - referência de backup ou recuperação.
+
+Por compatibilidade com os registros gerados pela v0.1.x, o campo serializado que registra a versão do produto mantém o nome `meminifyVersion`. Esse nome faz parte do contrato de `formatVersion` 1 e não deve ser renomeado.
 
 Devem ser diferenciados, no mínimo, “saída criada nesta execução” e “saída preexistente sobrescrita”.
 

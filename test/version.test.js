@@ -13,5 +13,5 @@ test('versão autoritativa vem do package.json e é exposta pela ponte', async (
 
 test('UI exibe a versão sem constante duplicada', async () => {
   const ui = await readFile('src/app/ui.ps1', 'utf8');
-  assert.match(ui, /MEMINIFY v\$\(\$identity\.version\)/);
+  assert.match(ui, /SELFMINIFIER v\$\(\$identity\.version\)/);
 });

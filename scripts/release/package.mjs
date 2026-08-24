@@ -68,7 +68,7 @@ async function runCleanNpmCi(stagingRoot) {
 }
 
 export async function stageRuntimeDependencies(projectRoot, packageRoot, { install = runCleanNpmCi } = {}) {
-  const stagingRoot = await mkdtemp(join(tmpdir(), 'Meminify runtime dependencies '));
+  const stagingRoot = await mkdtemp(join(tmpdir(), 'SelfMinifier runtime dependencies '));
   try {
     await copyFile(join(projectRoot, 'package.json'), join(stagingRoot, 'package.json'));
     await copyFile(join(projectRoot, 'package-lock.json'), join(stagingRoot, 'package-lock.json'));
@@ -94,7 +94,7 @@ async function walk(directory, root = directory) {
 
 export async function getPackageMetadata(projectRoot = scriptRoot) {
   const { version } = await loadApplicationMetadata(projectRoot);
-  const packageName = `Meminify-${version}`;
+  const packageName = `SelfMinifier-${version}`;
   return Object.freeze({
     version,
     packageName,

@@ -33,7 +33,7 @@ async function validatePackagedRuntimeCapabilities({ projectRoot, dependencies, 
     return {
       valid: false,
       code: 'PACKAGED_RUNTIME_INVALID',
-      message: 'O runtime interno do esbuild empacotado está ausente, corrompido ou incompatível. Reextraia uma distribuição íntegra do Meminify.',
+      message: 'O runtime interno do esbuild empacotado está ausente, corrompido ou incompatível. Reextraia uma distribuição íntegra do SelfMinifier.',
       probe,
     };
   }
@@ -97,7 +97,7 @@ export async function bootstrapEnvironment({
     return {
       ok: false,
       code: 'DEPENDENCY_VALIDATION_FAILED',
-      message: 'As dependências internas do pacote estão ausentes ou inconsistentes. Reextraia uma distribuição íntegra do Meminify; a inicialização normal não instala dependências automaticamente.',
+      message: 'As dependências internas do pacote estão ausentes ou inconsistentes. Reextraia uma distribuição íntegra do SelfMinifier; a inicialização normal não instala dependências automaticamente.',
       runtime,
       dependencies,
     };

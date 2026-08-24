@@ -22,7 +22,7 @@ const policy = {
 };
 
 async function projectFixture({ dependency = true, dependencyEngine } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'meminify-runtime-'));
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-runtime-'));
   const packageJson = { name: 'fixture', private: true, dependencies: { fixturedep: '1.2.3' } };
   const lockJson = {
     name: 'fixture', lockfileVersion: 3, requires: true,

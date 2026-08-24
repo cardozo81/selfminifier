@@ -10,7 +10,7 @@ test('UI explicita cancelamento, entrada inválida e recursos indisponíveis', a
   assert.match(source, /Restauração cancelada; nenhum arquivo foi alterado/);
   assert.match(source, /Nenhum relatório operacional disponível/);
   assert.match(source, /Nenhum log técnico disponível/);
-  assert.match(source, /Invoke-MeminifyBridge/);
+  assert.match(source, /Invoke-SelfMinifierBridge/);
   assert.match(source, /StandardInput\.BaseStream/);
   assert.match(source, /Criar backup e sobrescrever os arquivos originais/);
   assert.match(source, /Preservar os arquivos originais e criar arquivos \.min/);

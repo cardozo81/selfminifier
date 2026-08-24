@@ -1,8 +1,8 @@
-# Manual do Usuário — Meminify
+# Manual do Usuário — SelfMinifier
 
 ## Finalidade e segurança
 
-O Meminify minifica arquivos JavaScript e CSS no Windows. Toda alteração exige confirmação explícita, validação prévia e prova de integridade por SHA-256. Em dúvida, erro de configuração, origem inacessível ou estado técnico não comprovado, a operação é bloqueada.
+O SelfMinifier minifica arquivos JavaScript e CSS no Windows. Toda alteração exige confirmação explícita, validação prévia e prova de integridade por SHA-256. Em dúvida, erro de configuração, origem inacessível ou estado técnico não comprovado, a operação é bloqueada.
 
 Não existe risco zero. O risco do perfil é exibido separadamente do risco estimado da execução, que sempre é calculado antes de uma execução válida. Se algum dado necessário não puder ser determinado, a execução é bloqueada sem autorização substituta.
 
@@ -16,7 +16,7 @@ Para o uso normal, execute `Executar.cmd` com duplo clique na raiz. Ele apenas i
 
 As dependências de runtime já acompanham a distribuição. Com Node homologado instalado, o início normal funciona offline e não executa `npm ci` nem `npm install`. Dependência ausente ou divergente bloqueia a abertura; reextraia uma distribuição íntegra.
 
-A política do Windows PowerShell precisa permitir scripts locais. O Meminify não usa Bypass, não reduz e não altera permanentemente essa política. Sob `Restricted`, `Executar.cmd` mostra a restrição, aponta para este manual e termina com erro. Qualquer mudança apropriada de política deve ser decidida e executada explicitamente pelo usuário ou administrador conforme as regras da máquina ou organização.
+A política do Windows PowerShell precisa permitir scripts locais. O SelfMinifier não usa Bypass, não reduz e não altera permanentemente essa política. Sob `Restricted`, `Executar.cmd` mostra a restrição, aponta para este manual e termina com erro. Qualquer mudança apropriada de política deve ser decidida e executada explicitamente pelo usuário ou administrador conforme as regras da máquina ou organização.
 
 Após o bootstrap, o menu oferece análise, minificação, ajuste temporário, configurações, backups/restauração, relatórios e logs técnicos.
 
@@ -92,7 +92,7 @@ Uma restauração interrompida ou ambígua entra em `recovery-required`. Nesse e
 
 ## Relatórios e logs
 
-Após análise, execução ou restauração, o Meminify pode gerar relatórios operacionais UTF-8 em `Dados\Relatorios` (TXT e CSV) e logs técnicos UTF-8 em `Dados\Logs`. O menu permite listar e visualizar esses arquivos em modo somente leitura.
+Após análise, execução ou restauração, o SelfMinifier pode gerar relatórios operacionais UTF-8 em `Dados\Relatorios` (TXT e CSV) e logs técnicos UTF-8 em `Dados\Logs`. O menu permite listar e visualizar esses arquivos em modo somente leitura.
 
 Relatórios mostram totais, itens ignorados com motivo, resultados de restauração e falhas. Logs técnicos podem conter caminhos, diagnósticos e stack traces; eles não são exibidos como mensagem normal do menu.
 
@@ -102,6 +102,6 @@ Relatórios mostram totais, itens ignorados com motivo, resultados de restauraç
 - **Origem inacessível, link ou arquivo somente leitura:** o scanner informa o motivo e bloqueia quando o escopo não pode ser comprovado.
 - **Conflito `.min`:** revise a lista e confirme globalmente somente se aceitar sobrescrever todos os destinos listados.
 - **Node não homologado:** instale uma linha LTS homologada; não use versões Current, EOL ou globais.
-- **PowerShell bloqueia scripts locais/Restricted:** o Meminify não contorna a política. Consulte o administrador ou a política da organização; qualquer alteração deve ser explícita e apropriada ao ambiente.
+- **PowerShell bloqueia scripts locais/Restricted:** o SelfMinifier não contorna a política. Consulte o administrador ou a política da organização; qualquer alteração deve ser explícita e apropriada ao ambiente.
 - **Dependências internas ausentes ou inválidas:** reextraia um pacote íntegro. A inicialização não baixa nem reinstala dependências.
 - **`recovery-required`:** não tente contornar o bloqueio; consulte o log técnico e preserve o estado para recuperação comprovada.

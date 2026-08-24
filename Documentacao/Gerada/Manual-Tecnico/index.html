@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Manual Técnico — Meminify</title>
+<title>Manual Técnico — SelfMinifier</title>
 <style>
 :root { color-scheme: light; font-family: "Segoe UI", Arial, sans-serif; line-height: 1.55; color: #17212b; background: #f6f8fa; }
 body { max-width: 920px; margin: 0 auto; padding: 2rem; background: #fff; }
@@ -18,7 +18,7 @@ a { color: #005a9c; }
 </style>
 </head>
 <body>
-<h1>Manual Técnico — Meminify</h1>
+<h1>Manual Técnico — SelfMinifier</h1>
 <h2>Arquitetura implementada</h2>
 <p>O fluxo de dependências é <code>PowerShell → Node CLI → núcleo</code>. <code>Executar.ps1</code> executa o bootstrap e carrega <code>src/app/ui.ps1</code>; a interface chama <code>src/app/bridge.mjs</code> por JSON. A camada PowerShell apresenta escopo e confirmações, mas não aplica regras de scanner, minificação, integridade ou transação.</p>
 <p>O bridge coordena configuração, análise, execução, restauração, logs e relatórios. Diagnósticos estruturados são retornados sem stack traces para a interface; detalhes técnicos seguem para logs.</p>
@@ -54,7 +54,7 @@ a { color: #005a9c; }
 <h2>Documentação offline</h2>
 <p>As fontes autoritativas ficam em <code>Documentacao\Fonte</code>. Execute <code>npm.cmd run build:docs</code> para gerar HTML local em <code>Documentacao\Gerada</code>. O build não acessa a rede, não modifica o Markdown e usa <code>Documentacao\Assets\manual.css</code>; o HTML gerado não substitui as fontes Markdown nem as especificações.</p>
 <h2>Empacotamento local</h2>
-<p><code>publicar.cmd</code> delega para <code>scripts\release\publicar.ps1</code>. O pipeline valida ambiente, versão <code>package.json</code>, package/lock, dependências, UTF-8, testes e documentação antes de montar uma allowlist em <code>dist\Meminify-&lt;version&gt;</code>. Em seguida valida o conteúdo, cria um ZIP com uma única raiz versionada e grava o SHA-256 correspondente.</p>
+<p><code>publicar.cmd</code> delega para <code>scripts\release\publicar.ps1</code>. O pipeline valida ambiente, versão <code>package.json</code>, package/lock, dependências, UTF-8, testes e documentação antes de montar uma allowlist em <code>dist\SelfMinifier-&lt;version&gt;</code>. Em seguida valida o conteúdo, cria um ZIP com uma única raiz versionada e grava o SHA-256 correspondente.</p>
 <p>O pacote inclui launcher, manifestos npm, <code>src</code>, <code>resources</code>, modelo de configuração, HTML offline e <code>node_modules</code> de runtime gerado de forma limpa. Exclui testes, especificações, <code>_ias</code>, scripts de desenvolvimento, dados locais, configuração pessoal, backups, <code>node_modules</code> do checkout e <code>dist</code> anterior. O <code>Executar.cmd</code> empacotado é validado em CRLF e respeita a Execution Policy, bloqueando sob <code>Restricted</code> sem bypass. O empacotamento não publica GitHub Release.</p>
 </body>
 </html>

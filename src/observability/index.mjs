@@ -77,8 +77,8 @@ function reportText({ plan, rows, resultStatus, durationMs, applicationVersion }
   const final = rows.reduce((sum, row) => sum + (Number.isFinite(row.tamanhoFinal) ? row.tamanhoFinal : 0), 0);
   const red = reduction(original, final);
   const lines = [
-    'Relatório operacional do Meminify',
-    `Versão do Meminify: ${applicationVersion ?? ''}`,
+    'Relatório operacional do SelfMinifier',
+    `Versão do SelfMinifier: ${applicationVersion ?? ''}`,
     `Status: ${resultStatus ?? plan.status}`,
     `ID da execução: ${plan.executionId}`,
     `Arquivos encontrados: ${rows.length}`,
@@ -139,7 +139,7 @@ export async function writeTechnicalLog({ projectRoot, executionId, phases = [],
   await mkdir(directory, { recursive: true });
   const path = await uniquePath(directory, 'tecnico', 'log', stamp(timestamp));
   const lines = [
-    `Meminify técnico | data=${timestamp.toISOString()}`,
+    `SelfMinifier técnico | data=${timestamp.toISOString()}`,
     `executionId=${executionId ?? ''}`,
     `version=${applicationVersion ?? ''}`,
     `runtime=${JSON.stringify(runtime ?? {})}`,

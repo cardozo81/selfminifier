@@ -12,7 +12,7 @@ function fail(code, message, details = {}) {
   throw new ConfigurationError(code, message, details);
 }
 
-function scanIni(text) {
+export function scanIni(text) {
   const sections = new Map();
   let currentSection = null;
 
