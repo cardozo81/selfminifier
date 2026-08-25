@@ -39,7 +39,7 @@ O modelo `.example` é distribuído sem preferências pessoais. O INI real é do
 
 Apagar `configuracao.ini` remove apenas as preferências persistentes; não remove backups, estado, relatórios ou logs. Em uma abertura posterior, a ausência é detectada e a criação pode ser oferecida explicitamente. Atualizações do aplicativo nunca sobrescrevem um INI existente; qualquer migração futura deve ser explícita.
 
-O único formato aceito é o schema V2, sempre com `VersaoSchema=2`:
+Os formatos aceitos são os schemas V2 e V3. O V2 mantém exatamente a semântica existente, sempre com `VersaoSchema=2` e backups internos em `<pasta da aplicação>\_source_versions`:
 
 ```ini
 [Configuracao]
@@ -56,11 +56,13 @@ IgnorarArquivo01=src\config.js
 
 `PastaRaiz` define uma única raiz de projeto, percorrida recursivamente. `TiposArquivo` aceita `CSS`, `JavaScript` ou `CSS+JavaScript`. Exclusões usam `IgnorarPastaNN` e `IgnorarArquivoNN` com caminhos relativos, sem curingas ou `..`.
 
-Configurações sem `VersaoSchema`, com versão diferente de 2, com seções antigas `[Origem.xxx]`, com chaves `Incluir*`/`Excluir*` ou com estruturas misturadas são rejeitadas. O SelfMinifier não infere, migra nem converte configuração antiga automaticamente.
+O V3 preserva todos esses campos e acrescenta `PastaBackups`. Ausente ou vazia, ela significa armazenamento interno; preenchida, deve indicar uma pasta externa absoluta, existente, acessível, gravável, fisicamente separada de `PastaRaiz` e sem symlink, junction, reparse point ou alias. Caminhos relativos, `..`, curingas e variáveis de ambiente são rejeitados.
+
+Configurações sem `VersaoSchema`, com versão diferente de 2 ou 3, com seções antigas `[Origem.xxx]`, com chaves `Incluir*`/`Excluir*` ou com estruturas misturadas são rejeitadas. `PastaBackups` em V2 também é rejeitada. O SelfMinifier não migra ao iniciar: V2 só passa a V3 quando o usuário altera explicitamente o local de backups em **Configurações → Comportamento**. Voltar ao armazenamento interno mantém V3 e não apaga nem move backups existentes.
 
 ### Modos de saída e perfis
 
-O modo persistente padrão é **Criar backup e sobrescrever os arquivos originais**. Ele cria e valida uma cópia em `_source_versions` antes de substituir o original. A alternativa é **Preservar os arquivos originais e criar arquivos `.min`**, que conserva a fonte e cria um destino `.min.js` ou `.min.css` ao lado dela. O menu Configurações permite editar origem do projeto, tipos de arquivo, exclusões, perfil de minificação e modo de saída, sempre por escolha numérica e confirmação explícita; **Ver configuração atual** exibe os valores normalizados em modo somente leitura.
+O modo persistente padrão é **Criar backup e sobrescrever os arquivos originais**. Ele cria e valida uma cópia na raiz efetiva antes de substituir o original: `_source_versions` interno em V2/V3 sem pasta externa, ou `PastaBackups` em V3 externo. A alternativa é **Preservar os arquivos originais e criar arquivos `.min`**, que conserva a fonte e cria um destino `.min.js` ou `.min.css` ao lado dela. O menu Configurações permite editar origem, tipos, exclusões, perfil, modo de saída e local de backups, sempre por escolhas e confirmações numéricas; **Ver configuração atual** distingue V2 interno, V3 interno e V3 externo e mostra o caminho efetivo.
 
 Os perfis disponíveis são `Conservador` (risco muito baixo), `Padrao` (baixo) e `Maximo` (moderado) e podem ser trocados pelo menu; `Personalizado` não é selecionável nesta versão. O motor homologado atual é esbuild para JavaScript e CSS, sem bundling.
 
@@ -89,7 +91,7 @@ Se um destino `.min` já existir, ele é listado, preservado e ignorado. A execu
 
 ## Backups e restauração manual
 
-No modo de sobrescrita, a restauração lista backups válidos em `_source_versions` e também aceita uma pasta exata informada manualmente. O manifesto, a cópia de backup, os hashes, os caminhos e o estado técnico são validados antes de formar um plano.
+No modo de sobrescrita, a restauração combina backups internos legados com a proveniência persistida em `Dados\Historico`. A raiz registrada na execução é a autoridade, mesmo depois de a configuração atual mudar. Se uma raiz externa histórica estiver indisponível, a execução continua visível com o caminho esperado e a restauração é bloqueada; nunca há fallback para a raiz atual ou para `_source_versions`. Manifesto, histórico, cópia, hashes, caminhos, identidade física e estado técnico são validados antes de formar um plano.
 
 Se o arquivo atual ainda corresponde ao hash minificado registrado, basta a confirmação normal. Se foi alterado ou está ausente, há uma confirmação adicional; recusá-la preserva esse item. O arquivo minificado atual não recebe backup durante a restauração.
 

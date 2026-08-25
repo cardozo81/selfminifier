@@ -15,13 +15,15 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `src/domain/index.js` | Constantes de perfis, modos, schema V2, tipos de arquivo e defaults aprovados | Nenhuma |
+| `src/domain/index.js` | Constantes de perfis, modos, schemas V2/V3, tipos de arquivo e defaults aprovados | Nenhuma |
 | `src/configuration/errors.js` | Erro estruturado de configuração e códigos diagnósticos | Nenhuma |
 | `src/configuration/utf8.js` | Leitura UTF-8 fatal e escrita atômica UTF-8 por temporário + rename | Node.js `fs/promises`, `util` |
 | `src/configuration/parse.js` | Scanner INI compartilhado com detecção de seções/chaves duplicadas e linhas inválidas | `src/configuration/errors.js` |
-| `src/configuration/v2.js` | Schema V2: detecção explícita, parsing estrito, validação de raiz/tipos/exclusões, serialização e persistência | `src/domain/index.js`, `parse.js`, `schema.js`, `utf8.js` |
-| `src/configuration/schema.js` | Identificação fail-closed de V2 explícito, versão inválida/não suportada e estruturas antigas/mistas | `src/domain/index.js`, `parse.js` |
-| `src/configuration/index.js` | API V2 suportada e configuração efetiva temporária limitada a `outputMode` | Módulos de configuração |
+| `src/configuration/v2.js` | Schema V2 congelado: parsing, validação, serialização e persistência | `src/domain/index.js`, `parse.js`, `schema.js`, `utf8.js` |
+| `src/configuration/v3.js` | Schema V3: campos V2 + `PastaBackups`, parsing/serialização determinísticos e persistência | Módulos de configuração |
+| `src/configuration/backup-root.js` | Validação externa, disjunção física e resolver autoritativo da raiz efetiva | Integridade física, runtime paths |
+| `src/configuration/schema.js` | Identificação fail-closed de V2/V3, versões desconhecidas e estruturas antigas/mistas | `src/domain/index.js`, `parse.js` |
+| `src/configuration/index.js` | API V2/V3 e configuração efetiva temporária limitada a `outputMode` | Módulos de configuração |
 
 ## Minificação
 
@@ -53,10 +55,11 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `src/integrity/hash.js` | SHA-256 incremental de arquivos | Node.js `crypto`, `fs` |
 | `src/integrity/json-store.js` | Leitura UTF-8 estrita e persistência JSON por arquivo temporário e rename | Node.js built-ins |
 | `src/integrity/history.js` | `artifactId` criptográfico, schema histórico formatVersion 1, criação imutável, leitura, listagem e busca sequencial fail-closed | Node.js `crypto`, `fs/promises`, integridade |
+| `src/integrity/physical-path.js` | Prova lexical/canônica, identidade física, rejeição nativa de reparse points e sonda de escrita exclusiva | Node.js built-ins, `fsutil.exe` no Windows |
 | `src/integrity/schema.js` | Validação dos registros técnicos e entradas de manifesto | Módulos de integridade |
 | `src/integrity/state.js` | Validação e persistência de `Dados/estado.json` | Módulos de integridade |
 | `src/integrity/manifest.js` | Criação, validação e persistência do manifesto de backup | Módulos de integridade |
-| `src/integrity/backup.js` | Mapeamento, cópia e validação SHA-256 do backup de fontes | Node.js `fs/promises`, `path` |
+| `src/integrity/backup.js` | Mapeamento, identidade estável, cópia e validação SHA-256 do backup de fontes na raiz efetiva | Node.js `fs/promises`, `path` |
 | `src/integrity/index.js` | API pública da fundação de integridade | Módulos de integridade |
 
 ## Pré-análise e execução transacional

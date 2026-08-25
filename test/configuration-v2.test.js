@@ -75,10 +75,11 @@ test('TiposArquivo inválido falha fechado', () => {
   expectCode(() => v2(v2Ini({ TiposArquivo: 'JavaScript+CSS' })), 'INVALID_FILE_TYPES');
 });
 
-test('identificação aceita somente V2 explícita e rejeita ausência, versão não suportada e mistura', () => {
+test('identificação aceita V2/V3 explícitas e rejeita ausência, versão não suportada e mistura', () => {
   assert.deepEqual(identifyConfigurationSchema(v2Ini()), { kind: 'v2', schemaVersion: 2 });
+  assert.deepEqual(identifyConfigurationSchema(v2Ini({ VersaoSchema: '3' })), { kind: 'v3', schemaVersion: 3 });
   expectCode(() => identifyConfigurationSchema('[Configuracao]\nMotor=esbuild\nPerfil=Padrao\n'), 'MISSING_SCHEMA_VERSION');
-  expectCode(() => identifyConfigurationSchema(v2Ini({ VersaoSchema: '3' })), 'UNSUPPORTED_SCHEMA_VERSION');
+  expectCode(() => identifyConfigurationSchema(v2Ini({ VersaoSchema: '4' })), 'UNSUPPORTED_SCHEMA_VERSION');
   expectCode(() => identifyConfigurationSchema(v2Ini({ VersaoSchema: 'abc' })), 'INVALID_SCHEMA_VERSION');
   expectCode(() => identifyConfigurationSchema(v2Ini({ VersaoSchema: null })), 'MISSING_SCHEMA_VERSION');
   const mixedLists = `[Configuracao]\nVersaoSchema=2\nMotor=esbuild\nPerfil=Padrao\nPastaRaiz=C:\\Projetos\\x\nIncluir01=**/*.js\n`;

@@ -1,7 +1,16 @@
 import { lstat, readFile, readdir } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { validateExternalBackupRoot } from '../configuration/index.js';
 import { OUTPUT_MODES } from '../domain/index.js';
-import { assertPathHasNoLinks, hashFileSha256, readBackupManifest, readTechnicalState, writeTechnicalState } from '../integrity/index.js';
+import {
+  assertPathHasNoLinks,
+  assertPhysicalPath,
+  hashFileSha256,
+  listHistoricalExecutionRecords,
+  readBackupManifest,
+  readTechnicalState,
+  writeTechnicalState,
+} from '../integrity/index.js';
 import { readJsonUtf8, writeJsonUtf8Atomic } from '../integrity/json-store.js';
 import { inspectRegularFile, createNewFileExact, createValidatedRecoveryCopy, removeExactFile, replaceFileExact } from '../execution/filesystem.js';
 import { readExecutionJournal, writeExecutionJournal } from '../execution/journal.js';
@@ -46,18 +55,99 @@ async function safetyGate(runtimePaths) {
   }
 }
 
+async function findHistoricalBackupAuthority(projectRoot, executionId) {
+  const runtimePaths = resolveRuntimePaths(projectRoot);
+  const record = (await listHistoricalExecutionRecords(runtimePaths.historyDirectory))
+    .find((candidate) => candidate.executionId === executionId);
+  if (!record) return null;
+  if (record.outputMode !== OUTPUT_MODES.BACKUP_OVERWRITE || record.artifacts.length === 0) {
+    return { record, backupRoot: null, directory: null, artifacts: new Map() };
+  }
+  const backedArtifacts = record.artifacts.filter((artifact) => artifact.backup.available);
+  if (backedArtifacts.length !== record.artifacts.length) {
+    fail('INCOMPLETE_HISTORICAL_BACKUP_PROVENANCE', `O histórico da execução ${executionId} não comprova todos os payloads de backup.`);
+  }
+  const roots = new Map(backedArtifacts.map((artifact) => [identity(normalize(resolve(artifact.backup.backupRoot))), normalize(resolve(artifact.backup.backupRoot))]));
+  if (roots.size !== 1) fail('INCONSISTENT_HISTORICAL_BACKUP_ROOT', `O histórico da execução ${executionId} registra mais de uma raiz de backup.`);
+  const backupRoot = [...roots.values()][0];
+  return {
+    record,
+    backupRoot,
+    directory: join(backupRoot, executionId),
+    artifacts: new Map(backedArtifacts.map((artifact) => [artifact.artifactId, artifact])),
+  };
+}
+
+async function proveHistoricalBackupRoot(projectRoot, authority) {
+  const internalRoot = normalize(resolve(projectRoot, '_source_versions'));
+  try {
+    const proof = identity(authority.backupRoot) === identity(internalRoot)
+      ? await assertPhysicalPath(authority.backupRoot, { requireDirectory: true })
+      : await validateExternalBackupRoot(authority.backupRoot, authority.record.projectRoot, { proveWritable: false })
+        .then(() => assertPhysicalPath(authority.backupRoot, { requireDirectory: true }));
+    return proof;
+  } catch (cause) {
+    fail('HISTORICAL_BACKUP_ROOT_UNAVAILABLE', `A raiz histórica de backup não está disponível com segurança: ${authority.backupRoot}.`, {
+      expectedPath: authority.directory,
+      backupRoot: authority.backupRoot,
+      cause,
+    });
+  }
+}
+
 export async function listKnownBackups(projectRoot = process.cwd()) {
-  const root = resolve(projectRoot, '_source_versions');
-  let entries;
-  try { entries = await readdir(root, { withFileTypes: true }); } catch (error) { if (error.code === 'ENOENT') return []; throw error; }
-  const known = [];
-  for (const entry of entries.filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
-    const directory = join(root, entry.name);
+  const internalRoot = normalize(resolve(projectRoot, '_source_versions'));
+  const candidates = new Map();
+  try {
+    await assertPhysicalPath(internalRoot, { requireDirectory: true });
+    const entries = await readdir(internalRoot, { withFileTypes: true });
+    for (const entry of entries.filter((item) => item.isDirectory() && !item.isSymbolicLink())) {
+      candidates.set(entry.name, { executionId: entry.name, directory: join(internalRoot, entry.name), authority: 'legacy-internal' });
+    }
+  } catch (error) {
+    if (error?.code !== 'PHYSICAL_PATH_ACCESS_FAILED' || error?.details?.cause?.code !== 'ENOENT') throw error;
+  }
+
+  for (const record of await listHistoricalExecutionRecords(resolveRuntimePaths(projectRoot).historyDirectory)) {
+    if (record.outputMode !== OUTPUT_MODES.BACKUP_OVERWRITE || record.artifacts.length === 0) continue;
     try {
-      const plan = await createBackupRestorePlan({ projectRoot, backupDirectory: directory, skipGate: true });
-      known.push({ executionId: plan.sourceExecutionId, directory, files: plan.items.length, status: 'valid' });
+      const authority = await findHistoricalBackupAuthority(projectRoot, record.executionId);
+      candidates.set(record.executionId, {
+        executionId: record.executionId,
+        directory: authority.directory,
+        authority: 'history',
+      });
     } catch (error) {
-      known.push({ executionId: entry.name, directory, files: 0, status: 'invalid', diagnostic: { code: error.code, message: error.message } });
+      candidates.set(record.executionId, {
+        executionId: record.executionId,
+        directory: record.artifacts.find((artifact) => artifact.backup.available)?.backup.backupRoot
+          ? join(record.artifacts.find((artifact) => artifact.backup.available).backup.backupRoot, record.executionId)
+          : null,
+        authority: 'history',
+        authorityError: error,
+      });
+    }
+  }
+
+  const known = [];
+  for (const candidate of [...candidates.values()].sort((a, b) => a.executionId.localeCompare(b.executionId))) {
+    if (candidate.authorityError) {
+      known.push({ ...candidate, files: 0, status: 'invalid', diagnostic: { code: candidate.authorityError.code, message: candidate.authorityError.message } });
+      continue;
+    }
+    try {
+      const plan = await createBackupRestorePlan({ projectRoot, backupDirectory: candidate.directory, skipGate: true });
+      known.push({ executionId: plan.sourceExecutionId, directory: candidate.directory, files: plan.items.length, status: 'valid', authority: candidate.authority });
+    } catch (error) {
+      known.push({
+        executionId: candidate.executionId,
+        directory: candidate.directory,
+        expectedPath: error?.details?.expectedPath ?? candidate.directory,
+        files: 0,
+        status: error?.code === 'HISTORICAL_BACKUP_ROOT_UNAVAILABLE' ? 'unavailable' : 'invalid',
+        authority: candidate.authority,
+        diagnostic: { code: error.code, message: error.message },
+      });
     }
   }
   return known;
@@ -65,18 +155,57 @@ export async function listKnownBackups(projectRoot = process.cwd()) {
 
 export async function createBackupRestorePlan({ projectRoot = process.cwd(), backupDirectory, skipGate = false }) {
   const runtimePaths = resolveRuntimePaths(projectRoot);
+  if (typeof backupDirectory !== 'string' || backupDirectory === '') fail('BACKUP_DIRECTORY_REQUIRED', 'A pasta exata da execução de backup é obrigatória.');
+  const requestedDirectory = normalize(resolve(backupDirectory));
+  const executionId = basename(requestedDirectory);
+  const authority = await findHistoricalBackupAuthority(projectRoot, executionId);
+  let directory;
+  let backupRoot;
+  let backupRootProof;
+  if (authority) {
+    if (!authority.backupRoot || !authority.directory) fail('HISTORICAL_BACKUP_UNAVAILABLE', `O histórico da execução ${executionId} não registra payload restaurável.`);
+    directory = normalize(resolve(authority.directory));
+    backupRoot = authority.backupRoot;
+    if (identity(requestedDirectory) !== identity(directory)) {
+      fail('HISTORICAL_BACKUP_LOCATION_MISMATCH', 'A pasta solicitada diverge da localização histórica autoritativa.', {
+        requestedPath: requestedDirectory,
+        expectedPath: directory,
+      });
+    }
+    backupRootProof = await proveHistoricalBackupRoot(projectRoot, authority);
+  } else {
+    backupRoot = normalize(resolve(projectRoot, '_source_versions'));
+    directory = requestedDirectory;
+    if (identity(dirname(directory)) !== identity(backupRoot)) {
+      fail('UNPROVEN_BACKUP_AUTHORITY', 'Sem proveniência histórica, somente backups internos legados podem ser restaurados.', {
+        requestedPath: directory,
+        expectedRoot: backupRoot,
+      });
+    }
+    backupRootProof = await assertPhysicalPath(backupRoot, { requireDirectory: true });
+  }
   if (!skipGate) await safetyGate(runtimePaths);
-  const directory = normalize(resolve(backupDirectory));
   await assertPathHasNoLinks(directory);
   const manifest = await readBackupManifest(join(directory, 'manifest.json'));
-  if (manifest.executionId !== basename(directory)) fail('BACKUP_DIRECTORY_MISMATCH', 'A pasta selecionada não corresponde ao ID registrado no manifesto.');
+  if (manifest.executionId !== executionId) fail('BACKUP_DIRECTORY_MISMATCH', 'A pasta selecionada não corresponde ao ID registrado no manifesto.');
   const state = await readState(runtimePaths.technicalState);
-  const backupRoot = dirname(directory);
   const origins = new Map(manifest.origins.map((origin) => [origin.originId, normalize(resolve(origin.rootPath))]));
   const items = [];
   for (let index = 0; index < manifest.files.length; index += 1) {
     const entry = manifest.files[index];
     if (!entry.minifiedSha256) fail('INVALID_MANIFEST', 'O manifesto não registra o SHA-256 minificado necessário à restauração.');
+    if (authority) {
+      const historicalArtifact = authority.artifacts.get(entry.artifactId);
+      if (
+        !historicalArtifact
+        || identity(historicalArtifact.backup.backupRoot) !== identity(backupRoot)
+        || historicalArtifact.backup.backupRelativePath.replaceAll('\\', '/') !== entry.backupRelativePath.replaceAll('\\', '/')
+        || historicalArtifact.backup.originalHash !== entry.originalSha256
+        || identity(historicalArtifact.sourcePath) !== identity(entry.originalPath)
+      ) {
+        fail('HISTORY_MANIFEST_MISMATCH', `O histórico não corresponde ao item ${entry.artifactId} do manifesto.`);
+      }
+    }
     const backupPath = normalize(resolve(backupRoot, entry.backupRelativePath));
     if (!isInside(directory, backupPath)) fail('INVALID_BACKUP_MAPPING', 'O arquivo de backup não permanece na pasta da execução.', { backupPath });
     await assertPathHasNoLinks(backupPath);
@@ -94,7 +223,26 @@ export async function createBackupRestorePlan({ projectRoot = process.cwd(), bac
     const classification = !current.exists ? 'missing-current' : (current.hash === entry.minifiedSha256 ? 'unchanged-minified' : 'changed-after-minification');
     items.push({ id: `restore-${String(index + 1).padStart(3, '0')}`, operation: 'restore-source', sourcePath: originalPath, destinationPath: originalPath, backupPath, backupHash: entry.originalSha256, currentHash: current.hash, currentExists: current.exists, classification, requiresChangedConfirmation: classification !== 'unchanged-minified', fileType: originalPath.toLowerCase().endsWith('.css') ? 'css' : 'javascript', sourceSize: entry.originalSize });
   }
-  return freeze({ formatVersion: 1, kind: 'backup', restoreId: `restore-${Date.now()}`, sourceExecutionId: manifest.executionId, outputMode: OUTPUT_MODES.BACKUP_OVERWRITE, profile: manifest.files[0]?.profile ?? null, engine: { id: manifest.files[0]?.engine ?? null, version: manifest.files[0]?.engineVersion ?? null }, backupRoot: directory, runtimePaths, stateBefore: structuredClone(state), items, ignored: [], diagnostics: { errors: [], blockers: [] }, status: 'ready' });
+  return freeze({
+    formatVersion: 1,
+    kind: 'backup',
+    restoreId: `restore-${Date.now()}`,
+    sourceExecutionId: manifest.executionId,
+    outputMode: OUTPUT_MODES.BACKUP_OVERWRITE,
+    profile: manifest.files[0]?.profile ?? null,
+    engine: { id: manifest.files[0]?.engine ?? null, version: manifest.files[0]?.engineVersion ?? null },
+    backupRoot,
+    backupDirectory: directory,
+    backupRootCanonicalPath: backupRootProof.canonicalPath,
+    backupRootPhysicalIdentity: backupRootProof.physicalIdentity,
+    backupAuthority: authority ? 'history' : 'legacy-internal',
+    runtimePaths,
+    stateBefore: structuredClone(state),
+    items,
+    ignored: [],
+    diagnostics: { errors: [], blockers: [] },
+    status: 'ready',
+  });
 }
 
 export async function createLastMinRestorePlan({ projectRoot = process.cwd() } = {}) {
@@ -135,9 +283,33 @@ async function annotateLastExecution(plan, resultItems) {
   await writeExecutionJournal(plan.runtimePaths.lastExecutionJournal, journal);
 }
 
+async function assertRestoreBackupRootStable(plan) {
+  if (plan.kind !== 'backup') return;
+  let current;
+  try {
+    current = await assertPhysicalPath(plan.backupRoot, { requireDirectory: true });
+  } catch (cause) {
+    fail('HISTORICAL_BACKUP_ROOT_UNAVAILABLE', `A raiz de backup deixou de estar disponível: ${plan.backupRoot}.`, {
+      expectedPath: plan.backupDirectory,
+      cause,
+    });
+  }
+  if (
+    identity(current.canonicalPath) !== identity(plan.backupRootCanonicalPath)
+    || current.physicalIdentity !== plan.backupRootPhysicalIdentity
+  ) {
+    fail('HISTORICAL_BACKUP_ROOT_CHANGED', `A raiz física de backup mudou depois do plano: ${plan.backupRoot}.`, {
+      expectedPath: plan.backupDirectory,
+      expectedIdentity: plan.backupRootPhysicalIdentity,
+      actualIdentity: current.physicalIdentity,
+    });
+  }
+}
+
 export async function executeRestorePlan(plan, { confirmed = false, confirmChanged = false } = {}, dependencies = {}) {
   if (confirmed !== true) return { status: 'cancelled', items: plan.items.map((item) => ({ id: item.id, status: 'skipped-by-user', reason: 'RESTORE_CONFIRMATION_DENIED' })) };
   await safetyGate(plan.runtimePaths);
+  await assertRestoreBackupRootStable(plan);
   const mutableItems = plan.items.map((item) => ({ id: item.id, status: 'planned', operation: item.operation, path: item.destinationPath }));
   await writeRestoreJournal(plan, 'planned', mutableItems);
   let state = structuredClone(plan.stateBefore);
@@ -153,6 +325,8 @@ export async function executeRestorePlan(plan, { confirmed = false, confirmChang
       const current = await inspectRegularFile(item.destinationPath);
       if (current.exists !== item.currentExists || current.hash !== item.currentHash) fail('RESTORE_TARGET_CHANGED', `O destino mudou após o plano: ${item.destinationPath}.`);
       if (item.operation === 'restore-source') {
+        await assertRestoreBackupRootStable(plan);
+        await assertPathHasNoLinks(item.backupPath);
         if (await hashFileSha256(item.backupPath) !== item.backupHash) fail('BACKUP_HASH_MISMATCH', `O backup mudou após o plano: ${item.backupPath}.`);
         const content = await readFile(item.backupPath);
         tracked.status = 'mutation-intent'; await writeRestoreJournal(plan, 'running', mutableItems);

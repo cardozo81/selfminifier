@@ -1,7 +1,24 @@
 import { constants, copyFile, lstat, mkdir } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, normalize, parse, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { IntegrityError } from './errors.js';
 import { hashFileSha256 } from './hash.js';
+import { assertPhysicalPath } from './physical-path.js';
+
+async function assertBackupRootIdentity(backupRoot, expectedIdentity) {
+  if (!expectedIdentity) {
+    await assertPhysicalPath(backupRoot, { allowMissing: true });
+    await mkdir(backupRoot, { recursive: true });
+  }
+  const proof = await assertPhysicalPath(backupRoot, { requireDirectory: true });
+  if (expectedIdentity && proof.physicalIdentity !== expectedIdentity) {
+    throw new IntegrityError('BACKUP_ROOT_IDENTITY_CHANGED', 'A raiz física de backup mudou depois da pré-análise.', {
+      backupRoot,
+      expectedIdentity,
+      actualIdentity: proof.physicalIdentity,
+    });
+  }
+  return proof;
+}
 
 const SAFE_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -25,27 +42,17 @@ async function requireRegularPathWithoutLinks(rootPath, sourcePath) {
 }
 
 export async function assertPathHasNoLinks(filePath, { allowMissing = false } = {}) {
-  const normalizedPath = normalize(resolve(filePath));
-  const rootPath = parse(normalizedPath).root;
-  let currentPath = rootPath;
-  for (const part of relative(rootPath, normalizedPath).split(/[\\/]+/).filter(Boolean)) {
-    currentPath = join(currentPath, part);
-    let stats;
-    try { stats = await lstat(currentPath); } catch (cause) {
-      if (allowMissing && cause?.code === 'ENOENT') return;
-      throw new IntegrityError('SOURCE_ACCESS_FAILED', `Não foi possível acessar a origem: ${currentPath}.`, { filePath: currentPath, cause });
-    }
-    if (stats.isSymbolicLink()) throw new IntegrityError('LINK_NOT_ALLOWED', `Links não podem ser usados na criação de backup: ${currentPath}.`);
-  }
+  return assertPhysicalPath(filePath, { allowMissing });
 }
 
 export async function createValidatedSourceBackup(input, dependencies = {}) {
-  const { sourcePath, originRoot, backupRoot, executionId, originId } = input;
+  const { sourcePath, originRoot, backupRoot, executionId, originId, expectedBackupRootIdentity } = input;
   requireSafeIdentifier(executionId, 'executionId');
   requireSafeIdentifier(originId, 'originId');
   const normalizedSource = normalize(resolve(sourcePath));
   const normalizedOrigin = normalize(resolve(originRoot));
   const normalizedBackupRoot = normalize(resolve(backupRoot));
+  await assertBackupRootIdentity(normalizedBackupRoot, expectedBackupRootIdentity);
   if (isInside(normalizedBackupRoot, normalizedSource)) {
     throw new IntegrityError('SOURCE_IN_BACKUP_AREA', 'A origem não pode estar dentro da área técnica de backup.');
   }
@@ -67,7 +74,9 @@ export async function createValidatedSourceBackup(input, dependencies = {}) {
   const copy = dependencies.copyFile ?? copyFile;
   const sourceSha256 = await hash(normalizedSource);
   await assertPathHasNoLinks(dirname(backupPath), { allowMissing: true });
+  await assertBackupRootIdentity(normalizedBackupRoot, expectedBackupRootIdentity);
   await mkdir(dirname(backupPath), { recursive: true });
+  await assertBackupRootIdentity(normalizedBackupRoot, expectedBackupRootIdentity);
   await assertPathHasNoLinks(dirname(backupPath));
   try {
     await copy(normalizedSource, backupPath, constants.COPYFILE_EXCL);

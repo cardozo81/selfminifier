@@ -1,7 +1,8 @@
-import { access, constants, lstat } from 'node:fs/promises';
+import { access, constants, lstat, mkdir } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
-import { OUTPUT_MODES, PROFILE_DEFINITIONS } from '../domain/index.js';
-import { hashFileSha256 } from '../integrity/index.js';
+import { validateExternalBackupRoot } from '../configuration/index.js';
+import { CONFIGURATION_SCHEMA_VERSIONS, OUTPUT_MODES, PROFILE_DEFINITIONS } from '../domain/index.js';
+import { assertPhysicalPath, hashFileSha256, proveDirectoryWritable } from '../integrity/index.js';
 import { readTechnicalState } from '../integrity/state.js';
 import { resolveRuntimePaths } from '../runtime/paths.js';
 import { scan } from '../scanner/index.js';
@@ -67,14 +68,27 @@ export async function createExecutionPlan({
   if (!configuration || typeof executionId !== 'string' || !SAFE_EXECUTION_ID.test(executionId) || executionId === '.' || executionId === '..') {
     throw new ExecutionError('INVALID_PLAN_INPUT', 'Configuração e executionId são obrigatórios para a pré-análise.');
   }
-  if (configuration.schemaVersion !== 2) {
-    throw new ExecutionError('UNSUPPORTED_CONFIGURATION_SCHEMA', 'A pré-análise exige uma configuração normalizada com schemaVersion=2.');
+  if (![CONFIGURATION_SCHEMA_VERSIONS.V2, CONFIGURATION_SCHEMA_VERSIONS.V3].includes(configuration.schemaVersion)) {
+    throw new ExecutionError('UNSUPPORTED_CONFIGURATION_SCHEMA', 'A pré-análise exige uma configuração normalizada com schemaVersion=2 ou schemaVersion=3.');
   }
   if (!Object.values(OUTPUT_MODES).includes(configuration.outputMode)) {
     throw new ExecutionError('INVALID_OUTPUT_MODE', 'O modo de saída da pré-análise não é permitido.');
   }
   if (configuration.outputMode === OUTPUT_MODES.BACKUP_OVERWRITE && !backupRoot) {
     throw new ExecutionError('BACKUP_ROOT_REQUIRED', 'A raiz de backup deve ser informada no modo de sobrescrita.');
+  }
+
+  let backupRootProof = null;
+  if (configuration.outputMode === OUTPUT_MODES.BACKUP_OVERWRITE) {
+    const normalizedBackupRoot = normalize(resolve(backupRoot));
+    const external = configuration.schemaVersion === CONFIGURATION_SCHEMA_VERSIONS.V3 && configuration.backupRoot !== null;
+    if (external) {
+      await validateExternalBackupRoot(normalizedBackupRoot, configuration.projectRoot, { proveWritable: true });
+    } else {
+      await assertPhysicalPath(normalizedBackupRoot, { allowMissing: true });
+      await mkdir(normalizedBackupRoot, { recursive: true });
+    }
+    backupRootProof = await proveDirectoryWritable(normalizedBackupRoot);
   }
 
   const engineId = configuration.engine;
@@ -201,7 +215,7 @@ export async function createExecutionPlan({
 
   return deepFreeze({
     formatVersion: 1,
-    configurationSchemaVersion: 2,
+    configurationSchemaVersion: configuration.schemaVersion,
     executionId,
     meminifyVersion,
     timestamp,
@@ -214,6 +228,8 @@ export async function createExecutionPlan({
     engine: minifier ? { id: minifier.id, version: minifier.version } : { id: engineId, version: null },
     runtimePaths,
     backupRoot: backupRoot ? normalize(resolve(backupRoot)) : null,
+    backupRootCanonicalPath: backupRootProof?.canonicalPath ?? null,
+    backupRootPhysicalIdentity: backupRootProof?.physicalIdentity ?? null,
     sources: configuredSources.map((source) => ({ id: String(source.id), path: normalize(resolve(source.path)), recursive: source.recursive ?? false, type: source.type })),
     items,
     ignored,

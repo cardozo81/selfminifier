@@ -81,8 +81,8 @@ function validateRelativeEntries(values, field) {
 }
 
 function validateV2ScannerConfiguration(configuration) {
-  if (!configuration || typeof configuration !== 'object' || configuration.schemaVersion !== 2) {
-    scannerFailure('INVALID_V2_CONFIGURATION', 'O Scanner V2 exige uma configuração normalizada com schemaVersion=2.');
+  if (!configuration || typeof configuration !== 'object' || ![2, 3].includes(configuration.schemaVersion)) {
+    scannerFailure('INVALID_V2_CONFIGURATION', 'O Scanner V2 exige uma configuração normalizada com schemaVersion=2 ou schemaVersion=3.');
   }
   const projectRoot = configuration.projectRoot;
   const parsedRoot = typeof projectRoot === 'string' ? win32.parse(projectRoot).root : '';

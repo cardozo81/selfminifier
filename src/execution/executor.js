@@ -13,6 +13,7 @@ import {
   createBackupManifestEntry,
   createValidatedSourceBackup,
   assertPathHasNoLinks,
+  proveDirectoryWritable,
   writeBackupManifest,
   writeHistoricalExecutionRecord,
   writeTechnicalState,
@@ -55,7 +56,7 @@ function expectedMinifiedPath(sourcePath) {
 }
 
 async function assertV2ItemSecurityAtWriteTime(plan, item) {
-  if (plan.configurationSchemaVersion !== 2) return;
+  if (![2, 3].includes(plan.configurationSchemaVersion)) return;
   const projectRoot = normalize(resolve(plan.sources[0]?.path ?? ''));
   const sourcePath = normalize(resolve(item.sourcePath));
   const destinationPath = normalize(resolve(item.destinationPath));
@@ -230,10 +231,24 @@ function upsertStateRecord(state, plan, item, artifactId, outputHash, outputSize
 
 async function prepareRecovery(plan, item, journalItem, dependencies) {
   if (journalItem.operation === 'overwrite-original') {
+    const currentRoot = await proveDirectoryWritable(plan.backupRoot);
+    if (
+      currentRoot.canonicalPath !== plan.backupRootCanonicalPath
+      || currentRoot.physicalIdentity !== plan.backupRootPhysicalIdentity
+    ) {
+      throw new ExecutionError('BACKUP_ROOT_IDENTITY_CHANGED', 'A raiz física de backup mudou depois da pré-análise.', {
+        backupRoot: plan.backupRoot,
+        expectedCanonicalPath: plan.backupRootCanonicalPath,
+        actualCanonicalPath: currentRoot.canonicalPath,
+        expectedIdentity: plan.backupRootPhysicalIdentity,
+        actualIdentity: currentRoot.physicalIdentity,
+      });
+    }
     const backup = await createValidatedSourceBackup({
       sourcePath: item.sourcePath,
       originRoot: item.originRoot,
       backupRoot: plan.backupRoot,
+      expectedBackupRootIdentity: plan.backupRootPhysicalIdentity,
       executionId: plan.executionId,
       originId: item.backupOriginId,
     }, dependencies.backupDependencies);
@@ -275,7 +290,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
   const historyPath = await assertHistoricalExecutionWritable(plan.runtimePaths.historyDirectory, plan.executionId);
   const priorHistory = await listHistoricalExecutionRecords(plan.runtimePaths.historyDirectory);
   const knownArtifactIds = priorHistory.flatMap((execution) => execution.artifacts.map((artifact) => artifact.artifactId));
-  if (plan.configurationSchemaVersion === 2 && plan.items.length === 0) {
+  if ([2, 3].includes(plan.configurationSchemaVersion) && plan.items.length === 0) {
     const history = createHistoricalExecutionRecord({
       executionId: plan.executionId,
       meminifyVersion: options.meminifyVersion ?? plan.meminifyVersion ?? null,

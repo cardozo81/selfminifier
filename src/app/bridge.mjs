@@ -3,7 +3,15 @@ import { readFileSync } from 'node:fs';
 import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
-import { deriveEffectiveConfiguration, loadV2Configuration, validateV2Configuration, writeV2Configuration } from '../configuration/index.js';
+import {
+  deriveEffectiveConfiguration,
+  loadConfiguration,
+  resolveEffectiveBackupRoot,
+  validateV2Configuration,
+  validateV3Configuration,
+  writeV2Configuration,
+  writeV3Configuration,
+} from '../configuration/index.js';
 import { OUTPUT_MODES } from '../domain/index.js';
 import { createDefaultMinifierRegistry } from '../minifiers/index.js';
 import { createExecutionPlan, executePlan, ExecutionError } from '../execution/index.js';
@@ -37,11 +45,11 @@ async function loadPersistent(projectRoot) {
   try {
     const registry = createDefaultMinifierRegistry();
     const allowedEngines = new Set(registry.list().map((item) => item.id));
-    const configuration = await loadV2Configuration(filePaths.configuration, { allowedEngines });
+    const loaded = await loadConfiguration(filePaths.configuration, { allowedEngines });
     return {
       ok: true,
-      schema: 'v2',
-      configuration,
+      schema: loaded.schema.kind,
+      configuration: loaded.configuration,
       configurationPath: filePaths.configuration,
       examplePath: filePaths.example,
       projectRoot: filePaths.root,
@@ -104,11 +112,18 @@ async function createPlan(request, persistent, applicationVersion) {
   const allowedEngines = new Set(registry.list().map((item) => item.id));
   const effective = deriveEffectiveConfiguration(persistent.configuration, adjustments, { allowedEngines });
   const engineId = effective.engine;
+  const backupRoot = effective.outputMode === OUTPUT_MODES.BACKUP_OVERWRITE
+    ? await resolveEffectiveBackupRoot(effective, persistent.projectRoot, {
+      validateExternal: true,
+      proveWritable: true,
+      prepareInternal: true,
+    })
+    : undefined;
   const plan = await createExecutionPlan({
     configuration: effective,
     minifier: registry.get(engineId),
     runtimeRoot: persistent.projectRoot,
-    backupRoot: effective.outputMode === 'BackupESobrescreverOriginais' ? paths(persistent.projectRoot).backupRoot : undefined,
+    backupRoot,
     executionId: request.executionId ?? `exec-${Date.now()}`,
     meminifyVersion: applicationVersion,
   });
@@ -121,15 +136,20 @@ function sameValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+async function normalizePersistentConfiguration(configuration, schema, options) {
+  return schema === 'v2'
+    ? validateV2Configuration(configuration, options)
+    : validateV3Configuration(configuration, options);
+}
+
+async function writePersistentConfiguration(filePath, configuration, schema, options) {
+  return schema === 'v2'
+    ? writeV2Configuration(filePath, configuration)
+    : writeV3Configuration(filePath, configuration, options);
+}
+
 async function updateV2Configuration(request, persistent) {
   if (!persistent.ok) return { ok: false, ...persistent };
-  if (persistent.schema !== 'v2') {
-    return {
-      ok: false,
-      code: 'V2_CONFIGURATION_REQUIRED',
-      message: 'A edição de configuração exige uma configuração com VersaoSchema=2.',
-    };
-  }
 
   const updates = {};
   for (const key of EDITABLE_V2_FIELDS) {
@@ -147,19 +167,23 @@ async function updateV2Configuration(request, persistent) {
   const configurationPath = paths(persistent.projectRoot).configuration;
   let normalized;
   try {
-    normalized = validateV2Configuration({ ...persistent.configuration, ...updates }, { allowedEngines });
+    normalized = await normalizePersistentConfiguration(
+      { ...persistent.configuration, ...updates },
+      persistent.schema,
+      { allowedEngines },
+    );
   } catch (error) {
     return { ok: false, diagnostic: diagnostic(error), changed: false };
   }
 
   try {
-    await writeV2Configuration(configurationPath, normalized);
+    await writePersistentConfiguration(configurationPath, normalized, persistent.schema, { allowedEngines });
   } catch (error) {
     return { ok: false, diagnostic: diagnostic(error), changed: false };
   }
 
   const reloaded = await loadPersistent(persistent.projectRoot);
-  if (!reloaded.ok || reloaded.schema !== 'v2') {
+  if (!reloaded.ok || reloaded.schema !== persistent.schema) {
     return {
       ok: false,
       code: 'CONFIGURATION_RELOAD_FAILED',
@@ -186,10 +210,92 @@ async function updateV2Configuration(request, persistent) {
   return { ok: true, configuration: reloaded.configuration, updated: Object.keys(updates) };
 }
 
+const BACKUP_ROOT_PRESERVED_FIELDS = Object.freeze([
+  'engine',
+  'profile',
+  'outputMode',
+  'projectRoot',
+  'fileTypes',
+  'ignoredFolders',
+  'ignoredFiles',
+]);
+
+async function updateBackupRoot(request, persistent) {
+  if (!persistent.ok) return { ok: false, ...persistent };
+  if (request.confirmed !== true) {
+    return { ok: false, code: 'CONFIRMATION_REQUIRED', message: 'A alteração da pasta de backups exige confirmação explícita.' };
+  }
+  if (!Object.hasOwn(request, 'backupRoot')) {
+    return { ok: false, code: 'INVALID_UPDATE_REQUEST', message: 'A alteração exige backupRoot explícito como caminho externo ou null.' };
+  }
+  const registry = createDefaultMinifierRegistry();
+  const allowedEngines = new Set(registry.list().map((item) => item.id));
+  const requestedBackupRoot = request.backupRoot === '' ? null : request.backupRoot;
+  let normalized;
+  try {
+    normalized = await validateV3Configuration({
+      ...persistent.configuration,
+      schemaVersion: 3,
+      backupRoot: requestedBackupRoot,
+    }, { allowedEngines });
+  } catch (error) {
+    return { ok: false, diagnostic: diagnostic(error), changed: false };
+  }
+  const unrelatedMismatch = BACKUP_ROOT_PRESERVED_FIELDS.find((field) => (
+    !sameValue(normalized[field], persistent.configuration[field])
+  ));
+  if (unrelatedMismatch) {
+    return {
+      ok: false,
+      code: 'BACKUP_ROOT_UPDATE_SCOPE_MISMATCH',
+      message: `A alteração de PastaBackups tentaria modificar o campo não relacionado '${unrelatedMismatch}'.`,
+      changed: false,
+    };
+  }
+  const configurationPath = paths(persistent.projectRoot).configuration;
+  try {
+    await writeV3Configuration(configurationPath, normalized, { allowedEngines });
+  } catch (error) {
+    return { ok: false, diagnostic: diagnostic(error), changed: false };
+  }
+  const reloaded = await loadPersistent(persistent.projectRoot);
+  if (!reloaded.ok || reloaded.schema !== 'v3') {
+    return {
+      ok: false,
+      code: 'CONFIGURATION_RELOAD_FAILED',
+      message: 'A configuração V3 foi gravada, mas a releitura não pôde ser confirmada.',
+      diagnostic: reloaded.diagnostic,
+      changed: true,
+    };
+  }
+  const mismatch = reloaded.configuration.schemaVersion !== 3
+    || !sameValue(reloaded.configuration.backupRoot, normalized.backupRoot)
+    || BACKUP_ROOT_PRESERVED_FIELDS.some((field) => !sameValue(reloaded.configuration[field], persistent.configuration[field]));
+  if (mismatch) {
+    return {
+      ok: false,
+      code: 'CONFIGURATION_RELOAD_MISMATCH',
+      message: 'A releitura não confirmou PastaBackups e a preservação dos demais campos.',
+      configuration: reloaded.configuration,
+      changed: true,
+    };
+  }
+  return {
+    ok: true,
+    configurationPath,
+    configuration: reloaded.configuration,
+    backupRoot: reloaded.configuration.backupRoot,
+    backupStorageMode: reloaded.configuration.backupRoot === null ? 'internal' : 'external',
+    migratedFromV2: persistent.schema === 'v2',
+    updated: true,
+  };
+}
+
 export async function runBridgeRequest(request, { projectRoot = resolveApplicationRoot() } = {}) {
   const application = await loadApplicationMetadata(projectRoot);
   if (request.command === 'version') return { ok: true, ...application };
   const persistent = await loadPersistent(projectRoot);
+  if (request.command === 'update-backup-root') return updateBackupRoot(request, persistent);
   if (request.command === 'list-backups') {
     try { return { ok: true, backups: await listKnownBackups(projectRoot) }; }
     catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
@@ -229,7 +335,21 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
     catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
   }
   if (request.command === 'summary') {
-    return { ok: true, application, configuration: persistent.ok ? persistent.configuration : null, ...persistent, projectRoot: resolve(projectRoot) };
+    const effectiveBackupRoot = persistent.ok
+      ? await resolveEffectiveBackupRoot(persistent.configuration, projectRoot)
+      : null;
+    const backupStorageMode = persistent.ok && persistent.schema === 'v3' && persistent.configuration.backupRoot !== null
+      ? 'external'
+      : 'internal';
+    return {
+      ok: true,
+      application,
+      configuration: persistent.ok ? persistent.configuration : null,
+      effectiveBackupRoot,
+      backupStorageMode,
+      ...persistent,
+      projectRoot: resolve(projectRoot),
+    };
   }
   if (request.command === 'create-configuration') {
     const filePaths = paths(projectRoot);
@@ -248,22 +368,23 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
       return { ok: false, code: 'INVALID_OUTPUT_MODE', message: 'O modo de saída solicitado não é permitido.' };
     }
     if (!persistent.ok) return { ok: false, ...persistent };
-    if (persistent.schema !== 'v2') {
-      return { ok: false, code: 'V2_CONFIGURATION_REQUIRED', message: 'A alteração persistente do modo de saída exige uma configuração com VersaoSchema=2.' };
-    }
     if (request.confirmed !== true) return { ok: false, code: 'CONFIRMATION_REQUIRED', message: 'A alteração exige confirmação explícita.' };
     const registry = createDefaultMinifierRegistry();
     const allowedEngines = new Set(registry.list().map((item) => item.id));
     const filePath = paths(projectRoot).configuration;
     let normalized;
     try {
-      normalized = validateV2Configuration({ ...persistent.configuration, outputMode: request.outputMode }, { allowedEngines });
-      await writeV2Configuration(filePath, normalized);
+      normalized = await normalizePersistentConfiguration(
+        { ...persistent.configuration, outputMode: request.outputMode },
+        persistent.schema,
+        { allowedEngines },
+      );
+      await writePersistentConfiguration(filePath, normalized, persistent.schema, { allowedEngines });
     } catch (error) {
       return { ok: false, diagnostic: diagnostic(error), changed: false };
     }
     const reloaded = await loadPersistent(projectRoot);
-    if (!reloaded.ok || reloaded.schema !== 'v2') {
+    if (!reloaded.ok || reloaded.schema !== persistent.schema) {
       return {
         ok: false,
         code: 'CONFIGURATION_RELOAD_FAILED',

@@ -10,11 +10,11 @@ A UI consolida análise e execução em **Minificar projeto**. Cada entrada ness
 
 ## Configuração e domínio
 
-`src/configuration` lê UTF-8 estrito, exige `VersaoSchema=2`, detecta chaves duplicadas e valida raiz, tipos, exclusões, motor, perfil e modo. `src/domain/index.js` concentra os contratos V2 compartilhados. `deriveEffectiveConfiguration()` aceita somente o override temporário de `outputMode` e não muta a persistente.
+`src/configuration` lê UTF-8 estrito, aceita exatamente `VersaoSchema=2` e `VersaoSchema=3`, detecta chaves duplicadas e rejeita V1, versões desconhecidas e estruturas mistas. V2 conserva a raiz interna `<applicationRoot>\_source_versions`; V3 acrescenta `backupRoot`, correspondente a `PastaBackups`, como caminho externo validado ou `null` para semântica interna. `deriveEffectiveConfiguration()` aceita somente o override temporário de `outputMode`.
 
-A edição persistente pela UI usa o bridge `update-configuration-v2` com whitelist restrita (`projectRoot`, `fileTypes`, `ignoredFolders`, `ignoredFiles`, `profile`), valida com `validateV2Configuration`, grava com `writeV2Configuration` e relê para confirmar. O `outputMode` persistente usa o fluxo dedicado `update-output-mode` com a mesma validação e releitura.
+Edições de raiz/tipos/exclusões/perfil e de `outputMode` preservam o schema carregado. O bridge `update-backup-root` é a única transição V2→V3: valida o caminho externo, grava atomicamente, relê e comprova que campos não relacionados permaneceram iguais. Limpar a raiz mantém V3 com `backupRoot=null`; não há migração automática nem downgrade silencioso.
 
-O INI real permanece em `Configuracao\configuracao.ini`; o modelo fica em `Configuracao\configuracao.ini.example`. Não há fallback silencioso para dados inválidos.
+`resolveEffectiveBackupRoot()` é a autoridade única: V2 e V3 interno resolvem para a pasta controlada pela aplicação; V3 externo resolve para `backupRoot`. O INI real permanece em `Configuracao\configuracao.ini`; o modelo V2 fica em `Configuracao\configuracao.ini.example`. Não há fallback silencioso para dados inválidos.
 
 ## Scanner e minificação
 
@@ -22,17 +22,17 @@ O INI real permanece em `Configuracao\configuracao.ini`; o modelo fica em `Confi
 
 ## Integridade, backup e execução
 
-`src/integrity` fornece SHA-256, JSON UTF-8 atômico, estado técnico, manifesto e cópias de backup validadas. O modo de sobrescrita grava fontes em `_source_versions/<execução>` e persiste `manifest.json` com mapeamento de origem, tamanhos e hashes.
+`src/integrity` fornece SHA-256, JSON UTF-8 atômico, estado técnico, manifesto e cópias de backup validadas. O modo de sobrescrita grava em `<effectiveBackupRoot>/<executionId>/<originId>/<relativePath>` e mantém `manifest.json` na pasta da execução. O payload continua sem compressão. A raiz é provada antes do plano e revalidada por caminho canônico e identidade física antes de cada backup; desaparecimento ou troca bloqueia sem fallback.
 
 `src/execution/planner.js` cria uma pré-análise imutável. `src/execution/executor.js` usa journal write-ahead em `Dados\Restauracao\ultima-execucao.bkp`: plano, intenção, mutação, hash final, estado e conclusão. Para `.min`, destinos preexistentes são preservados por `skip-existing`; o rollback remove somente caminhos exatos criados e registrados. `recovery-required` é usado quando o rollback não pode ser comprovado sem adivinhação.
 
 `src/integrity/history.js` mantém a autoridade histórica em `Dados\Historico\<executionId>.json`, um registro UTF-8 formatVersion 1 por execução concluída e sem índice global. Cada artefato produzido recebe `artifactId` de 96 bits por `crypto.randomBytes(12)`, em hexadecimal maiúsculo. Estado atual, journal e manifesto novos podem referenciar essa identidade; formatos antigos sem o campo permanecem válidos.
 
-O histórico conserva os hashes SHA-256 de entrada e saída e, em sobrescrita, a raiz/caminho relativo do payload realmente gravado em `_source_versions`, com `compression: none`. No modo `.min`, a ausência de payload histórico de backup é explícita. Estado e manifesto são comprovados antes da criação exclusiva do histórico; o journal só conclui depois de comprovar também o hash desse registro. `SelfMinifier-Tag`, GZIP e `PastaBackups` não estão implementados. Quando a tag existir, `outputHash` cobrirá os bytes finais completos, inclusive a tag; a tag nunca será prova de integridade.
+O histórico conserva hashes de entrada/saída e, em sobrescrita, a raiz efetiva e o caminho relativo do payload realmente gravado, com `compression: none`. Essa raiz histórica é imutável e autoritativa para descoberta/restauração; a configuração atual nunca a substitui. No modo `.min`, a ausência de payload de backup é explícita. Estado e manifesto são comprovados antes da criação exclusiva do histórico; o journal só conclui depois de comprovar também o hash desse registro. `SelfMinifier-Tag` e GZIP não estão implementados; todos os formatos técnicos permanecem em `formatVersion: 1`.
 
 ## Restauração manual
 
-`src/restore/index.js` cria planos imutáveis e revalida o gate de segurança imediatamente antes da mutação. A restauração por backup exige manifesto, hash da cópia, caminho original, mapeamento de origem e registro de estado compatível. Cada fonte restaurada remove o registro que afirmava que ela ainda era minificada.
+`src/restore/index.js` combina diretórios internos legados e registros históricos. Quando há histórico, ele define a pasta esperada; uma raiz externa indisponível permanece listada como `unavailable` e bloqueia sem substituição. O plano cruza histórico, manifesto, `artifactId`, hash, caminho original, mapeamento de origem e estado; a execução revalida raiz física e payload antes da mutação.
 
 A restauração `.min` lê somente a última execução concluída e remove apenas operações `create-output`. Operações `replace-output` são registradas como não aplicáveis. Saídas ausentes, alteradas, recusadas, restauradas ou excluídas permanecem rastreadas. O progresso manual é persistido em `Dados\Restauracao\restauracao-em-andamento.bkp`; um estado incompleto ou `recovery-required` bloqueia nova mutação.
 
@@ -46,7 +46,8 @@ Diretórios técnicos relevantes:
 - `Dados\Historico`: metadados históricos imutáveis por execução concluída; não contém payload de backup.
 - `Dados\Temporarios`: área técnica excluída pelo scanner.
 - `Dados\Restauracao`: journal de execução, journal de restauração e cópias transitórias.
-- `_source_versions`: backups de fontes para o modo de sobrescrita.
+- `_source_versions`: raiz interna compatível para backups V2 e V3 sem pasta externa.
+- `PastaBackups`: raiz física externa opcional em V3; não contém índice global e não recebe migração automática.
 
 Não há política automática de retenção ou remoção histórica.
 

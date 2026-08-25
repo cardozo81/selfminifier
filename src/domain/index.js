@@ -21,6 +21,7 @@ export const PROFILE_DEFINITIONS = Object.freeze({
 
 export const CONFIGURATION_SCHEMA_VERSIONS = Object.freeze({
   V2: 2,
+  V3: 3,
 });
 
 export const V2_FILE_TYPE_VALUES = Object.freeze({

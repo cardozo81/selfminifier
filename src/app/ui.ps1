@@ -85,13 +85,23 @@ function Show-RestoreMenu {
         '1' {
             $response = Invoke-SelfMinifierBridge @{ command = 'list-backups' }
             if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; return }
-            $valid = @($response.backups | Where-Object { $_.status -eq 'valid' })
-            if ($valid.Count -eq 0) { Show-Mensagem 'Nenhum backup válido conhecido.' Yellow; return }
-            for ($index = 0; $index -lt $valid.Count; $index++) { Write-Host "$($index + 1). $($valid[$index].executionId) - $($valid[$index].directory)" }
+            $known = @($response.backups)
+            if ($known.Count -eq 0) { Show-Mensagem 'Nenhum backup conhecido.' Yellow; return }
+            for ($index = 0; $index -lt $known.Count; $index++) {
+                $item = $known[$index]
+                $shownPath = if ($item.expectedPath) { $item.expectedPath } else { $item.directory }
+                Write-Host "$($index + 1). $($item.executionId) [$($item.status)] - $shownPath"
+            }
             $selected = (Read-Host 'Número; Enter cancela').Trim()
             $number = 0
-            if (-not $selected -or -not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $valid.Count) { Show-Mensagem 'Seleção cancelada ou inválida; nenhum arquivo foi alterado.' Yellow; return }
-            Invoke-RestoreFlow backup $valid[$number - 1].directory
+            if (-not $selected -or -not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $known.Count) { Show-Mensagem 'Seleção cancelada ou inválida; nenhum arquivo foi alterado.' Yellow; return }
+            $chosen = $known[$number - 1]
+            if ($chosen.status -ne 'valid') {
+                Show-Mensagem "Restauração indisponível: $($chosen.diagnostic.message)" Red
+                Show-Mensagem "Local histórico esperado: $($chosen.expectedPath)" Yellow
+                return
+            }
+            Invoke-RestoreFlow backup $chosen.directory
         }
         '2' { $directory = (Read-Host 'Pasta exata do backup').Trim(); if ($directory) { Invoke-RestoreFlow backup $directory } else { Show-Mensagem 'Restauração cancelada.' Yellow } }
         '3' { Invoke-RestoreFlow last-min }
@@ -157,7 +167,7 @@ function Invoke-TemporaryAdjustment {
     }
 }
 
-function Invoke-PersistentConfiguration {
+function Invoke-EditOutputMode {
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) {
         if ($summary.code -eq 'CONFIGURATION_MISSING') {
@@ -198,6 +208,76 @@ function Invoke-PersistentConfiguration {
         if (-not $saved.ok) { Show-Mensagem (Get-BridgeErrorMessage $saved 'A configuração não foi salva.') Red; return }
         Show-Mensagem "Configuração persistente salva: $(Get-ModoSaidaDescricao $newMode)" Green
         return
+    }
+}
+
+function Invoke-EditBackupRoot {
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if (-not $summary.ok -or -not $summary.configuration) {
+        Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red
+        return
+    }
+    $config = $summary.configuration
+    Show-Mensagem "`nARMAZENAMENTO DE BACKUPS" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    if ($summary.backupStorageMode -eq 'external') {
+        Show-Mensagem 'Modo atual: pasta externa (V3)' Cyan
+    } elseif ($config.schemaVersion -eq 3) {
+        Show-Mensagem 'Modo atual: pasta interna (V3)' Cyan
+    } else {
+        Show-Mensagem 'Modo atual: pasta interna compatível (V2, sem migração automática)' Cyan
+    }
+    Show-Mensagem 'Local efetivo atual:' Gray
+    Show-Mensagem $summary.effectiveBackupRoot White
+    Write-Host '1. Usar a pasta interna da aplicação'
+    Write-Host '2. Usar uma pasta externa existente'
+    Write-Host '0. Cancelar'
+    $choice = (Read-Host 'Escolha').Trim()
+    if ($choice -eq '0') { Show-Mensagem 'Alteração cancelada; a configuração não foi modificada.' Yellow; return }
+    $requestedRoot = $null
+    $description = 'pasta interna da aplicação'
+    if ($choice -eq '2') {
+        $requestedRoot = (Read-Host 'Informe o caminho absoluto da pasta externa').Trim()
+        if ([string]::IsNullOrWhiteSpace($requestedRoot)) {
+            Show-Mensagem 'Pasta externa vazia; a configuração não foi modificada.' Yellow
+            return
+        }
+        $description = "pasta externa: $requestedRoot"
+    } elseif ($choice -ne '1') {
+        Show-Mensagem 'Opção inválida; a configuração não foi modificada.' Yellow
+        return
+    }
+    Show-Mensagem "`nNovo armazenamento: $description" Cyan
+    Write-Host '1. Salvar alteração'
+    Write-Host '0. Cancelar'
+    $confirmation = (Read-Host 'Escolha').Trim()
+    if ($confirmation -ne '1') { Show-Mensagem 'Alteração cancelada; a configuração não foi modificada.' Yellow; return }
+    $request = @{ command = 'update-backup-root'; backupRoot = $requestedRoot; confirmed = $true }
+    $saved = Invoke-SelfMinifierBridge $request
+    if (-not $saved.ok) {
+        $message = Get-BridgeErrorMessage $saved 'A pasta de backups não foi alterada.'
+        if ($saved.changed) { $message = "$message A configuração pode ter sido alterada." }
+        Show-Mensagem "Erro: $message" Red
+        return
+    }
+    $mode = if ($saved.backupStorageMode -eq 'external') { 'externa' } else { 'interna' }
+    Show-Mensagem "Armazenamento de backups salvo como $mode em Configuração V3." Green
+}
+
+function Invoke-PersistentConfiguration {
+    while ($true) {
+        Show-Mensagem "`nCOMPORTAMENTO" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Write-Host '1. Modo de saída'
+        Write-Host '2. Local de armazenamento dos backups'
+        Write-Host '0. Voltar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Invoke-EditOutputMode }
+            '2' { Invoke-EditBackupRoot }
+            '0' { return }
+            default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
+        }
     }
 }
 
@@ -607,7 +687,14 @@ function Show-CurrentConfiguration {
     $config = $summary.configuration
     Show-Mensagem "`nCONFIGURAÇÃO ATUAL" Cyan
     Show-Mensagem '────────────────────────────────────' Cyan
-    Show-Mensagem "Schema: V2 (VersaoSchema=$($config.schemaVersion))" Gray
+    $schemaDescription = if ($config.schemaVersion -eq 2) {
+        'V2 — backups internos, sem migração automática'
+    } elseif ($null -eq $config.backupRoot) {
+        'V3 — backups internos'
+    } else {
+        'V3 — backups externos'
+    }
+    Show-Mensagem "Schema: $schemaDescription (VersaoSchema=$($config.schemaVersion))" Gray
     Show-Mensagem 'Origem do projeto (PastaRaiz):' Cyan
     Show-Mensagem $config.projectRoot White
     Show-Mensagem "Tipos de arquivo (TiposArquivo): $(Get-TiposArquivoDescricao $config.fileTypes)" Cyan
@@ -615,6 +702,10 @@ function Show-CurrentConfiguration {
     Show-Mensagem "Perfil (Perfil): $($config.profile)" Cyan
     Show-Mensagem 'Comportamento de saída (ModoSaida):' Cyan
     Show-Mensagem (Get-ModoSaidaDescricao $config.outputMode) White
+    Show-Mensagem 'Armazenamento de backups:' Cyan
+    Show-Mensagem $(if ($summary.backupStorageMode -eq 'external') { 'Externo' } else { 'Interno' }) White
+    Show-Mensagem 'Local efetivo dos backups:' Cyan
+    Show-Mensagem $summary.effectiveBackupRoot White
     Show-Mensagem 'Pastas ignoradas:' Cyan
     if (@($config.ignoredFolders).Count -eq 0) {
         Show-Mensagem 'Nenhuma' Gray
