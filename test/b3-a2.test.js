@@ -196,7 +196,7 @@ test('prova exclusiva de escrita falha fechado e não deixa arquivo residual', a
   } finally { await rm(paths.root, { recursive: true, force: true }); }
 });
 
-test('sobrescrita V3 usa layout externo e histórico persiste a raiz real sem compressão', async () => {
+test('sobrescrita V3 usa layout externo e histórico persiste a raiz real com compressão gzip', async () => {
   const paths = await fixture({ schemaVersion: 3, backupRoot: null });
   try {
     const migrated = await runBridgeRequest({ command: 'update-backup-root', backupRoot: paths.externalA, confirmed: true }, { projectRoot: paths.root });
@@ -206,7 +206,7 @@ test('sobrescrita V3 usa layout externo e histórico persiste a raiz real sem co
     assert.equal(await lstat(join(paths.externalA, executionId, 'manifest.json')).then((stats) => stats.isFile()), true);
     const history = await readHistoricalExecutionRecord(resolveRuntimePaths(paths.root).historyDirectory, executionId);
     assert.equal(history.artifacts[0].backup.backupRoot, normalize(paths.externalA));
-    assert.equal(history.artifacts[0].backup.compression, 'none');
+    assert.equal(history.artifacts[0].backup.compression, 'gzip');
     assert.equal(history.formatVersion, 1);
     assert.equal(executed.result.status, 'completed');
   } finally { await rm(paths.root, { recursive: true, force: true }); }

@@ -156,7 +156,7 @@ function createArtifactProvenance(plan, item, journalItem, outputHash, outputSiz
       backupRoot: plan.backupRoot,
       backupRelativePath: backup.backupRelativePath,
       originalHash: backup.originalSha256,
-      compression: 'none',
+      compression: backup.compression ?? 'none',
     } : {
       available: false,
       backupRoot: null,
@@ -252,7 +252,7 @@ async function prepareRecovery(plan, item, journalItem, dependencies) {
       executionId: plan.executionId,
       originId: item.backupOriginId,
     }, dependencies.backupDependencies);
-    journalItem.recovery = { type: 'source-backup', path: backup.backupPath, hash: backup.backupSha256 };
+    journalItem.recovery = { type: 'source-backup', path: backup.backupPath, hash: backup.backupSha256, compression: backup.compression ?? 'none' };
     return backup;
   }
   if (journalItem.operation === 'replace-output') {

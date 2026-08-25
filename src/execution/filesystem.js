@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { constants, copyFile, link, lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { TextDecoder } from 'node:util';
-import { assertPathHasNoLinks, hashContentSha256, hashFileSha256 } from '../integrity/index.js';
+import { assertPathHasNoLinks, hashContentSha256, hashFileSha256, readVerifiedBackupContent } from '../integrity/index.js';
 import { ExecutionError } from './errors.js';
 
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
@@ -93,12 +93,22 @@ export async function createValidatedRecoveryCopy(sourcePath, recoveryPath) {
   return { path: recoveryPath, hash: recovery.hash };
 }
 
-export async function restoreExactFile(targetPath, recoveryPath, expectedCurrentHash, expectedRecoveryHash) {
+export async function restoreExactFile(targetPath, recoveryPath, expectedCurrentHash, expectedRecoveryHash, compression = 'none') {
   const current = await inspectRegularFile(targetPath);
   if (!current.exists || current.hash !== expectedCurrentHash) return false;
   const recovery = await inspectRegularFile(recoveryPath);
-  if (!recovery.exists || recovery.hash !== expectedRecoveryHash) return false;
-  const content = await readFile(recoveryPath);
+  if (!recovery.exists) return false;
+  let content;
+  if (compression === 'gzip') {
+    try {
+      content = await readVerifiedBackupContent(recoveryPath, 'gzip', expectedRecoveryHash, dirname(targetPath));
+    } catch {
+      return false;
+    }
+  } else {
+    if (recovery.hash !== expectedRecoveryHash) return false;
+    content = await readFile(recoveryPath);
+  }
   await replaceFileExact(targetPath, content, expectedCurrentHash, expectedRecoveryHash);
   return (await inspectRegularFile(targetPath)).hash === expectedRecoveryHash;
 }

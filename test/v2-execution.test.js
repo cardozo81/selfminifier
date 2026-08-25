@@ -11,6 +11,7 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises';
+import { gunzipSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateV2Configuration } from '../src/configuration/index.js';
@@ -203,7 +204,8 @@ windowsTest('V2 reutiliza backup, manifesto e operação de sobrescrita do execu
     const journal = await readExecutionJournal(runtimePaths.lastExecutionJournal);
     assert.equal(journal.items[0].operation, 'overwrite-original');
     assert.equal(journal.items[0].recovery.type, 'source-backup');
-    assert.equal(await readFile(journal.items[0].recovery.path, 'utf8'), original);
+    assert.equal(journal.items[0].recovery.compression, 'gzip');
+    assert.equal(gunzipSync(await readFile(journal.items[0].recovery.path)).toString('utf8'), original);
     const manifest = JSON.parse(await readFile(executed.result.manifestPath, 'utf8'));
     assert.equal(Object.hasOwn(manifest, 'meminifyVersion'), true);
     assert.equal(Object.hasOwn(manifest, 'selfminifierVersion'), false);

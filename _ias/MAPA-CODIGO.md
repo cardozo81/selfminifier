@@ -59,7 +59,8 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `src/integrity/schema.js` | Validação dos registros técnicos e entradas de manifesto | Módulos de integridade |
 | `src/integrity/state.js` | Validação e persistência de `Dados/estado.json` | Módulos de integridade |
 | `src/integrity/manifest.js` | Criação, validação e persistência do manifesto de backup | Módulos de integridade |
-| `src/integrity/backup.js` | Mapeamento, identidade estável, cópia e validação SHA-256 do backup de fontes na raiz efetiva | Node.js `fs/promises`, `path` |
+| `src/integrity/gzip.js` | GZIP/GUNZIP em streaming e prova do conteúdo descompactado | Node.js `zlib`, `stream/promises`, `fs` |
+| `src/integrity/backup.js` | Mapeamento, identidade estável, cópia GZIP e validação SHA-256 do backup de fontes na raiz efetiva | Node.js `fs/promises`, `path`, `gzip.js` |
 | `src/integrity/index.js` | API pública da fundação de integridade | Módulos de integridade |
 
 ## Pré-análise e execução transacional

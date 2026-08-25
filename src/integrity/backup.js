@@ -1,6 +1,8 @@
-import { constants, copyFile, lstat, mkdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { link, lstat, mkdir, rm } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { IntegrityError } from './errors.js';
+import { gzipFileToFile, hashDecompressedGzipFile } from './gzip.js';
 import { hashFileSha256 } from './hash.js';
 import { assertPhysicalPath } from './physical-path.js';
 
@@ -68,28 +70,52 @@ export async function createValidatedSourceBackup(input, dependencies = {}) {
   );
   const sourceRelativePath = originStats.isFile() ? basename(normalizedSource) : relative(normalizedOrigin, normalizedSource);
   if (!sourceRelativePath || sourceRelativePath.startsWith('..') || isAbsolute(sourceRelativePath)) throw new IntegrityError('INVALID_BACKUP_MAPPING', 'Não foi possível mapear a origem no backup.');
-  const backupRelativePath = join(executionId, originId, sourceRelativePath);
+  const backupRelativePath = `${join(executionId, originId, sourceRelativePath)}.gz`;
   const backupPath = join(normalizedBackupRoot, backupRelativePath);
   const hash = dependencies.hashFile ?? hashFileSha256;
-  const copy = dependencies.copyFile ?? copyFile;
+  const gzip = dependencies.gzipFile ?? gzipFileToFile;
+  const hashDecompressed = dependencies.hashDecompressed ?? hashDecompressedGzipFile;
   const sourceSha256 = await hash(normalizedSource);
   await assertPathHasNoLinks(dirname(backupPath), { allowMissing: true });
   await assertBackupRootIdentity(normalizedBackupRoot, expectedBackupRootIdentity);
   await mkdir(dirname(backupPath), { recursive: true });
   await assertBackupRootIdentity(normalizedBackupRoot, expectedBackupRootIdentity);
   await assertPathHasNoLinks(dirname(backupPath));
+
+  const temporaryPath = `${backupPath}.${process.pid}.${randomUUID()}.tmp`;
+  let compressedSha256;
   try {
-    await copy(normalizedSource, backupPath, constants.COPYFILE_EXCL);
+    compressedSha256 = await gzip(normalizedSource, temporaryPath);
   } catch (cause) {
-    throw new IntegrityError('BACKUP_COPY_FAILED', `Não foi possível criar o backup: ${backupPath}.`, { backupPath, cause });
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    throw new IntegrityError('BACKUP_COPY_FAILED', `Não foi possível criar o backup gzip: ${backupPath}.`, { backupPath, cause });
   }
+
+  let decompressedSha256;
+  try {
+    decompressedSha256 = await hashDecompressed(temporaryPath);
+  } catch (cause) {
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    throw cause;
+  }
+  if (decompressedSha256 !== sourceSha256) {
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    throw new IntegrityError('BACKUP_HASH_MISMATCH', 'O SHA-256 do conteúdo descompactado não corresponde ao SHA-256 da origem.', { sourceSha256, decompressedSha256 });
+  }
+
+  try {
+    await link(temporaryPath, backupPath);
+  } catch (cause) {
+    await rm(temporaryPath, { force: true }).catch(() => {});
+    throw new IntegrityError('BACKUP_COPY_FAILED', `Não foi possível promover o backup gzip: ${backupPath}.`, { backupPath, cause });
+  }
+  await rm(temporaryPath, { force: true }).catch(() => {});
+
   let backupStats;
   try { backupStats = await lstat(backupPath); } catch (cause) {
     throw new IntegrityError('BACKUP_VALIDATION_FAILED', `O backup criado não pôde ser validado: ${backupPath}.`, { backupPath, cause });
   }
   if (!backupStats.isFile() || backupStats.isSymbolicLink()) throw new IntegrityError('BACKUP_VALIDATION_FAILED', 'O destino do backup não é um arquivo regular validável.');
-  const backupSha256 = await hash(backupPath);
-  if (sourceSha256 !== backupSha256) throw new IntegrityError('BACKUP_HASH_MISMATCH', 'O SHA-256 do backup não corresponde ao SHA-256 da origem.', { sourceSha256, backupSha256 });
   return Object.freeze({
     valid: true,
     sourcePath: normalizedSource,
@@ -99,6 +125,8 @@ export async function createValidatedSourceBackup(input, dependencies = {}) {
     backupRelativePath: backupRelativePath.replaceAll('\\', '/'),
     originalSize: sourceStats.size,
     originalSha256: sourceSha256,
-    backupSha256,
+    backupSha256: decompressedSha256,
+    compressedSha256,
+    compression: 'gzip',
   });
 }

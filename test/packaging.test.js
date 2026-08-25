@@ -120,7 +120,7 @@ test('pacote isolado resolve versão e inicia fora do repositório em caminho co
     const startup = await runProcess(powershell, ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', join(metadata.packageRoot, 'Executar.ps1')], { cwd, input: '1\r\n0\r\n' });
     assert.equal(startup.code, 0);
     assert.equal((startup.stdout.match(/SELFMINIFIER v0\.2\.0/g) ?? []).length, 1);
-    assert.match(startup.stdout, /Erro: Configuração persistente ausente/);
+    assert.match(startup.stdout, /Corrija a configuração em Configurações antes de minificar/);
     const powershellMojibake = String.fromCharCode(0x00C3, 0x0192, 0x00C2, 0x00A0);
     assert.doesNotMatch(`${startup.stdout}${startup.stderr}`, new RegExp(powershellMojibake));
     const bridgePath = join(metadata.packageRoot, 'src', 'app', 'bridge.mjs');
@@ -134,7 +134,7 @@ test('pacote isolado resolve versão e inicia fora do repositório em caminho co
     assert.equal(summary.configurationPath, join(metadata.packageRoot, 'Configuracao', 'configuracao.ini'));
     const restartedSummary = JSON.parse((await requestBridge({ command: 'summary' })).stdout);
     assert.equal(restartedSummary.ok, true);
-    const persistentUi = await runProcess(powershell, ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', join(metadata.packageRoot, 'Executar.ps1')], { cwd, input: '2\r\n5\r\n2\r\n1\r\n0\r\n0\r\n' });
+    const persistentUi = await runProcess(powershell, ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', join(metadata.packageRoot, 'Executar.ps1')], { cwd, input: '2\r\n5\r\n1\r\n2\r\n1\r\n0\r\n0\r\n0\r\n' });
     assert.equal(persistentUi.code, 0);
     assert.match(persistentUi.stdout, /Preservar os arquivos originais e criar arquivos \.min/);
     assert.match(await readFile(join(metadata.packageRoot, 'Configuracao', 'configuracao.ini'), 'utf8'), /ModoSaida=PreservarOriginaisECriarMinificados/);
@@ -142,7 +142,7 @@ test('pacote isolado resolve versão e inicia fora do repositório em caminho co
     assert.equal(temporaryUi.code, 0);
     assert.match(temporaryUi.stdout, /Modo temporário: criar backup e sobrescrever os arquivos originais/);
     assert.match(temporaryUi.stdout, /Operação cancelada; nenhum arquivo foi alterado/);
-    assert.match(temporaryUi.stdout, /Modo: BackupESobrescreverOriginais/);
+    assert.match(temporaryUi.stdout, /Modo de saída: Criar backup e sobrescrever os arquivos originais/);
     assert.doesNotMatch(await readFile(join(metadata.packageRoot, 'Configuracao', 'configuracao.ini'), 'utf8'), /ModoSaida=BackupESobrescreverOriginais/);
     const analyzed = JSON.parse((await requestBridge({ command: 'analyze' })).stdout);
     assert.equal(analyzed.ok, true);

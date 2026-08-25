@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import test from 'node:test';
 import { OUTPUT_MODES } from '../src/domain/index.js';
 import {
@@ -138,7 +139,8 @@ test('modo de sobrescrita exige backup válido, gera manifesto e mantém estado 
     const journal = await readExecutionJournal(paths.runtime.lastExecutionJournal);
     assert.equal(journal.items[0].operation, 'overwrite-original');
     assert.equal(journal.items[0].recovery.type, 'source-backup');
-    assert.equal(await readFile(journal.items[0].recovery.path, 'utf8'), original);
+    assert.equal(journal.items[0].recovery.compression, 'gzip');
+    assert.equal(gunzipSync(await readFile(journal.items[0].recovery.path)).toString('utf8'), original);
     assert.equal(await exists(result.manifestPath), true);
     assert.equal((await readTechnicalState(paths.runtime.technicalState)).records[0].minifiedHash, await hashFileSha256(paths.files[0]));
   } finally {
@@ -149,9 +151,8 @@ test('modo de sobrescrita exige backup válido, gera manifesto e mantém estado 
   try {
     const original = await readFile(invalid.files[0], 'utf8');
     const { plan, minifier } = await planFor(invalid, OUTPUT_MODES.BACKUP_OVERWRITE);
-    let hashes = 0;
     await assert.rejects(executePlan(plan, minifier, { confirmed: true }, {
-      backupDependencies: { hashFile: async (filePath) => (++hashes === 1 ? hashFileSha256(filePath) : '0'.repeat(64)) },
+      backupDependencies: { hashDecompressed: async () => '0'.repeat(64) },
     }), (error) => error.code === 'BACKUP_HASH_MISMATCH');
     assert.equal(await readFile(invalid.files[0], 'utf8'), original);
     assert.equal((await readExecutionJournal(invalid.runtime.lastExecutionJournal)).status, 'rolled-back');

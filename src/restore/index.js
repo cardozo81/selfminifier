@@ -5,10 +5,12 @@ import { OUTPUT_MODES } from '../domain/index.js';
 import {
   assertPathHasNoLinks,
   assertPhysicalPath,
+  hashDecompressedGzipFile,
   hashFileSha256,
   listHistoricalExecutionRecords,
   readBackupManifest,
   readTechnicalState,
+  readVerifiedBackupContent,
   writeTechnicalState,
 } from '../integrity/index.js';
 import { readJsonUtf8, writeJsonUtf8Atomic } from '../integrity/json-store.js';
@@ -206,11 +208,23 @@ export async function createBackupRestorePlan({ projectRoot = process.cwd(), bac
         fail('HISTORY_MANIFEST_MISMATCH', `O histórico não corresponde ao item ${entry.artifactId} do manifesto.`);
       }
     }
+    const compression = manifest.formatVersion === 2 ? entry.compression : 'none';
     const backupPath = normalize(resolve(backupRoot, entry.backupRelativePath));
     if (!isInside(directory, backupPath)) fail('INVALID_BACKUP_MAPPING', 'O arquivo de backup não permanece na pasta da execução.', { backupPath });
     await assertPathHasNoLinks(backupPath);
     const backup = await inspectRegularFile(backupPath);
-    if (!backup.exists || backup.hash !== entry.originalSha256) fail('BACKUP_HASH_MISMATCH', `O backup falhou na validação SHA-256: ${backupPath}.`);
+    if (!backup.exists) fail('BACKUP_HASH_MISMATCH', `O backup está ausente: ${backupPath}.`);
+    if (compression === 'gzip') {
+      let decompressedHash;
+      try {
+        decompressedHash = await hashDecompressedGzipFile(backupPath);
+      } catch (cause) {
+        fail('BACKUP_HASH_MISMATCH', `O backup gzip não pôde ser descompactado: ${backupPath}.`, { backupPath, cause });
+      }
+      if (decompressedHash !== entry.originalSha256) fail('BACKUP_HASH_MISMATCH', `O conteúdo descompactado do backup não corresponde ao SHA-256 original: ${backupPath}.`);
+    } else if (backup.hash !== entry.originalSha256) {
+      fail('BACKUP_HASH_MISMATCH', `O backup falhou na validação SHA-256: ${backupPath}.`);
+    }
     const origin = origins.get(entry.originId);
     const originalPath = normalize(resolve(entry.originalPath));
     if (!origin || !(originalPath === origin || isInside(origin, originalPath))) fail('INVALID_ORIGINAL_MAPPING', `O destino original não corresponde à origem do manifesto: ${originalPath}.`);
@@ -221,7 +235,7 @@ export async function createBackupRestorePlan({ projectRoot = process.cwd(), bac
     }
     const current = await inspectRegularFile(originalPath);
     const classification = !current.exists ? 'missing-current' : (current.hash === entry.minifiedSha256 ? 'unchanged-minified' : 'changed-after-minification');
-    items.push({ id: `restore-${String(index + 1).padStart(3, '0')}`, operation: 'restore-source', sourcePath: originalPath, destinationPath: originalPath, backupPath, backupHash: entry.originalSha256, currentHash: current.hash, currentExists: current.exists, classification, requiresChangedConfirmation: classification !== 'unchanged-minified', fileType: originalPath.toLowerCase().endsWith('.css') ? 'css' : 'javascript', sourceSize: entry.originalSize });
+    items.push({ id: `restore-${String(index + 1).padStart(3, '0')}`, operation: 'restore-source', sourcePath: originalPath, destinationPath: originalPath, backupPath, backupHash: entry.originalSha256, backupCompression: compression, currentHash: current.hash, currentExists: current.exists, classification, requiresChangedConfirmation: classification !== 'unchanged-minified', fileType: originalPath.toLowerCase().endsWith('.css') ? 'css' : 'javascript', sourceSize: entry.originalSize });
   }
   return freeze({
     formatVersion: 1,
@@ -327,8 +341,17 @@ export async function executeRestorePlan(plan, { confirmed = false, confirmChang
       if (item.operation === 'restore-source') {
         await assertRestoreBackupRootStable(plan);
         await assertPathHasNoLinks(item.backupPath);
-        if (await hashFileSha256(item.backupPath) !== item.backupHash) fail('BACKUP_HASH_MISMATCH', `O backup mudou após o plano: ${item.backupPath}.`);
-        const content = await readFile(item.backupPath);
+        let content;
+        if (item.backupCompression === 'gzip') {
+          try {
+            content = await readVerifiedBackupContent(item.backupPath, 'gzip', item.backupHash, plan.runtimePaths.temporaryDirectory);
+          } catch (cause) {
+            fail('BACKUP_HASH_MISMATCH', `O backup gzip não pôde ser validado para restauração: ${item.backupPath}.`, { backupPath: item.backupPath, cause });
+          }
+        } else {
+          if (await hashFileSha256(item.backupPath) !== item.backupHash) fail('BACKUP_HASH_MISMATCH', `O backup mudou após o plano: ${item.backupPath}.`);
+          content = await readFile(item.backupPath);
+        }
         tracked.status = 'mutation-intent'; await writeRestoreJournal(plan, 'running', mutableItems);
         if (current.exists) await replaceFileExact(item.destinationPath, content, item.currentHash, item.backupHash);
         else await createNewFileExact(item.destinationPath, content, item.backupHash);

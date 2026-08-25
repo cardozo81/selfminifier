@@ -47,9 +47,10 @@ test('backup da fonte é criado e validado sem alterar a origem', async () => {
     const backup = await createValidatedSourceBackup({ sourcePath, originRoot, backupRoot, executionId: 'exec-001', originId: 'origem-001' });
     assert.equal(backup.valid, true);
     assert.equal(backup.originalSha256, backup.backupSha256);
-    assert.equal(await readFile(backup.backupPath, 'utf8'), before);
+    assert.equal(backup.compression, 'gzip');
+    assert.equal(backup.backupRelativePath, 'exec-001/origem-001/sub/aplicação.js.gz');
+    assert.notEqual(await readFile(backup.backupPath, 'utf8'), before);
     assert.equal(await readFile(sourcePath, 'utf8'), before);
-    assert.equal(backup.backupRelativePath, 'exec-001/origem-001/sub/aplicação.js');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -61,7 +62,6 @@ test('falha de validação de hash rejeita o backup', async () => {
     const sourcePath = join(root, 'origem', 'app.js');
     await mkdir(join(root, 'origem'));
     await writeFile(sourcePath, 'const value = 1;');
-    let call = 0;
     await assert.rejects(createValidatedSourceBackup({
       sourcePath,
       originRoot: join(root, 'origem'),
@@ -69,7 +69,7 @@ test('falha de validação de hash rejeita o backup', async () => {
       executionId: 'exec-002',
       originId: 'origem-001',
     }, {
-      hashFile: async (filePath) => (++call === 1 ? hashFileSha256(filePath) : '0'.repeat(64)),
+      hashDecompressed: async () => '0'.repeat(64),
     }), (error) => error instanceof IntegrityError && error.code === 'BACKUP_HASH_MISMATCH');
   } finally {
     await rm(root, { recursive: true, force: true });

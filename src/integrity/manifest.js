@@ -4,7 +4,7 @@ import { readJsonUtf8, writeJsonUtf8Atomic } from './json-store.js';
 import { requireObject, validateManifestEntry } from './schema.js';
 
 export function createBackupManifest({ executionId, timestamp, meminifyVersion = null, origins = [], files = [] }) {
-  return validateBackupManifest({ formatVersion: 1, executionId, timestamp, meminifyVersion, origins, files });
+  return validateBackupManifest({ formatVersion: 2, executionId, timestamp, meminifyVersion, origins, files });
 }
 
 export function createBackupManifestEntry(backup, metadata = {}) {
@@ -12,6 +12,7 @@ export function createBackupManifestEntry(backup, metadata = {}) {
     originId: backup.originId,
     originalPath: backup.sourcePath,
     backupRelativePath: backup.backupRelativePath,
+    compression: backup.compression ?? 'none',
     engine: metadata.engine ?? null,
     engineVersion: metadata.engineVersion ?? null,
     profile: metadata.profile ?? null,
@@ -28,7 +29,7 @@ export function createBackupManifestEntry(backup, metadata = {}) {
 
 export function validateBackupManifest(manifest) {
   requireObject(manifest, 'INVALID_MANIFEST', 'Manifesto');
-  if (manifest.formatVersion !== 1) throw new IntegrityError('INVALID_MANIFEST', 'A versão do formato do manifesto não é suportada.');
+  if (![1, 2].includes(manifest.formatVersion)) throw new IntegrityError('INVALID_MANIFEST', 'A versão do formato do manifesto não é suportada.');
   for (const field of ['executionId', 'timestamp']) {
     if (typeof manifest[field] !== 'string' || manifest[field].length === 0) throw new IntegrityError('INVALID_MANIFEST', `Manifesto.${field} deve ser texto não vazio.`);
   }
@@ -47,6 +48,9 @@ export function validateBackupManifest(manifest) {
   const backupPaths = new Set();
   manifest.files.forEach((entry, index) => {
     validateManifestEntry(entry, index);
+    if (manifest.formatVersion === 2 && entry.compression !== 'gzip') {
+      throw new IntegrityError('INVALID_MANIFEST', `Manifesto.files[${index}].compression deve ser gzip no formato v2.`);
+    }
     if (!originIds.has(entry.originId)) throw new IntegrityError('INVALID_MANIFEST', `Manifesto.files[${index}].originId não possui raiz mapeada.`);
     if (!isAbsolute(entry.originalPath)) throw new IntegrityError('INVALID_MANIFEST', `Manifesto.files[${index}].originalPath deve ser absoluto.`);
     if (isAbsolute(entry.backupRelativePath) || entry.backupRelativePath.split(/[\\/]+/).some((part) => part === '..')) {

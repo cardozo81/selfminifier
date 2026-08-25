@@ -150,9 +150,9 @@ test('sobrescrita concluída persiste hashes, backup físico e artifactId em his
       assert.deepEqual(artifact.backup, {
         available: true,
         backupRoot: paths.backupRoot,
-        backupRelativePath: `${plan.executionId}/origem-project-root/${paths.files[index].split(/[\\/]/).at(-1)}`,
+        backupRelativePath: `${plan.executionId}/origem-project-root/${paths.files[index].split(/[\\/]/).at(-1)}.gz`,
         originalHash: plan.items[index].sourceHash,
-        compression: 'none',
+        compression: 'gzip',
       });
     }
     const state = await readTechnicalState(paths.runtime.technicalState);

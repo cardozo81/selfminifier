@@ -27,7 +27,7 @@ function isInside(rootPath, candidatePath) {
 function validateBackupProvenance(backup, label) {
   requireObject(backup, 'INVALID_HISTORY_RECORD', label);
   if (typeof backup.available !== 'boolean') throw new IntegrityError('INVALID_HISTORY_RECORD', `${label}.available deve ser booleano.`);
-  if (backup.compression !== 'none') throw new IntegrityError('INVALID_HISTORY_RECORD', `${label}.compression deve ser none nesta versão.`);
+  if (!['none', 'gzip'].includes(backup.compression)) throw new IntegrityError('INVALID_HISTORY_RECORD', `${label}.compression deve ser none ou gzip.`);
   if (backup.available) {
     if (typeof backup.backupRoot !== 'string' || !isAbsolute(backup.backupRoot)) throw new IntegrityError('INVALID_HISTORY_RECORD', `${label}.backupRoot deve ser um caminho absoluto.`);
     if (typeof backup.backupRelativePath !== 'string' || !backup.backupRelativePath || isAbsolute(backup.backupRelativePath)

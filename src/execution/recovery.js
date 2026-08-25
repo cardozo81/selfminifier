@@ -26,7 +26,7 @@ async function rollbackItem(item) {
   }
   if (current.exists && current.hash === item.previousHash) return true;
   if (!current.exists || current.hash !== item.expectedOutputHash || !item.recovery) return false;
-  return restoreExactFile(item.destinationPath, item.recovery.path, item.expectedOutputHash, item.recovery.hash);
+  return restoreExactFile(item.destinationPath, item.recovery.path, item.expectedOutputHash, item.recovery.hash, item.recovery.compression ?? 'none');
 }
 
 async function validateCompletedConsistency(journal) {

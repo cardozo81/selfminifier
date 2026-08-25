@@ -62,7 +62,7 @@ Configurações sem `VersaoSchema`, com versão diferente de 2 ou 3, com seçõe
 
 ### Modos de saída e perfis
 
-O modo persistente padrão é **Criar backup e sobrescrever os arquivos originais**. Ele cria e valida uma cópia na raiz efetiva antes de substituir o original: `_source_versions` interno em V2/V3 sem pasta externa, ou `PastaBackups` em V3 externo. A alternativa é **Preservar os arquivos originais e criar arquivos `.min`**, que conserva a fonte e cria um destino `.min.js` ou `.min.css` ao lado dela. O menu Configurações permite editar origem, tipos, exclusões, perfil, modo de saída e local de backups, sempre por escolhas e confirmações numéricas; **Ver configuração atual** distingue V2 interno, V3 interno e V3 externo e mostra o caminho efetivo.
+O modo persistente padrão é **Criar backup e sobrescrever os arquivos originais**. Ele cria e valida uma cópia compactada com GZIP (`.gz`) na raiz efetiva antes de substituir o original: `_source_versions` interno em V2/V3 sem pasta externa, ou `PastaBackups` em V3 externo. Backups legados não compactados continuam restauráveis. A alternativa é **Preservar os arquivos originais e criar arquivos `.min`**, que conserva a fonte e cria um destino `.min.js` ou `.min.css` ao lado dela. O menu Configurações permite editar origem, tipos, exclusões, perfil, modo de saída e local de backups, sempre por escolhas e confirmações numéricas; **Ver configuração atual** distingue V2 interno, V3 interno e V3 externo e mostra o caminho efetivo.
 
 Os perfis disponíveis são `Conservador` (risco muito baixo), `Padrao` (baixo) e `Maximo` (moderado) e podem ser trocados pelo menu; `Personalizado` não é selecionável nesta versão. O motor homologado atual é esbuild para JavaScript e CSS, sem bundling.
 
