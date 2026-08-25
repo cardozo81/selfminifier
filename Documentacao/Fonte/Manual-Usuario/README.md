@@ -49,9 +49,9 @@ Configurações sem `VersaoSchema`, com versão diferente de 2, com seções ant
 
 ### Modos de saída e perfis
 
-O modo persistente padrão é **Criar backup e sobrescrever os arquivos originais**. Ele cria e valida uma cópia em `_source_versions` antes de substituir o original. A alternativa é **Preservar os arquivos originais e criar arquivos `.min`**, que conserva a fonte e cria um destino `.min.js` ou `.min.css` ao lado dela. O menu Configurações apresenta essas opções por número e só salva uma mudança após confirmação explícita.
+O modo persistente padrão é **Criar backup e sobrescrever os arquivos originais**. Ele cria e valida uma cópia em `_source_versions` antes de substituir o original. A alternativa é **Preservar os arquivos originais e criar arquivos `.min`**, que conserva a fonte e cria um destino `.min.js` ou `.min.css` ao lado dela. O menu Configurações permite editar origem do projeto, tipos de arquivo, exclusões, perfil de minificação e modo de saída, sempre por escolha numérica e confirmação explícita; **Ver configuração atual** exibe os valores normalizados em modo somente leitura.
 
-Os perfis disponíveis são `Conservador` (risco muito baixo), `Padrao` (baixo) e `Maximo` (moderado). O motor homologado atual é esbuild para JavaScript e CSS, sem bundling.
+Os perfis disponíveis são `Conservador` (risco muito baixo), `Padrao` (baixo) e `Maximo` (moderado) e podem ser trocados pelo menu; `Personalizado` não é selecionável nesta versão. O motor homologado atual é esbuild para JavaScript e CSS, sem bundling.
 
 O risco estimado da execução é:
 

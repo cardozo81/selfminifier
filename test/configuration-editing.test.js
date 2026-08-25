@@ -220,3 +220,226 @@ windowsTest('update-configuration-v2 bloqueia configuração V2 inválida', asyn
     await rm(root, { recursive: true, force: true });
   }
 });
+
+windowsTest('update-configuration-v2 edita ignoredFolders e preserva campos não relacionados', async () => {
+  const { root, projectRoot, configurationPath } = await v2Fixture({
+    outputMode: 'BackupESobrescreverOriginais',
+    ignoredFolders: ['vendor'],
+    ignoredFiles: ['src\\config.js'],
+  });
+  try {
+    const response = await runBridgeRequest({
+      command: 'update-configuration-v2',
+      ignoredFolders: ['vendor', 'build\\cache'],
+      confirmed: true,
+    }, { projectRoot: root });
+
+    assert.equal(response.ok, true);
+    assert.deepEqual(response.updated, ['ignoredFolders']);
+    assert.deepEqual(response.configuration.ignoredFolders, ['vendor', 'build\\cache']);
+    assert.deepEqual(response.configuration.ignoredFiles, ['src\\config.js']);
+    assert.equal(response.configuration.projectRoot, projectRoot);
+    assert.equal(response.configuration.engine, 'esbuild');
+    assert.equal(response.configuration.profile, 'Padrao');
+    assert.equal(response.configuration.outputMode, 'BackupESobrescreverOriginais');
+    assert.equal(response.configuration.schemaVersion, 2);
+
+    const text = await readFile(configurationPath, 'utf8');
+    assert.ok(text.includes('IgnorarPasta01=vendor'));
+    assert.ok(text.includes('IgnorarPasta02=build\\cache'));
+    assert.ok(text.includes('IgnorarArquivo01=src\\config.js'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('update-configuration-v2 edita ignoredFiles e preserva pastas', async () => {
+  const { root, configurationPath } = await v2Fixture({
+    ignoredFolders: ['vendor'],
+    ignoredFiles: ['src\\config.js'],
+  });
+  try {
+    const response = await runBridgeRequest({
+      command: 'update-configuration-v2',
+      ignoredFiles: ['src\\config.js', 'src\\outro.js'],
+      confirmed: true,
+    }, { projectRoot: root });
+
+    assert.equal(response.ok, true);
+    assert.deepEqual(response.updated, ['ignoredFiles']);
+    assert.deepEqual(response.configuration.ignoredFiles, ['src\\config.js', 'src\\outro.js']);
+    assert.deepEqual(response.configuration.ignoredFolders, ['vendor']);
+    const text = await readFile(configurationPath, 'utf8');
+    assert.ok(text.includes('IgnorarPasta01=vendor'));
+    assert.ok(text.includes('IgnorarArquivo01=src\\config.js'));
+    assert.ok(text.includes('IgnorarArquivo02=src\\outro.js'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('update-configuration-v2 aceita lista vazia para remover exclusões', async () => {
+  const { root, configurationPath } = await v2Fixture({
+    ignoredFolders: ['vendor', 'build'],
+    ignoredFiles: ['src\\config.js'],
+  });
+  try {
+    const response = await runBridgeRequest({
+      command: 'update-configuration-v2',
+      ignoredFolders: [],
+      confirmed: true,
+    }, { projectRoot: root });
+
+    assert.equal(response.ok, true);
+    assert.deepEqual(response.updated, ['ignoredFolders']);
+    assert.deepEqual(response.configuration.ignoredFolders, []);
+    assert.deepEqual(response.configuration.ignoredFiles, ['src\\config.js']);
+    const text = await readFile(configurationPath, 'utf8');
+    assert.ok(!text.includes('IgnorarPasta'));
+    assert.ok(text.includes('IgnorarArquivo01=src\\config.js'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('update-configuration-v2 ignora campos arbitrários fora do whitelist', async () => {
+  const { root } = await v2Fixture({
+    outputMode: 'PreservarOriginaisECriarMinificados',
+    ignoredFolders: [],
+  });
+  try {
+    const response = await runBridgeRequest({
+      command: 'update-configuration-v2',
+      ignoredFolders: ['vendor'],
+      engine: 'nao-homologado',
+      outputMode: 'BackupESobrescreverOriginais',
+      schemaVersion: 99,
+      confirmed: true,
+    }, { projectRoot: root });
+
+    assert.equal(response.ok, true);
+    assert.deepEqual(response.configuration.ignoredFolders, ['vendor']);
+    assert.equal(response.configuration.engine, 'esbuild');
+    assert.equal(response.configuration.profile, 'Padrao');
+    assert.equal(response.configuration.outputMode, 'PreservarOriginaisECriarMinificados');
+    assert.equal(response.configuration.schemaVersion, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('update-configuration-v2 rejeita caminho de exclusão inválido sem mutar', async () => {
+  const cases = [
+    { value: '', code: 'MISSING_REQUIRED_VALUE' },
+    { value: '..\\escape', code: 'PARENT_TRAVERSAL_NOT_ALLOWED' },
+    { value: 'C:\\absoluto', code: 'RELATIVE_PATH_REQUIRED' },
+    { value: 'vendor\\*', code: 'GLOB_NOT_ALLOWED' },
+  ];
+  for (const entry of cases) {
+    const { root, configurationPath } = await v2Fixture({ ignoredFolders: ['vendor'] });
+    const before = await readFile(configurationPath, 'utf8');
+    try {
+      const response = await runBridgeRequest({
+        command: 'update-configuration-v2',
+        ignoredFolders: ['vendor', entry.value],
+        confirmed: true,
+      }, { projectRoot: root });
+
+      assert.equal(response.ok, false, `esperava rejeição para: ${JSON.stringify(entry.value)}`);
+      assert.equal(response.diagnostic.code, entry.code);
+      assert.equal(await readFile(configurationPath, 'utf8'), before);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
+windowsTest('update-configuration-v2 rejeita duplicata lógica conforme regras V2', async () => {
+  const folderFixture = await v2Fixture({ ignoredFolders: ['vendor'] });
+  try {
+    const response = await runBridgeRequest({
+      command: 'update-configuration-v2',
+      ignoredFolders: ['vendor', 'Vendor'],
+      confirmed: true,
+    }, { projectRoot: folderFixture.root });
+    assert.equal(response.ok, false);
+    assert.equal(response.diagnostic.code, 'DUPLICATE_IGNORED_FOLDER');
+  } finally {
+    await rm(folderFixture.root, { recursive: true, force: true });
+  }
+
+  const fileFixture = await v2Fixture({ ignoredFiles: ['src\\config.js'] });
+  try {
+    const response = await runBridgeRequest({
+      command: 'update-configuration-v2',
+      ignoredFiles: ['src\\config.js', 'src\\CONFIG.js'],
+      confirmed: true,
+    }, { projectRoot: fileFixture.root });
+    assert.equal(response.ok, false);
+    assert.equal(response.diagnostic.code, 'DUPLICATE_IGNORED_FILE');
+  } finally {
+    await rm(fileFixture.root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('update-configuration-v2 edita profile e preserva campos não relacionados', async () => {
+  const { root, projectRoot, configurationPath } = await v2Fixture({
+    ignoredFolders: ['vendor'],
+    ignoredFiles: ['src\\config.js'],
+  });
+  try {
+    const response = await runBridgeRequest({
+      command: 'update-configuration-v2',
+      profile: 'Maximo',
+      confirmed: true,
+    }, { projectRoot: root });
+
+    assert.equal(response.ok, true);
+    assert.deepEqual(response.updated, ['profile']);
+    assert.equal(response.configuration.profile, 'Maximo');
+    assert.equal(response.configuration.projectRoot, projectRoot);
+    assert.equal(response.configuration.engine, 'esbuild');
+    assert.equal(response.configuration.outputMode, 'PreservarOriginaisECriarMinificados');
+    assert.deepEqual(response.configuration.fileTypes, ['css', 'javascript']);
+    assert.deepEqual(response.configuration.ignoredFolders, ['vendor']);
+    assert.deepEqual(response.configuration.ignoredFiles, ['src\\config.js']);
+    assert.equal(response.configuration.schemaVersion, 2);
+
+    const text = await readFile(configurationPath, 'utf8');
+    assert.ok(text.includes('Perfil=Maximo'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('update-configuration-v2 aceita perfis suportados e rejeita Personalizado', async () => {
+  for (const value of ['Conservador', 'Padrao', 'Maximo']) {
+    const { root } = await v2Fixture();
+    try {
+      const response = await runBridgeRequest({
+        command: 'update-configuration-v2',
+        profile: value,
+        confirmed: true,
+      }, { projectRoot: root });
+      assert.equal(response.ok, true);
+      assert.equal(response.configuration.profile, value);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+
+  const { root, configurationPath } = await v2Fixture();
+  const before = await readFile(configurationPath, 'utf8');
+  try {
+    const response = await runBridgeRequest({
+      command: 'update-configuration-v2',
+      profile: 'Personalizado',
+      confirmed: true,
+    }, { projectRoot: root });
+    assert.equal(response.ok, false);
+    assert.equal(response.diagnostic.code, 'PROFILE_OPTIONS_PENDING');
+    assert.equal(await readFile(configurationPath, 'utf8'), before);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

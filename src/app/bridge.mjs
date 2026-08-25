@@ -115,7 +115,7 @@ async function createPlan(request, persistent, applicationVersion) {
   return { plan, minifier: registry.get(engineId), effective };
 }
 
-const EDITABLE_V2_FIELDS = new Set(['projectRoot', 'fileTypes']);
+const EDITABLE_V2_FIELDS = new Set(['projectRoot', 'fileTypes', 'ignoredFolders', 'ignoredFiles', 'profile']);
 
 function sameValue(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
@@ -127,7 +127,7 @@ async function updateV2Configuration(request, persistent) {
     return {
       ok: false,
       code: 'V2_CONFIGURATION_REQUIRED',
-      message: 'A edição da origem do projeto e dos tipos de arquivo exige uma configuração com VersaoSchema=2.',
+      message: 'A edição de configuração exige uma configuração com VersaoSchema=2.',
     };
   }
 
@@ -136,7 +136,7 @@ async function updateV2Configuration(request, persistent) {
     if (Object.hasOwn(request, key)) updates[key] = request[key];
   }
   if (Object.keys(updates).length === 0) {
-    return { ok: false, code: 'INVALID_UPDATE_REQUEST', message: 'Informe a origem do projeto ou os tipos de arquivo para atualizar.' };
+    return { ok: false, code: 'INVALID_UPDATE_REQUEST', message: 'Nenhum campo editável foi informado para atualização.' };
   }
   if (request.confirmed !== true) {
     return { ok: false, code: 'CONFIRMATION_REQUIRED', message: 'A alteração exige confirmação explícita.' };

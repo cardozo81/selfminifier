@@ -32,9 +32,10 @@ Uso seguro
 - Preservar os arquivos originais e criar arquivos .min mantém a fonte e cria
   .min.js ou .min.css ao lado dela; pode ser salvo como modo persistente.
 - O menu Configurações usa escolhas numeradas e confirmação explícita para
-  salvar o modo persistente. Ajustar somente esta execução pode substituir o
-  modo apenas naquela execução e nunca altera configuracao.ini; cancelar os
-  ajustes descarta todo o rascunho.
+  editar origem do projeto, tipos, exclusões, perfil e modo de saída, e mostra
+  a configuração atual em modo somente leitura. Ajustar somente esta execução
+  pode substituir o modo apenas naquela execução e nunca altera configuracao.ini;
+  cancelar os ajustes descarta todo o rascunho.
 - Backups e restauração ficam disponíveis no menu. Relatórios ficam em
   Dados\Relatorios e logs técnicos em Dados\Logs.
 

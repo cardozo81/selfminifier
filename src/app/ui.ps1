@@ -161,12 +161,14 @@ function Invoke-PersistentConfiguration {
     if (-not $summary.ok -or -not $summary.configuration) {
         if ($summary.code -eq 'CONFIGURATION_MISSING') {
             Show-Mensagem "Configuração ausente: $($summary.configurationPath)" Yellow
-            if (Confirmar-Acao 'Criar a configuração a partir do modelo, sem sobrescrever arquivo existente') {
-                $created = Invoke-SelfMinifierBridge @{ command = 'create-configuration'; confirmed = $true }
-                if (-not $created.ok) { Show-Mensagem (Get-BridgeErrorMessage $created 'A configuração não foi criada.') Red; return }
-                Show-Mensagem "Configuração criada: $($created.configurationPath)" Green
-                $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
-            } else { return }
+            Write-Host '1. Criar configuração'
+            Write-Host '0. Cancelar'
+            $escolha = (Read-Host 'Escolha').Trim()
+            if ($escolha -ne '1') { Show-Mensagem 'Criação cancelada; a configuração não foi criada.' Yellow; return }
+            $created = Invoke-SelfMinifierBridge @{ command = 'create-configuration'; confirmed = $true }
+            if (-not $created.ok) { Show-Mensagem (Get-BridgeErrorMessage $created 'A configuração não foi criada.') Red; return }
+            Show-Mensagem "Configuração criada: $($created.configurationPath)" Green
+            $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
         }
         if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; return }
     }
@@ -185,8 +187,12 @@ function Invoke-PersistentConfiguration {
         }
         if ($null -eq $newMode) { Show-Mensagem 'Escolha inválida; a configuração não foi modificada.' Yellow; continue }
         if ($newMode -eq $current) { Show-Mensagem 'O modo escolhido já está configurado; nenhuma alteração foi necessária.' Green; return }
-        Show-Mensagem "`nNova configuração: $(Get-ModoSaidaDescricao $newMode)" Cyan
-        if (-not (Confirmar-Acao 'Salvar esta configuração para as próximas execuções')) { Show-Mensagem 'Alteração cancelada; a configuração não foi modificada.' Yellow; return }
+        Show-Mensagem "`nModo atual: $(Get-ModoSaidaDescricao $current)" Cyan
+        Show-Mensagem "Novo modo: $(Get-ModoSaidaDescricao $newMode)" Cyan
+        Write-Host '1. Salvar alteração'
+        Write-Host '0. Cancelar'
+        $confirmacao = (Read-Host 'Escolha').Trim()
+        if ($confirmacao -ne '1') { Show-Mensagem 'Alteração cancelada; a configuração não foi modificada.' Yellow; return }
         $saved = Invoke-SelfMinifierBridge @{ command = 'update-output-mode'; outputMode = $newMode; confirmed = $true }
         if (-not $saved.ok) { Show-Mensagem (Get-BridgeErrorMessage $saved 'A configuração não foi salva.') Red; return }
         Show-Mensagem "Configuração persistente salva: $(Get-ModoSaidaDescricao $newMode)" Green
@@ -283,10 +289,308 @@ function Invoke-EditFileTypes {
     }
 }
 
-function Show-ConfigNotAvailable {
-    param([string]$Label)
-    Show-Mensagem "$Label ainda não está disponível nesta etapa da implementação." Yellow
-    Show-Mensagem 'Nenhuma configuração foi alterada.' Gray
+function Get-PerfilDescricao {
+    param([string]$Perfil)
+    switch ($Perfil) {
+        'Conservador' { return 'Conservador' }
+        'Padrao' { return 'Padrão' }
+        'Maximo' { return 'Máximo' }
+        default { return "Perfil não reconhecido: $Perfil" }
+    }
+}
+
+function Invoke-EditProfile {
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if (-not $summary.ok -or -not $summary.configuration) {
+        Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+        return
+    }
+    $current = $summary.configuration.profile
+    Show-Mensagem "`nPERFIL DE MINIFICAÇÃO" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem "Perfil atual: $(Get-PerfilDescricao $current)" Cyan
+    Write-Host '1. Conservador'
+    Write-Host '2. Padrão'
+    Write-Host '3. Máximo'
+    Write-Host '0. Cancelar'
+    $escolha = (Read-Host 'Escolha').Trim()
+    if ($escolha -eq '0') { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow; return }
+    $novoPerfil = switch ($escolha) {
+        '1' { 'Conservador' }
+        '2' { 'Padrao' }
+        '3' { 'Maximo' }
+        default { $null }
+    }
+    if ($null -eq $novoPerfil) { Show-Mensagem 'Escolha inválida; nenhuma configuração foi alterada.' Yellow; return }
+    if ($novoPerfil -eq $current) { Show-Mensagem 'O perfil selecionado já está configurado; nenhuma alteração foi necessária.' Green; return }
+    Show-Mensagem "`nPerfil atual: $(Get-PerfilDescricao $current)" Cyan
+    Show-Mensagem "Novo perfil: $(Get-PerfilDescricao $novoPerfil)" Cyan
+    Write-Host '1. Salvar alteração'
+    Write-Host '0. Cancelar'
+    $confirmacao = (Read-Host 'Escolha').Trim()
+    switch ($confirmacao) {
+        '1' {
+            $saved = Invoke-SelfMinifierBridge @{ command = 'update-configuration-v2'; profile = $novoPerfil; confirmed = $true }
+            if (-not $saved.ok) {
+                $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar o perfil de minificação.'
+                if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
+                Show-Mensagem "Erro: $mensagem" Red
+                return
+            }
+            Show-Mensagem "Perfil de minificação salvo: $(Get-PerfilDescricao $saved.configuration.profile)" Green
+        }
+        '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
+        default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
+    }
+}
+
+function Get-V2Summary {
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if (-not $summary.ok -or -not $summary.configuration) {
+        Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+        return $null
+    }
+    return $summary
+}
+
+function Get-ExclusionInfo {
+    param([ValidateSet('folder', 'file')][string]$Kind)
+    if ($Kind -eq 'folder') {
+        return @{
+            Field = 'ignoredFolders'
+            Titulo = 'PASTAS IGNORADAS'
+            TituloAdd = 'ADICIONAR PASTA IGNORADA'
+            TituloRemove = 'REMOVER PASTA IGNORADA'
+            Prompt = 'Informe a pasta relativa que deve ser ignorada.'
+            Exemplo = 'node_modules'
+            VazioRemove = 'Não há pastas ignoradas para remover.'
+            ConfirmAddLabel = 'Pasta a adicionar'
+            ConfirmRemoveLabel = 'Pasta a remover'
+            SucessoAdd = 'Pasta ignorada adicionada'
+            SucessoRemove = 'Pasta ignorada removida'
+        }
+    }
+    return @{
+        Field = 'ignoredFiles'
+        Titulo = 'ARQUIVOS IGNORADOS'
+        TituloAdd = 'ADICIONAR ARQUIVO IGNORADO'
+        TituloRemove = 'REMOVER ARQUIVO IGNORADO'
+        Prompt = 'Informe o arquivo relativo que deve ser ignorado.'
+        Exemplo = 'src\config.js'
+        VazioRemove = 'Não há arquivos ignorados para remover.'
+        ConfirmAddLabel = 'Arquivo a adicionar'
+        ConfirmRemoveLabel = 'Arquivo a remover'
+        SucessoAdd = 'Arquivo ignorado adicionado'
+        SucessoRemove = 'Arquivo ignorado removido'
+    }
+}
+
+function Show-IgnoredFoldersList {
+    $summary = Get-V2Summary
+    if (-not $summary) { return }
+    $folders = @($summary.configuration.ignoredFolders)
+    Show-Mensagem "`nPASTAS IGNORADAS" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    if ($folders.Count -eq 0) {
+        Show-Mensagem 'Nenhuma' Gray
+    } else {
+        foreach ($folder in $folders) { Show-Mensagem "- $folder" White }
+    }
+}
+
+function Show-IgnoredFilesList {
+    $summary = Get-V2Summary
+    if (-not $summary) { return }
+    $files = @($summary.configuration.ignoredFiles)
+    Show-Mensagem "`nARQUIVOS IGNORADOS" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    if ($files.Count -eq 0) {
+        Show-Mensagem 'Nenhum' Gray
+    } else {
+        foreach ($file in $files) { Show-Mensagem "- $file" White }
+    }
+}
+
+function Show-CurrentExclusions {
+    $summary = Get-V2Summary
+    if (-not $summary) { return }
+    Show-Mensagem "`nEXCLUSÕES ATUAIS" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem 'Pastas ignoradas:' Cyan
+    $folders = @($summary.configuration.ignoredFolders)
+    if ($folders.Count -eq 0) {
+        Show-Mensagem 'Nenhuma' Gray
+    } else {
+        foreach ($folder in $folders) { Show-Mensagem "- $folder" White }
+    }
+    Show-Mensagem 'Arquivos ignorados:' Cyan
+    $files = @($summary.configuration.ignoredFiles)
+    if ($files.Count -eq 0) {
+        Show-Mensagem 'Nenhum' Gray
+    } else {
+        foreach ($file in $files) { Show-Mensagem "- $file" White }
+    }
+}
+
+function Add-ExclusionEntry {
+    param([ValidateSet('folder', 'file')][string]$Kind)
+    $summary = Get-V2Summary
+    if (-not $summary) { return }
+    $info = Get-ExclusionInfo $Kind
+    $current = @($summary.configuration.($info.Field))
+    Show-Mensagem "`n$($info.TituloAdd)" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem 'Origem do projeto:' Cyan
+    Show-Mensagem $summary.configuration.projectRoot White
+    Show-Mensagem $info.Prompt Gray
+    Show-Mensagem "Exemplo: $($info.Exemplo)" Gray
+    Show-Mensagem '0 = Cancelar' Gray
+    $entrada = (Read-Host 'Valor relativo').Trim()
+    if ($entrada -eq '0' -or $entrada -eq '') {
+        Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow
+        return
+    }
+    $novaLista = @($current) + $entrada
+    Show-Mensagem "`n$($info.ConfirmAddLabel):" Cyan
+    Show-Mensagem $entrada White
+    Write-Host '1. Adicionar'
+    Write-Host '0. Cancelar'
+    $escolha = (Read-Host 'Escolha').Trim()
+    switch ($escolha) {
+        '1' {
+            $request = @{ command = 'update-configuration-v2'; confirmed = $true }
+            $request[$info.Field] = $novaLista
+            $saved = Invoke-SelfMinifierBridge $request
+            if (-not $saved.ok) {
+                if ($saved.diagnostic.code -eq 'DUPLICATE_IGNORED_FOLDER' -or $saved.diagnostic.code -eq 'DUPLICATE_IGNORED_FILE') {
+                    Show-Mensagem "O valor já está configurado. $(Get-BridgeErrorMessage $saved 'Valor duplicado.')" Yellow
+                } else {
+                    $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar a exclusão.'
+                    if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
+                    Show-Mensagem "Erro: $mensagem" Red
+                }
+                return
+            }
+            $persistido = @($saved.configuration.($info.Field))
+            Show-Mensagem "$($info.SucessoAdd): $($persistido[-1])" Green
+        }
+        '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
+        default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
+    }
+}
+
+function Remove-ExclusionEntry {
+    param([ValidateSet('folder', 'file')][string]$Kind)
+    $summary = Get-V2Summary
+    if (-not $summary) { return }
+    $info = Get-ExclusionInfo $Kind
+    $current = @($summary.configuration.($info.Field))
+    if ($current.Count -eq 0) {
+        Show-Mensagem $info.VazioRemove Yellow
+        return
+    }
+    Show-Mensagem "`n$($info.TituloRemove)" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    for ($index = 0; $index -lt $current.Count; $index++) {
+        Write-Host "$($index + 1). $($current[$index])"
+    }
+    Write-Host '0. Cancelar'
+    $escolha = (Read-Host 'Escolha').Trim()
+    if ($escolha -eq '0') { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow; return }
+    $number = 0
+    if (-not [int]::TryParse($escolha, [ref]$number) -or $number -lt 1 -or $number -gt $current.Count) {
+        Show-Mensagem 'Seleção inválida; nenhuma configuração foi alterada.' Yellow
+        return
+    }
+    $remover = $current[$number - 1]
+    Show-Mensagem "`n$($info.ConfirmRemoveLabel):" Cyan
+    Show-Mensagem $remover White
+    Write-Host '1. Remover'
+    Write-Host '0. Cancelar'
+    $confirmacao = (Read-Host 'Escolha').Trim()
+    switch ($confirmacao) {
+        '1' {
+            $novaLista = @()
+            for ($index = 0; $index -lt $current.Count; $index++) {
+                if ($index -ne ($number - 1)) { $novaLista += $current[$index] }
+            }
+            $request = @{ command = 'update-configuration-v2'; confirmed = $true }
+            $request[$info.Field] = $novaLista
+            $saved = Invoke-SelfMinifierBridge $request
+            if (-not $saved.ok) {
+                $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar a exclusão.'
+                if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
+                Show-Mensagem "Erro: $mensagem" Red
+                return
+            }
+            Show-Mensagem "$($info.SucessoRemove): $remover" Green
+        }
+        '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
+        default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
+    }
+}
+
+function Invoke-EditIgnoredFolders {
+    while ($true) {
+        Show-Mensagem "`nPASTAS IGNORADAS" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Write-Host '1. Adicionar pasta'
+        Write-Host '2. Remover pasta'
+        Write-Host '3. Ver lista'
+        Write-Host '0. Voltar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Add-ExclusionEntry 'folder' }
+            '2' { Remove-ExclusionEntry 'folder' }
+            '3' { Show-IgnoredFoldersList }
+            '0' { return }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
+}
+
+function Invoke-EditIgnoredFiles {
+    while ($true) {
+        Show-Mensagem "`nARQUIVOS IGNORADOS" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Write-Host '1. Adicionar arquivo'
+        Write-Host '2. Remover arquivo'
+        Write-Host '3. Ver lista'
+        Write-Host '0. Voltar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Add-ExclusionEntry 'file' }
+            '2' { Remove-ExclusionEntry 'file' }
+            '3' { Show-IgnoredFilesList }
+            '0' { return }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
+}
+
+function Invoke-EditExclusions {
+    while ($true) {
+        $summary = Get-V2Summary
+        if (-not $summary) { return }
+        $folders = @($summary.configuration.ignoredFolders)
+        $files = @($summary.configuration.ignoredFiles)
+        Show-Mensagem "`nEXCLUSÕES" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem "Pastas ignoradas:   $($folders.Count)" White
+        Show-Mensagem "Arquivos ignorados: $($files.Count)" White
+        Write-Host '1. Pastas ignoradas'
+        Write-Host '2. Arquivos ignorados'
+        Write-Host '3. Ver exclusões atuais'
+        Write-Host '0. Voltar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Invoke-EditIgnoredFolders }
+            '2' { Invoke-EditIgnoredFiles }
+            '3' { Show-CurrentExclusions }
+            '0' { return }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
 }
 
 function Show-CurrentConfiguration {
@@ -331,22 +635,18 @@ function Show-ConfigurationMenu {
         Write-Host '1. Origem do projeto'
         Write-Host '2. Tipos de arquivo'
         Write-Host '3. Exclusões'
-        Write-Host '4. Comportamento'
-        Write-Host '5. Interface e mensagens'
-        Write-Host '6. Pastas e dados do programa'
-        Write-Host '7. Ver configuração atual'
-        Write-Host '8. Restaurar configurações padrão'
+        Write-Host '4. Perfil de minificação'
+        Write-Host '5. Comportamento'
+        Write-Host '6. Ver configuração atual'
         Write-Host '0. Voltar'
         $choice = (Read-Host 'Escolha').Trim()
         switch ($choice) {
             '1' { Invoke-EditProjectRoot }
             '2' { Invoke-EditFileTypes }
-            '3' { Show-ConfigNotAvailable 'Exclusões' }
-            '4' { Invoke-PersistentConfiguration }
-            '5' { Show-ConfigNotAvailable 'Interface e mensagens' }
-            '6' { Show-ConfigNotAvailable 'Pastas e dados do programa' }
-            '7' { Show-CurrentConfiguration }
-            '8' { Show-ConfigNotAvailable 'Restaurar configurações padrão' }
+            '3' { Invoke-EditExclusions }
+            '4' { Invoke-EditProfile }
+            '5' { Invoke-PersistentConfiguration }
+            '6' { Show-CurrentConfiguration }
             '0' { return }
             default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
         }

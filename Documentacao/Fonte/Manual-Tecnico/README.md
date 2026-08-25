@@ -10,6 +10,8 @@ O bridge coordena configuração, análise, execução, restauração, logs e re
 
 `src/configuration` lê UTF-8 estrito, exige `VersaoSchema=2`, detecta chaves duplicadas e valida raiz, tipos, exclusões, motor, perfil e modo. `src/domain/index.js` concentra os contratos V2 compartilhados. `deriveEffectiveConfiguration()` aceita somente o override temporário de `outputMode` e não muta a persistente.
 
+A edição persistente pela UI usa o bridge `update-configuration-v2` com whitelist restrita (`projectRoot`, `fileTypes`, `ignoredFolders`, `ignoredFiles`, `profile`), valida com `validateV2Configuration`, grava com `writeV2Configuration` e relê para confirmar. O `outputMode` persistente usa o fluxo dedicado `update-output-mode` com a mesma validação e releitura.
+
 O INI real permanece em `Configuracao\configuracao.ini`; o modelo fica em `Configuracao\configuracao.ini.example`. Não há fallback silencioso para dados inválidos.
 
 ## Scanner e minificação
