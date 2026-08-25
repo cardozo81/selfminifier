@@ -142,10 +142,12 @@ export async function executeRestorePlan(plan, { confirmed = false, confirmChang
   await writeRestoreJournal(plan, 'planned', mutableItems);
   let state = structuredClone(plan.stateBefore);
   const recoveryCopies = [];
+  let activeItem = null;
   try {
     await writeRestoreJournal(plan, 'running', mutableItems);
     for (let index = 0; index < plan.items.length; index += 1) {
       const item = plan.items[index];
+      activeItem = item;
       const tracked = mutableItems[index];
       if (item.requiresChangedConfirmation && confirmChanged !== true) { tracked.status = 'skipped-by-user'; tracked.reason = item.classification; await writeRestoreJournal(plan, 'running', mutableItems); continue; }
       const current = await inspectRegularFile(item.destinationPath);
@@ -183,11 +185,29 @@ export async function executeRestorePlan(plan, { confirmed = false, confirmChang
         if (current.exists) { rollbackSafe = false; break; }
         const content = await readFile(copy.recovery.path);
         try { await createNewFileExact(copy.item.destinationPath, content, copy.recovery.hash); } catch { rollbackSafe = false; break; }
+        const tracked = mutableItems.find((item) => item.id === copy.item.id);
+        if (tracked) tracked.status = 'rolled-back';
       }
       if (rollbackSafe) await writeTechnicalState(plan.stateBefore, plan.runtimePaths.technicalState).catch(() => { rollbackSafe = false; });
     }
     const status = rollbackSafe ? 'rolled-back' : 'recovery-required';
     await writeRestoreJournal(plan, status, mutableItems);
-    throw new RestoreError(status === 'recovery-required' ? 'RESTORE_RECOVERY_REQUIRED' : 'RESTORE_FAILED_ROLLED_BACK', `A restauração falhou e terminou em ${status}.`, { cause: error, items: mutableItems });
+    const causeCode = error?.code ?? error?.name ?? 'RESTORE_INTERNAL_FAILURE';
+    const causeMessage = error?.message ?? 'Falha interna sem mensagem disponível.';
+    throw new RestoreError(
+      status === 'recovery-required' ? 'RESTORE_RECOVERY_REQUIRED' : 'RESTORE_FAILED_ROLLED_BACK',
+      `A restauração falhou e terminou em ${status}. Causa: ${causeCode}: ${causeMessage}`,
+      {
+        cause: error,
+        causeCode,
+        causeMessage,
+        failedItem: activeItem ? {
+          id: activeItem.id,
+          operation: activeItem.operation,
+          destinationPath: activeItem.destinationPath,
+        } : null,
+        items: mutableItems,
+      },
+    );
   }
 }

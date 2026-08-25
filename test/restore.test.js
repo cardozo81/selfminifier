@@ -105,6 +105,7 @@ test('.min remove somente saída criada; saída preexistente permanece', async (
     assert.ok((await readFile(join(sourceDirectory, 'existente.min.js'), 'utf8')).length > 0);
     const state = await readTechnicalState(join(root, 'Dados', 'estado.json'));
     assert.equal(state.records.length, 1);
+    assert.equal(state.records[0].sourcePath, join(sourceDirectory, 'existente.js'));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

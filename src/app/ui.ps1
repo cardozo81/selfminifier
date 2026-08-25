@@ -212,6 +212,222 @@ function Invoke-PersistentConfiguration {
     }
 }
 
+function Show-ConfigNotAvailable {
+    param([string]$Label)
+    Show-Mensagem "$Label ainda não está disponível nesta etapa da implementação." Yellow
+    Show-Mensagem 'Nenhuma configuração foi alterada.' Gray
+}
+
+function Show-CurrentConfiguration {
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if (-not $summary.ok -or -not $summary.configuration) {
+        if ($summary.code -eq 'CONFIGURATION_MISSING') {
+            Show-Mensagem 'Configuração persistente ausente; não há configuração atual para exibir.' Yellow
+        } else {
+            Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+        }
+        return
+    }
+    if ($summary.schema -ne 'v2') {
+        Show-Mensagem "`nCONFIGURAÇÃO ATUAL" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem 'A configuração atual não está no schema V2.' Yellow
+        Show-Mensagem "Schema detectado: $($summary.schema)" Gray
+        Show-Mensagem 'A visualização V2 não está disponível sem uma representação segura equivalente.' Yellow
+        return
+    }
+    $config = $summary.configuration
+    Show-Mensagem "`nCONFIGURAÇÃO ATUAL" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem "Schema: V2 (VersaoSchema=$($config.schemaVersion))" Gray
+    Show-Mensagem 'Origem do projeto (PastaRaiz):' Cyan
+    Show-Mensagem $config.projectRoot White
+    if ($config.fileTypes -contains 'css' -and $config.fileTypes -contains 'javascript') { $tipoDescricao = 'CSS + JavaScript' }
+    elseif ($config.fileTypes -contains 'css') { $tipoDescricao = 'CSS' }
+    elseif ($config.fileTypes -contains 'javascript') { $tipoDescricao = 'JavaScript' }
+    else { $tipoDescricao = ($config.fileTypes -join ', ') }
+    Show-Mensagem "Tipos de arquivo (TiposArquivo): $tipoDescricao" Cyan
+    Show-Mensagem "Motor (Motor): $($config.engine)" Cyan
+    Show-Mensagem "Perfil (Perfil): $($config.profile)" Cyan
+    Show-Mensagem 'Comportamento de saída (ModoSaida):' Cyan
+    Show-Mensagem (Get-ModoSaidaDescricao $config.outputMode) White
+    Show-Mensagem 'Pastas ignoradas:' Cyan
+    if (@($config.ignoredFolders).Count -eq 0) {
+        Show-Mensagem 'Nenhuma' Gray
+    } else {
+        foreach ($folder in @($config.ignoredFolders)) { Show-Mensagem "- $folder" White }
+    }
+    Show-Mensagem 'Arquivos ignorados:' Cyan
+    if (@($config.ignoredFiles).Count -eq 0) {
+        Show-Mensagem 'Nenhum' Gray
+    } else {
+        foreach ($file in @($config.ignoredFiles)) { Show-Mensagem "- $file" White }
+    }
+}
+
+function Show-ConfigurationMenu {
+    while ($true) {
+        Show-Mensagem "`nCONFIGURAÇÕES" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Write-Host '1. Origem do projeto'
+        Write-Host '2. Tipos de arquivo'
+        Write-Host '3. Exclusões'
+        Write-Host '4. Comportamento'
+        Write-Host '5. Interface e mensagens'
+        Write-Host '6. Pastas e dados do programa'
+        Write-Host '7. Ver configuração atual'
+        Write-Host '8. Restaurar configurações padrão'
+        Write-Host '0. Voltar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Show-ConfigNotAvailable 'Origem do projeto' }
+            '2' { Show-ConfigNotAvailable 'Tipos de arquivo' }
+            '3' { Show-ConfigNotAvailable 'Exclusões' }
+            '4' { Invoke-PersistentConfiguration }
+            '5' { Show-ConfigNotAvailable 'Interface e mensagens' }
+            '6' { Show-ConfigNotAvailable 'Pastas e dados do programa' }
+            '7' { Show-CurrentConfiguration }
+            '8' { Show-ConfigNotAvailable 'Restaurar configurações padrão' }
+            '0' { return }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
+}
+
+function Show-ProjectAnalysis {
+    param($Analysis)
+    Show-Mensagem "`nMINIFICAR PROJETO" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    if ($Analysis.projectRoot) {
+        Show-Mensagem 'Origem:' Cyan
+        Show-Mensagem $Analysis.projectRoot Gray
+    }
+    if ($Analysis.fileTypes -contains 'css' -and $Analysis.fileTypes -contains 'javascript') { $tipoDescricao = 'CSS + JavaScript' }
+    elseif ($Analysis.fileTypes -contains 'css') { $tipoDescricao = 'CSS' }
+    elseif ($Analysis.fileTypes -contains 'javascript') { $tipoDescricao = 'JavaScript' }
+    else { $tipoDescricao = ($Analysis.fileTypes -join ', ') }
+    Show-Mensagem "Tipos: $tipoDescricao" Cyan
+    Show-Mensagem "Exclusões: $($Analysis.exclusions.folders) pasta(s), $($Analysis.exclusions.files) arquivo(s)" Cyan
+    Show-Mensagem "`nAnálise concluída:" Cyan
+    Show-Mensagem "CSS encontrados:          $($Analysis.counts.cssFound)"
+    Show-Mensagem "JavaScript encontrados:    $($Analysis.counts.javascriptFound)"
+    Show-Mensagem "Ignorados:                 $($Analysis.counts.ignored)"
+    Show-Mensagem "Já minificados:            $($Analysis.counts.alreadyMinified)"
+    Show-Mensagem "Arquivos elegíveis:        $($Analysis.counts.eligible)"
+    foreach ($entry in @($Analysis.ignoredByReason)) {
+        Show-Mensagem "- $($entry.label): $($entry.count)" Gray
+    }
+}
+
+function Show-CandidatePreview {
+    param($Analysis)
+    $candidates = if ($Analysis.execution -and $Analysis.execution.items) {
+        @($Analysis.execution.items | ForEach-Object {
+            [pscustomobject]@{ fileType = $_.fileType; relativePath = $_.relativePath }
+        })
+    } else {
+        @($Analysis.candidates.css) + @($Analysis.candidates.javascript)
+    }
+    $total = $candidates.Count
+    if ($total -eq 0) {
+        Show-Mensagem 'Nenhum arquivo elegível para minificação.' Yellow
+        return
+    }
+    $pageSize = 10
+    $totalPages = [math]::Ceiling($total / $pageSize)
+    $page = 1
+    while ($true) {
+        $start = ($page - 1) * $pageSize
+        $pageItems = @($candidates | Select-Object -Skip $start -First $pageSize)
+        Show-Mensagem "`nARQUIVOS QUE SERÃO MINIFICADOS" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem "Página $page de $totalPages (Total: $total)" Gray
+        $cssItems = @($pageItems | Where-Object { $_.fileType -eq 'css' })
+        $jsItems = @($pageItems | Where-Object { $_.fileType -eq 'javascript' })
+        if ($cssItems.Count -gt 0) {
+            Show-Mensagem 'CSS' Cyan
+            foreach ($item in $cssItems) { Show-Mensagem "- $($item.relativePath)" White }
+        }
+        if ($jsItems.Count -gt 0) {
+            Show-Mensagem 'JavaScript' Cyan
+            foreach ($item in $jsItems) { Show-Mensagem "- $($item.relativePath)" White }
+        }
+        if ($totalPages -gt 1) {
+            Write-Host '1. Próxima página'
+            Write-Host '2. Página anterior'
+        }
+        Write-Host '0. Voltar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { if ($page -lt $totalPages) { $page++ } else { Show-Mensagem 'Você já está na última página.' Yellow } }
+            '2' { if ($page -gt 1) { $page-- } else { Show-Mensagem 'Você já está na primeira página.' Yellow } }
+            '0' { return }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
+}
+
+function Invoke-ScanAnalysis {
+    param([hashtable]$Adjustments = @{})
+    $response = Invoke-SelfMinifierBridge @{ command = 'scan-analysis'; adjustments = $Adjustments }
+    if (-not $response.ok) {
+        Show-Mensagem "Erro: $(Get-BridgeErrorMessage $response 'A análise foi bloqueada por um diagnóstico indisponível.')" Red
+        return
+    }
+    $analysis = $response.analysis
+    Show-ProjectAnalysis $analysis
+    if (@($analysis.errors).Count -gt 0) {
+        Show-Mensagem 'Problemas de descoberta:' Red
+        foreach ($error in @($analysis.errors)) { Show-Mensagem "- $($error.reason): $($error.message)" Red }
+    }
+    if (@($analysis.execution.conflicts).Count -gt 0) {
+        Show-Mensagem 'Conflitos de destino .min (serão ignorados e preservados):' Yellow
+        foreach ($conflict in @($analysis.execution.conflicts)) { Show-Mensagem "- $($conflict.destinationPath)" Yellow }
+    }
+    while ($true) {
+        Write-Host "`n1. Ver arquivos"
+        Write-Host '2. Iniciar minificação'
+        Write-Host '0. Cancelar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Show-CandidatePreview $analysis }
+            '2' {
+                $execution = Invoke-SelfMinifierBridge @{
+                    command = 'execute'
+                    adjustments = $Adjustments
+                    confirmed = $true
+                    confirmationFingerprint = $analysis.execution.confirmationFingerprint
+                }
+                if (-not $execution.ok) {
+                    Show-Mensagem "Minificação bloqueada: $(Get-BridgeErrorMessage $execution 'A execução falhou sem diagnóstico disponível.')" Red
+                    return
+                }
+                Show-Mensagem "Execução: $($execution.result.executionId)" Cyan
+                Show-Mensagem "Planejados: $($execution.result.counts.planned)" White
+                Show-Mensagem "Processados com sucesso: $($execution.result.counts.createdSuccessfully)" Green
+                Show-Mensagem "Conflitos .min preservados: $($execution.result.counts.skippedConflicts)" $(if ($execution.result.counts.skippedConflicts -gt 0) { 'Yellow' } else { 'Gray' })
+                if ($execution.result.noFilesChanged) {
+                    Show-Mensagem 'Nenhum arquivo foi alterado.' Yellow
+                } else {
+                    Show-Mensagem 'Minificação concluída.' Green
+                }
+                return
+            }
+            '0' { Show-Mensagem 'Análise cancelada; nenhum arquivo foi alterado.' Yellow; return }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
+}
+
+function Invoke-ProjectAnalysis {
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if ($summary.ok -and $summary.configuration -and $summary.configuration.schemaVersion -eq 2) {
+        Invoke-ScanAnalysis $script:TemporaryAdjustments
+    } else {
+        [void](Invoke-Analyze $script:TemporaryAdjustments)
+    }
+}
+
 function Start-SelfMinifierUi {
     $identity = Invoke-SelfMinifierBridge @{ command = 'version' }
     if (-not $identity.ok) { Show-Mensagem "Não foi possível obter a versão do SelfMinifier. $($identity.diagnostic.message)" Red; return }
@@ -230,8 +446,13 @@ function Start-SelfMinifierUi {
         $choice = (Read-Host 'Escolha').Trim()
         try {
             switch ($choice) {
-                '1' { [void](Invoke-Analyze $script:TemporaryAdjustments) }
+                '1' { Invoke-ProjectAnalysis }
                 '2' {
+                    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+                    if ($summary.ok -and $summary.configuration -and $summary.configuration.schemaVersion -eq 2) {
+                        Invoke-ScanAnalysis $script:TemporaryAdjustments
+                        break
+                    }
                     $analysis = Invoke-Analyze $script:TemporaryAdjustments
                     if ($null -eq $analysis -or $analysis.status -ne 'ready') { Show-Mensagem 'A minificação foi bloqueada pela pré-análise.' Red; break }
                     if (-not (Confirmar-Acao 'Confirmar a minificação do escopo exibido')) { Show-Mensagem 'Execução cancelada.' Yellow; break }
@@ -243,7 +464,7 @@ function Start-SelfMinifierUi {
                     if ($response.ok -and $response.result.status -eq 'completed') { Show-Mensagem 'Minificação concluída.' Green } elseif ($response.ok -and $response.result.status -eq 'cancelled') { Show-Mensagem 'Execução cancelada.' Yellow } else { Show-Mensagem "Falha: $($response.diagnostic.message)" Red }
                 }
                 '3' { Invoke-TemporaryAdjustment }
-                '4' { Invoke-PersistentConfiguration }
+                '4' { Show-ConfigurationMenu }
                 '5' { Show-RestoreMenu }
                 '6' { Show-Artefatos reports }
                 '7' { Show-Artefatos logs }

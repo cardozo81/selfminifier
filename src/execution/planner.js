@@ -74,14 +74,19 @@ export async function createExecutionPlan({
     throw new ExecutionError('BACKUP_ROOT_REQUIRED', 'A raiz de backup deve ser informada no modo de sobrescrita.');
   }
 
+  const isV2 = configuration.schemaVersion === 2;
+  const engineId = isV2 ? configuration.engine : configuration.engineId;
+  const configuredSources = isV2
+    ? [{ id: 'project-root', path: configuration.projectRoot, recursive: true, type: 'Diretorio' }]
+    : configuration.sources;
   const runtimePaths = resolveRuntimePaths(runtimeRoot);
   const scannerResult = await scan(configuration, { runtimeRoot, ...scannerOptions });
   const stateSnapshot = await loadStateSnapshot(runtimePaths.technicalState);
   const blockers = scannerResult.errors.map((diagnostic) => ({ ...diagnostic }));
   const ignored = scannerResult.ignored.map((item) => ({ ...item }));
-  const sourceById = new Map(configuration.sources.map((source) => [String(source.id), source]));
+  const sourceById = new Map(configuredSources.map((source) => [String(source.id), source]));
 
-  if (!minifier || minifier.id !== configuration.engineId) {
+  if (!minifier || minifier.id !== engineId) {
     blockers.push({ code: 'INVALID_ENGINE', message: 'O minificador fornecido não corresponde ao motor configurado.' });
   } else {
     const installation = minifier.validateInstallation();
@@ -118,7 +123,7 @@ export async function createExecutionPlan({
     const validation = minifier?.validateConfiguration({
       type: eligible.fileType,
       profile: configuration.profile,
-      engineId: configuration.engineId,
+      engineId,
     });
     if (!validation?.valid) {
       blockers.push(...(validation?.diagnostics ?? [{ code: 'INVALID_MINIFIER_CONFIGURATION', message: 'Configuração de minificação inválida.' }]));
@@ -145,6 +150,22 @@ export async function createExecutionPlan({
       blockers.push({ code: 'UNSAFE_DESTINATION', normalizedPath: destinationPath });
       continue;
     }
+    if (isV2 && configuration.outputMode === OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED && destination.exists) {
+      conflicts.push({
+        sourcePath,
+        destinationPath,
+        existingHash: destination.hash,
+        classification: 'PREEXISTING_MIN_CONFLICT',
+        action: 'skipped',
+      });
+      ignored.push({
+        ...eligible,
+        status: 'ignored',
+        reason: 'PREEXISTING_MIN_CONFLICT',
+        destinationPath,
+      });
+      continue;
+    }
     if (configuration.outputMode === OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED && destination.exists && destination.writable === false) {
       blockers.push({ code: 'READONLY_DESTINATION', normalizedPath: destinationPath });
       continue;
@@ -155,6 +176,7 @@ export async function createExecutionPlan({
       backupOriginId: `origem-${String(eligible.sourceId)}`,
       originRoot: normalize(resolve(source.path)),
       sourcePath,
+      relativePath: eligible.relativePath ?? null,
       sourceHash,
       sourceSize: sourceStats.size,
       fileType: eligible.fileType,
@@ -168,7 +190,7 @@ export async function createExecutionPlan({
     }
   }
 
-  if (conflicts.length > 0) {
+  if (!isV2 && conflicts.length > 0) {
     const executionRecoveryDirectory = join(runtimePaths.recoveryDirectory, executionId);
     if ((await pathState(executionRecoveryDirectory)).exists) {
       blockers.push({ code: 'EXECUTION_RECOVERY_COLLISION', normalizedPath: executionRecoveryDirectory });
@@ -177,15 +199,16 @@ export async function createExecutionPlan({
   const executionRisk = calculateExecutionRisk({
     outputMode: configuration.outputMode,
     profile: configuration.profile,
-    conflictCount: conflicts.length,
+    conflictCount: isV2 ? 0 : conflicts.length,
   });
   const requiredConfirmations = [
     { type: 'execution', satisfied: false },
   ];
-  if (conflicts.length > 0) requiredConfirmations.push({ type: 'overwrite-min-conflicts', satisfied: false });
+  if (!isV2 && conflicts.length > 0) requiredConfirmations.push({ type: 'overwrite-min-conflicts', satisfied: false });
 
   return deepFreeze({
     formatVersion: 1,
+    configurationSchemaVersion: isV2 ? 2 : 1,
     executionId,
     meminifyVersion,
     timestamp,
@@ -195,10 +218,10 @@ export async function createExecutionPlan({
     profileRisk: PROFILE_DEFINITIONS[configuration.profile]?.risk ?? null,
     executionRisk,
     scope: { fileCount: items.length },
-    engine: minifier ? { id: minifier.id, version: minifier.version } : { id: configuration.engineId, version: null },
+    engine: minifier ? { id: minifier.id, version: minifier.version } : { id: engineId, version: null },
     runtimePaths,
     backupRoot: backupRoot ? normalize(resolve(backupRoot)) : null,
-    sources: configuration.sources.map((source) => ({ id: String(source.id), path: normalize(resolve(source.path)), recursive: source.recursive ?? false, type: source.type })),
+    sources: configuredSources.map((source) => ({ id: String(source.id), path: normalize(resolve(source.path)), recursive: source.recursive ?? false, type: source.type })),
     items,
     ignored,
     diagnostics: {
@@ -207,7 +230,9 @@ export async function createExecutionPlan({
       blockers,
     },
     conflicts,
+    conflictPolicy: isV2 ? 'skip-existing' : 'authorize-overwrite',
     requiredConfirmations,
     stateBefore: stateSnapshot,
+    scannerResult,
   });
 }

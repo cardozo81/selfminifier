@@ -1,9 +1,11 @@
-import { basename, join, relative } from 'node:path';
+import { access, constants, lstat, realpath } from 'node:fs/promises';
+import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { OUTPUT_MODES } from '../domain/index.js';
 import {
   createBackupManifest,
   createBackupManifestEntry,
   createValidatedSourceBackup,
+  assertPathHasNoLinks,
   writeBackupManifest,
   writeTechnicalState,
 } from '../integrity/index.js';
@@ -22,6 +24,77 @@ import { validateCalculatedExecutionRisk } from './risk.js';
 
 function clone(value) {
   return structuredClone(value);
+}
+
+function pathIdentity(filePath) {
+  const normalized = normalize(resolve(filePath));
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function isInside(rootPath, candidatePath) {
+  const relativePath = relative(rootPath, candidatePath);
+  return relativePath === '' || (
+    !isAbsolute(relativePath)
+    && relativePath !== '..'
+    && !relativePath.startsWith(`..${sep}`)
+  );
+}
+
+function expectedMinifiedPath(sourcePath) {
+  const extension = extname(sourcePath);
+  return `${sourcePath.slice(0, -extension.length)}.min${extension}`;
+}
+
+async function assertV2ItemSecurityAtWriteTime(plan, item) {
+  if (plan.configurationSchemaVersion !== 2) return;
+  const projectRoot = normalize(resolve(plan.sources[0]?.path ?? ''));
+  const sourcePath = normalize(resolve(item.sourcePath));
+  const destinationPath = normalize(resolve(item.destinationPath));
+  const expectedDestination = plan.outputMode === OUTPUT_MODES.BACKUP_OVERWRITE
+    ? sourcePath
+    : expectedMinifiedPath(sourcePath);
+  if (
+    !projectRoot
+    || !isInside(projectRoot, sourcePath)
+    || !isInside(projectRoot, destinationPath)
+    || pathIdentity(destinationPath) !== pathIdentity(expectedDestination)
+    || pathIdentity(dirname(destinationPath)) !== pathIdentity(dirname(sourcePath))
+  ) {
+    throw new ExecutionError('V2_WRITE_OUTSIDE_PROJECT_ROOT', 'A origem ou o destino V2 não permanece confinado à raiz autorizada.', {
+      projectRoot,
+      sourcePath,
+      destinationPath,
+    });
+  }
+
+  try {
+    await assertPathHasNoLinks(projectRoot);
+    await assertPathHasNoLinks(sourcePath);
+    await assertPathHasNoLinks(dirname(destinationPath));
+    const canonicalRoot = normalize(resolve(await realpath(projectRoot)));
+    const canonicalSource = normalize(resolve(await realpath(sourcePath)));
+    const canonicalDestinationDirectory = normalize(resolve(await realpath(dirname(destinationPath))));
+    if (
+      pathIdentity(canonicalRoot) !== pathIdentity(projectRoot)
+      || !isInside(canonicalRoot, canonicalSource)
+      || !isInside(canonicalRoot, canonicalDestinationDirectory)
+    ) {
+      throw new ExecutionError('V2_WRITE_PATH_INDIRECTION', 'A prova canônica da origem ou do destino V2 não corresponde à raiz autorizada.');
+    }
+    const stats = await lstat(sourcePath, { bigint: true });
+    const writeMask = typeof stats.mode === 'bigint' ? 0o222n : 0o222;
+    const noWriteBits = typeof stats.mode === 'bigint' ? 0n : 0;
+    if (!stats.isFile() || stats.isSymbolicLink() || Number(stats.nlink) > 1) {
+      throw new ExecutionError('V2_UNSAFE_SOURCE_AT_EXECUTION', 'A fonte V2 deixou de ser um arquivo regular com identidade física exclusiva.');
+    }
+    if ((stats.mode & writeMask) === noWriteBits) {
+      throw new ExecutionError('READONLY_SOURCE_AT_EXECUTION', 'A fonte V2 tornou-se somente leitura após a análise.');
+    }
+    await access(sourcePath, constants.W_OK);
+  } catch (cause) {
+    if (cause instanceof ExecutionError) throw cause;
+    throw new ExecutionError('V2_WRITE_SECURITY_REVALIDATION_FAILED', 'A segurança da origem ou do destino V2 não pôde ser comprovada no momento da escrita.', { cause });
+  }
 }
 
 function operationFor(plan, item) {
@@ -124,10 +197,11 @@ async function prepareRecovery(plan, item, journalItem, dependencies) {
 function validateExecutionAuthorization(plan, options) {
   if (plan.status !== 'ready' || plan.diagnostics.blockers.length > 0) throw new ExecutionError('PLAN_BLOCKED', 'A pré-análise contém bloqueios e não pode ser executada.');
   if (options.confirmed !== true) throw new ExecutionError('EXECUTION_CONFIRMATION_REQUIRED', 'A execução exige confirmação explícita do chamador.');
-  if (!validateCalculatedExecutionRisk(plan.executionRisk, { outputMode: plan.outputMode, profile: plan.profile, conflictCount: plan.conflicts.length })) {
+  const authorizedConflictCount = plan.conflictPolicy === 'skip-existing' ? 0 : plan.conflicts.length;
+  if (!validateCalculatedExecutionRisk(plan.executionRisk, { outputMode: plan.outputMode, profile: plan.profile, conflictCount: authorizedConflictCount })) {
     throw new ExecutionError('RISK_CALCULATION_REQUIRED', 'A execução exige uma classificação determinística de risco antes de qualquer mutação.');
   }
-  if (plan.conflicts.length > 0 && options.authorizeOverwriteConflicts !== true) return false;
+  if (plan.conflictPolicy !== 'skip-existing' && plan.conflicts.length > 0 && options.authorizeOverwriteConflicts !== true) return false;
   return true;
 }
 
@@ -140,21 +214,41 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
   }
 
   await recoverInterruptedExecution(plan.runtimePaths.lastExecutionJournal);
+  if (plan.configurationSchemaVersion === 2 && plan.items.length === 0) {
+    return {
+      status: 'completed',
+      executionId: plan.executionId,
+      items: [],
+      conflicts: clone(plan.conflicts),
+      counts: {
+        eligible: plan.scannerResult?.eligible?.length ?? 0,
+        planned: 0,
+        createdSuccessfully: 0,
+        skippedConflicts: plan.conflicts.length,
+        failed: 0,
+      },
+      noFilesChanged: true,
+      journalRecorded: false,
+      manifestPath: null,
+    };
+  }
   const journal = createJournal(plan);
   const journalPath = plan.runtimePaths.lastExecutionJournal;
+  const persistJournal = dependencies.writeExecutionJournal ?? writeExecutionJournal;
   const workingState = clone(plan.stateBefore.value);
   const backupManifestEntries = [];
-  await writeExecutionJournal(journalPath, journal);
+  await persistJournal(journalPath, journal);
   journal.status = 'prepared';
-  await writeExecutionJournal(journalPath, journal);
+  await persistJournal(journalPath, journal);
 
   try {
     journal.status = 'running';
-    await writeExecutionJournal(journalPath, journal);
+    await persistJournal(journalPath, journal);
     for (let index = 0; index < plan.items.length; index += 1) {
       const item = plan.items[index];
       const journalItem = journal.items[index];
       await dependencies.hooks?.beforeItem?.({ item: clone(item), index });
+      await assertV2ItemSecurityAtWriteTime(plan, item);
       const sourceBefore = await inspectRegularFile(item.sourcePath);
       if (!sourceBefore.exists || sourceBefore.hash !== item.sourceHash) {
         throw new ExecutionError('SOURCE_CHANGED', `A fonte mudou após a pré-análise: ${item.sourcePath}.`);
@@ -166,7 +260,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
 
       const backup = await prepareRecovery(plan, item, journalItem, dependencies);
       journalItem.status = 'prepared';
-      await writeExecutionJournal(journalPath, journal);
+      await persistJournal(journalPath, journal);
 
       const sourceText = await readSourceUtf8(item.sourcePath);
       const minified = await minifier.minify({
@@ -182,7 +276,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       const outputSize = Buffer.byteLength(minified.output, 'utf8');
       journalItem.expectedOutputHash = outputHash;
       journalItem.status = 'mutation-intent';
-      await writeExecutionJournal(journalPath, journal);
+      await persistJournal(journalPath, journal);
       await dependencies.hooks?.beforeMutation?.({ item: clone(item), journalPath, journal: clone(journal) });
 
       try {
@@ -194,7 +288,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       } catch (cause) {
         if (cause?.code === 'LATE_DESTINATION_CONFLICT' || cause?.code === 'TARGET_CHANGED') {
           journalItem.status = 'prepared';
-          await writeExecutionJournal(journalPath, journal);
+          await persistJournal(journalPath, journal);
         }
         throw cause;
       }
@@ -202,13 +296,13 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       const output = await inspectRegularFile(item.destinationPath);
       if (!output.exists || output.hash !== outputHash) throw new ExecutionError('OUTPUT_HASH_MISMATCH', `A saída mudou antes da confirmação: ${item.destinationPath}.`);
       journalItem.status = 'confirmed';
-      await writeExecutionJournal(journalPath, journal);
+      await persistJournal(journalPath, journal);
 
       const updated = upsertStateRecord(workingState, plan, item, outputHash, outputSize);
       workingState.records = updated.records;
       await writeTechnicalState(workingState, plan.runtimePaths.technicalState);
       journalItem.stateRecorded = true;
-      await writeExecutionJournal(journalPath, journal);
+      await persistJournal(journalPath, journal);
 
       if (backup) {
         backupManifestEntries.push(createBackupManifestEntry(backup, {
@@ -240,24 +334,47 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       });
       manifestPath = journal.manifestPath;
       journal.manifestExpectedHash = hashContentSha256(`${JSON.stringify(manifest, null, 2)}\n`);
-      await writeExecutionJournal(journalPath, journal);
+      await persistJournal(journalPath, journal);
       await writeBackupManifest(manifestPath, manifest);
       const writtenManifest = await inspectRegularFile(manifestPath);
       if (!writtenManifest.exists || writtenManifest.hash !== journal.manifestExpectedHash) {
         throw new ExecutionError('MANIFEST_HASH_MISMATCH', 'O manifesto persistido não corresponde ao conteúdo esperado.');
       }
       journal.manifestStatus = 'written';
-      await writeExecutionJournal(journalPath, journal);
+      await persistJournal(journalPath, journal);
     }
 
     journal.status = 'completed';
-    await writeExecutionJournal(journalPath, journal);
-    return { status: 'completed', executionId: plan.executionId, items: clone(journal.items), manifestPath };
+    await persistJournal(journalPath, journal);
+    return {
+      status: 'completed',
+      executionId: plan.executionId,
+      items: clone(journal.items),
+      conflicts: clone(plan.conflicts),
+      counts: {
+        eligible: plan.scannerResult?.eligible?.length ?? plan.items.length,
+        planned: plan.items.length,
+        createdSuccessfully: journal.items.filter((item) => item.status === 'confirmed').length,
+        skippedConflicts: plan.conflictPolicy === 'skip-existing' ? plan.conflicts.length : 0,
+        failed: 0,
+      },
+      noFilesChanged: journal.items.length === 0,
+      journalRecorded: true,
+      manifestPath,
+    };
   } catch (cause) {
     const rollback = await rollbackExecutionJournal(journal, journalPath);
     if (rollback.status === 'recovery-required') {
       throw new ExecutionError('RECOVERY_REQUIRED', 'A execução falhou e o rollback encontrou estado ambíguo.', { cause, journal: rollback.journal });
     }
-    throw new ExecutionError(cause.code ?? 'EXECUTION_FAILED', cause.message ?? 'A execução transacional falhou.', { cause, rollbackStatus: rollback.status });
+    throw new ExecutionError(cause.code ?? 'EXECUTION_FAILED', cause.message ?? 'A execução transacional falhou.', {
+      cause,
+      causeCode: cause.details?.causeCode ?? cause.code ?? null,
+      causeMessage: cause.details?.causeMessage ?? cause.message ?? null,
+      operation: cause.details?.operation ?? null,
+      targetPath: cause.details?.targetPath ?? null,
+      temporaryPath: cause.details?.temporaryPath ?? null,
+      rollbackStatus: rollback.status,
+    });
   }
 }

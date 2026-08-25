@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -15,6 +15,7 @@ import {
   writeTechnicalState,
 } from '../src/integrity/index.js';
 import { scan } from '../src/scanner/index.js';
+import { writeJsonUtf8Atomic } from '../src/integrity/json-store.js';
 
 async function temporaryTestDirectory() {
   return mkdtemp(join(tmpdir(), 'selfminifier-integrity-'));
@@ -146,6 +147,175 @@ test('estado técnico faz round-trip e estado inválido falha fechado', async ()
     assert.deepEqual(await readTechnicalState(statePath), state);
     await writeFile(statePath, '{"formatVersion":1,"records":[{}]}', 'utf8');
     await assert.rejects(readTechnicalState(statePath), (error) => error instanceof IntegrityError && error.code === 'INVALID_TECHNICAL_STATE');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('persistência atômica repete EPERM transitório no Windows e mantém o mesmo rename seguro', async () => {
+  const root = await temporaryTestDirectory();
+  const targetPath = join(root, 'ultima-execucao.bkp');
+  const original = '{"estado":"anterior"}\n';
+  try {
+    await writeFile(targetPath, original, 'utf8');
+    let attempts = 0;
+    let cleanupCalls = 0;
+    const delays = [];
+    await writeJsonUtf8Atomic(targetPath, { estado: 'novo' }, 'EXECUTION_JOURNAL', {
+      platform: 'win32',
+      rename: async (temporaryPath, destinationPath) => {
+        attempts += 1;
+        assert.equal(await readFile(targetPath, 'utf8'), original);
+        if (attempts === 1) throw Object.assign(new Error('contenção transitória'), { code: 'EPERM' });
+        return rename(temporaryPath, destinationPath);
+      },
+      wait: async (milliseconds) => { delays.push(milliseconds); },
+      rm: async (...args) => { cleanupCalls += 1; return rm(...args); },
+    });
+    assert.equal(attempts, 2);
+    assert.deepEqual(delays, [50]);
+    assert.equal(cleanupCalls, 0);
+    assert.deepEqual(JSON.parse(await readFile(targetPath, 'utf8')), { estado: 'novo' });
+    assert.deepEqual(await readdir(root), ['ultima-execucao.bkp']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('persistência atômica aplica backoff limitado após múltiplos EPERM e então conclui', async () => {
+  const root = await temporaryTestDirectory();
+  const targetPath = join(root, 'estado.json');
+  try {
+    await writeFile(targetPath, '{"estado":"anterior"}\n', 'utf8');
+    let attempts = 0;
+    const delays = [];
+    await writeJsonUtf8Atomic(targetPath, { estado: 'novo' }, 'TECHNICAL_STATE', {
+      platform: 'win32',
+      rename: async (temporaryPath, destinationPath) => {
+        attempts += 1;
+        if (attempts < 4) throw Object.assign(new Error(`contenção ${attempts}`), { code: 'EPERM' });
+        return rename(temporaryPath, destinationPath);
+      },
+      wait: async (milliseconds) => { delays.push(milliseconds); },
+    });
+    assert.equal(attempts, 4);
+    assert.deepEqual(delays, [50, 100, 200]);
+    assert.deepEqual(JSON.parse(await readFile(targetPath, 'utf8')), { estado: 'novo' });
+    assert.deepEqual(await readdir(root), ['estado.json']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('persistência atômica esgota EPERM de forma fail-closed e preserva diagnóstico', async () => {
+  const root = await temporaryTestDirectory();
+  const targetPath = join(root, 'ultima-execucao.bkp');
+  const original = '{"estado":"anterior"}\n';
+  try {
+    await writeFile(targetPath, original, 'utf8');
+    let attempts = 0;
+    const delays = [];
+    const simulatedCause = Object.assign(new Error('acesso negado durante rename'), { code: 'EPERM' });
+    await assert.rejects(
+      writeJsonUtf8Atomic(targetPath, { estado: 'novo' }, 'EXECUTION_JOURNAL', {
+        platform: 'win32',
+        rename: async () => { attempts += 1; throw simulatedCause; },
+        wait: async (milliseconds) => { delays.push(milliseconds); },
+      }),
+      (error) => {
+        assert.equal(error.code, 'EXECUTION_JOURNAL_WRITE_FAILED');
+        assert.equal(error.details.causeCode, 'EPERM');
+        assert.equal(error.details.causeMessage, 'acesso negado durante rename');
+        assert.equal(error.details.operation, 'rename-temporary-to-target');
+        assert.equal(error.details.targetPath, targetPath);
+        assert.match(error.details.temporaryPath, /\.tmp$/);
+        assert.equal(error.details.attempts, 4);
+        assert.equal(error.details.cleanupCauseCode, null);
+        return true;
+      },
+    );
+    assert.equal(attempts, 4);
+    assert.deepEqual(delays, [50, 100, 200]);
+    assert.equal(await readFile(targetPath, 'utf8'), original);
+    assert.deepEqual(await readdir(root), ['ultima-execucao.bkp']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('persistência atômica reporta falha de limpeza sem mascarar EPERM esgotado', async () => {
+  const root = await temporaryTestDirectory();
+  const targetPath = join(root, 'ultima-execucao.bkp');
+  const original = '{"estado":"anterior"}\n';
+  try {
+    await writeFile(targetPath, original, 'utf8');
+    const renameCause = Object.assign(new Error('contenção persistente'), { code: 'EPERM' });
+    const cleanupCause = Object.assign(new Error('temporário ainda bloqueado'), { code: 'EACCES' });
+    await assert.rejects(
+      writeJsonUtf8Atomic(targetPath, { estado: 'novo' }, 'EXECUTION_JOURNAL', {
+        platform: 'win32',
+        rename: async () => { throw renameCause; },
+        wait: async () => {},
+        rm: async () => { throw cleanupCause; },
+      }),
+      (error) => {
+        assert.equal(error.details.causeCode, 'EPERM');
+        assert.equal(error.details.causeMessage, 'contenção persistente');
+        assert.equal(error.details.attempts, 4);
+        assert.equal(error.details.cleanupCauseCode, 'EACCES');
+        assert.equal(error.details.cleanupCauseMessage, 'temporário ainda bloqueado');
+        return true;
+      },
+    );
+    assert.equal(await readFile(targetPath, 'utf8'), original);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('persistência atômica não repete erro estrutural de rename', async () => {
+  const root = await temporaryTestDirectory();
+  const targetPath = join(root, 'estado.json');
+  try {
+    let attempts = 0;
+    let waits = 0;
+    await assert.rejects(
+      writeJsonUtf8Atomic(targetPath, { estado: 'novo' }, 'TECHNICAL_STATE', {
+        platform: 'win32',
+        rename: async () => {
+          attempts += 1;
+          throw Object.assign(new Error('destino estruturalmente inválido'), { code: 'ENOTDIR' });
+        },
+        wait: async () => { waits += 1; },
+      }),
+      (error) => error.details.causeCode === 'ENOTDIR' && error.details.attempts === 1,
+    );
+    assert.equal(attempts, 1);
+    assert.equal(waits, 0);
+    assert.deepEqual(await readdir(root), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('persistência atômica não repete EPERM fora do Windows', async () => {
+  const root = await temporaryTestDirectory();
+  const targetPath = join(root, 'estado.json');
+  try {
+    let attempts = 0;
+    await assert.rejects(
+      writeJsonUtf8Atomic(targetPath, { estado: 'novo' }, 'TECHNICAL_STATE', {
+        platform: 'linux',
+        rename: async () => {
+          attempts += 1;
+          throw Object.assign(new Error('falha EPERM não Windows'), { code: 'EPERM' });
+        },
+        wait: async () => { assert.fail('não deveria aguardar fora do Windows'); },
+      }),
+      (error) => error.details.causeCode === 'EPERM' && error.details.attempts === 1,
+    );
+    assert.equal(attempts, 1);
+    assert.deepEqual(await readdir(root), []);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

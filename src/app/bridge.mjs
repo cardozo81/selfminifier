@@ -3,13 +3,15 @@ import { readFileSync } from 'node:fs';
 import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
-import { deriveEffectiveConfiguration, loadConfiguration } from '../configuration/index.js';
+import { deriveEffectiveConfiguration, identifyConfigurationSchema, parseConfiguration, parseV2Configuration, validateV2Configuration } from '../configuration/index.js';
+import { readUtf8File } from '../configuration/utf8.js';
 import { OUTPUT_MODES } from '../domain/index.js';
 import { createDefaultMinifierRegistry } from '../minifiers/index.js';
 import { createExecutionPlan, executePlan, ExecutionError } from '../execution/index.js';
 import { listArtifacts, readArtifact, writeOperationalReports, writeTechnicalLog } from '../observability/index.mjs';
 import { createBackupRestorePlan, createLastMinRestorePlan, executeRestorePlan, listKnownBackups } from '../restore/index.js';
 import { resolveApplicationPaths, resolveApplicationRoot, resolveRuntimePaths } from '../runtime/paths.js';
+import { buildAnalysis } from '../scanner/index.js';
 import { loadApplicationMetadata } from '../runtime/version.js';
 
 function paths(projectRoot) {
@@ -35,9 +37,16 @@ async function loadPersistent(projectRoot) {
   }
   try {
     const registry = createDefaultMinifierRegistry();
+    const allowedEngines = new Set(registry.list().map((item) => item.id));
+    const text = await readUtf8File(filePaths.configuration);
+    const schema = identifyConfigurationSchema(text);
+    const configuration = schema.kind === 'v2'
+      ? parseV2Configuration(text, { allowedEngines })
+      : parseConfiguration(text, { allowedEngines });
     return {
       ok: true,
-      configuration: await loadConfiguration(filePaths.configuration, { allowedEngines: new Set(registry.list().map((item) => item.id)) }),
+      schema: schema.kind,
+      configuration,
       configurationPath: filePaths.configuration,
       examplePath: filePaths.example,
       projectRoot: filePaths.root,
@@ -50,6 +59,7 @@ async function loadPersistent(projectRoot) {
 function summarizePlan(plan) {
   const summary = {
     formatVersion: plan.formatVersion,
+    configurationSchemaVersion: plan.configurationSchemaVersion,
     executionId: plan.executionId,
     status: plan.status,
     outputMode: plan.outputMode,
@@ -63,6 +73,7 @@ function summarizePlan(plan) {
     items: plan.items,
     ignored: plan.ignored,
     conflicts: plan.conflicts,
+    conflictPolicy: plan.conflictPolicy,
     diagnostics: plan.diagnostics,
     requiredConfirmations: plan.requiredConfirmations,
     backupRoot: plan.backupRoot,
@@ -94,16 +105,25 @@ async function persistArtifacts({ projectRoot, plan, result = null, resultStatus
 
 async function createPlan(request, persistent, applicationVersion) {
   const registry = createDefaultMinifierRegistry();
-  const effective = deriveEffectiveConfiguration(persistent.configuration, adjustmentsFrom(request), { allowedEngines: new Set(registry.list().map((item) => item.id)) });
+  const isV2 = persistent.configuration?.schemaVersion === 2;
+  const adjustments = adjustmentsFrom(request);
+  const allowedEngines = new Set(registry.list().map((item) => item.id));
+  if (isV2 && Object.keys(adjustments).some((key) => key !== 'outputMode')) {
+    throw new ExecutionError('V2_UNSUPPORTED_TEMPORARY_ADJUSTMENT', 'A execução V2 recebeu um ajuste temporário não permitido.');
+  }
+  const effective = isV2
+    ? validateV2Configuration({ ...persistent.configuration, ...adjustments }, { allowedEngines })
+    : deriveEffectiveConfiguration(persistent.configuration, adjustments, { allowedEngines });
+  const engineId = isV2 ? effective.engine : effective.engineId;
   const plan = await createExecutionPlan({
     configuration: effective,
-    minifier: registry.get(effective.engineId),
+    minifier: registry.get(engineId),
     runtimeRoot: persistent.projectRoot,
     backupRoot: effective.outputMode === 'BackupESobrescreverOriginais' ? paths(persistent.projectRoot).backupRoot : undefined,
     executionId: request.executionId ?? `exec-${Date.now()}`,
     meminifyVersion: applicationVersion,
   });
-  return { plan, minifier: registry.get(effective.engineId), effective };
+  return { plan, minifier: registry.get(engineId), effective };
 }
 
 export async function runBridgeRequest(request, { projectRoot = resolveApplicationRoot() } = {}) {
@@ -189,6 +209,27 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
   if (!persistent.ok) return { ok: false, ...persistent };
   persistent.projectRoot = resolve(projectRoot);
   try {
+    if (request.command === 'scan-analysis') {
+      if (persistent.configuration?.schemaVersion !== 2) {
+        return { ok: false, code: 'V2_CONFIGURATION_REQUIRED', message: 'A análise quantitativa exige uma configuração com VersaoSchema=2.' };
+      }
+      const configuration = persistent.configuration;
+      const { plan } = await createPlan(request, persistent, application.version);
+      const analysis = buildAnalysis(plan.scannerResult, {
+        projectRoot: configuration.projectRoot,
+        fileTypes: configuration.fileTypes,
+        ignoredFolders: configuration.ignoredFolders,
+        ignoredFiles: configuration.ignoredFiles,
+      });
+      return {
+        ok: true,
+        schema: persistent.schema,
+        analysis: {
+          ...analysis,
+          execution: summarizePlan(plan),
+        },
+      };
+    }
     if (request.command === 'analyze') {
       const startedAt = performance.now();
       const { plan } = await createPlan(request, persistent, application.version);
