@@ -16,6 +16,7 @@ export function createBackupManifestEntry(backup, metadata = {}) {
     engineVersion: metadata.engineVersion ?? null,
     profile: metadata.profile ?? null,
     executionRisk: metadata.executionRisk ?? null,
+    ...(metadata.artifactId === undefined ? {} : { artifactId: metadata.artifactId }),
     originalSize: backup.originalSize,
     originalSha256: backup.originalSha256,
     minifiedSize: metadata.minifiedSize ?? null,

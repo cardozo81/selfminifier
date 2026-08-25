@@ -20,6 +20,29 @@ Para um original sobrescrito, a detecção confiável de “já minificado” ex
 
 Timestamps não são prova primária, e aparência visual não comprova estado. A troca de motor não autoriza reminificar diretamente um arquivo comprovadamente já minificado; quando aplicável, a fonte original deve ser restaurada primeiro.
 
+## Histórico persistente de proveniência
+
+`Dados\Historico` é a autoridade histórica de metadados técnicos. Cada execução concluída possui um registro imutável `Dados\Historico\<executionId>.json`, com `formatVersion: 1`, sem índice global. `Dados\estado.json` permanece o estado técnico atual e não substitui nem acumula o histórico.
+
+O cabeçalho histórico registra:
+
+- `executionId` existente, sem alteração;
+- `meminifyVersion`, preservando o nome compatível do formato 1;
+- timestamp, modo de saída e raiz física do projeto;
+- lista dos artefatos efetivamente produzidos.
+
+Cada artefato produzido recebe um `artifactId` persistente, independente de caminhos e de numeração sequencial, gerado por `crypto.randomBytes(12)` como 24 caracteres hexadecimais maiúsculos. O registro do artefato conserva origem, saída, hashes de entrada e saída, tamanhos, motor e versão, perfil, modo e timestamp.
+
+No modo de sobrescrita, a proveniência conserva a raiz física de backup e o caminho relativo realmente usados, o hash do original e `compression: none`. No modo `.min`, a ausência de payload histórico de backup é explícita por `available: false`, caminhos/hash nulos e `compression: none`; a aplicação não copia a fonte apenas para fabricar recuperação histórica.
+
+O payload de backup continua em `_source_versions` nesta fase. `Dados\Historico` contém somente o plano de controle necessário para interpretar cada execução segundo a localização vigente quando ela ocorreu.
+
+Registros novos podem ligar `executionId` e `artifactId` ao estado atual, ao journal e ao manifesto. Registros antigos sem esses campos continuam válidos e não são migrados ou regravados.
+
+`SelfMinifier-Tag` não é inserido nesta fase. `artifactId` é identidade persistente; SHA-256 continua sendo prova de integridade. Quando a tag for implementada, `outputHash` significará o SHA-256 dos bytes finais completos do artefato, incluindo a tag inserida. Não haverá remoção de marcador nem hash normalizado, e a presença de uma tag nunca substituirá a prova SHA-256.
+
+No protocolo write-ahead, caminho e SHA-256 esperado do histórico entram no journal antes da criação exclusiva do registro. Estado e manifesto obrigatórios são comprovados primeiro; o histórico é então gravado e comprovado; somente depois o journal recebe `completed`. Falha anterior à conclusão remove o histórico apenas pelo caminho e hash exatos, e qualquer divergência permanece `recovery-required`. Colisão de `executionId` bloqueia sem sobrescrever o registro existente.
+
 ## `BackupESobrescreverOriginais`
 
 O backup guarda somente a fonte não minificada imediatamente antes de sua sobrescrita. Uma versão minificada nunca pode ser usada como backup de fonte.

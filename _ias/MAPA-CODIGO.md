@@ -52,6 +52,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `src/integrity/errors.js` | Erros estruturados de integridade | Nenhuma |
 | `src/integrity/hash.js` | SHA-256 incremental de arquivos | Node.js `crypto`, `fs` |
 | `src/integrity/json-store.js` | Leitura UTF-8 estrita e persistência JSON por arquivo temporário e rename | Node.js built-ins |
+| `src/integrity/history.js` | `artifactId` criptográfico, schema histórico formatVersion 1, criação imutável, leitura, listagem e busca sequencial fail-closed | Node.js `crypto`, `fs/promises`, integridade |
 | `src/integrity/schema.js` | Validação dos registros técnicos e entradas de manifesto | Módulos de integridade |
 | `src/integrity/state.js` | Validação e persistência de `Dados/estado.json` | Módulos de integridade |
 | `src/integrity/manifest.js` | Criação, validação e persistência do manifesto de backup | Módulos de integridade |
@@ -136,6 +137,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `test/minifiers.test.js` | Testes focados de registry, adapter, perfis, JS, CSS e resultados neutros | `node:test`, adapter esbuild |
 | `test/scanner.test.js` | Testes focados do Scanner V2: tipos, exclusões, confinamento, links, readonly, hard links e determinismo | `node:test`, módulos do scanner |
 | `test/integrity.test.js` | Testes focados de SHA-256, estado, manifesto, backup e diretório temporário | `node:test`, módulos de integridade |
+| `test/history.test.js` | Testes focados de `artifactId`, histórico imutável, dois modos, hashes, backup físico, compatibilidade transacional e falhas de persistência | `node:test`, integridade e execução |
 | `test/execution.test.js` | Testes focados de pré-análise, write-ahead, conflitos, execução, rollback e interrupção | `node:test`, módulos de execução |
 | `test/runtime.test.js` | Testes focados de política Node, package/lock, dependências e bootstrap sem instalação real | `node:test`, módulos runtime |
 

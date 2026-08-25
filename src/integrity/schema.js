@@ -29,6 +29,8 @@ export function validateRecord(record, code, label) {
     if (!isNullableSize(record[field])) throw new IntegrityError(code, `${label}.${field} deve ser inteiro não negativo ou null.`);
   }
   if (record.executionRisk !== undefined && !isNullableString(record.executionRisk)) throw new IntegrityError(code, `${label}.executionRisk deve ser texto ou null.`);
+  if (record.executionId !== undefined && (typeof record.executionId !== 'string' || !record.executionId)) throw new IntegrityError(code, `${label}.executionId deve ser texto não vazio quando presente.`);
+  if (record.artifactId !== undefined && !/^[A-F0-9]{24}$/.test(record.artifactId)) throw new IntegrityError(code, `${label}.artifactId deve conter 24 caracteres hexadecimais maiúsculos quando presente.`);
 }
 
 export function validateManifestEntry(entry, index) {
@@ -42,6 +44,7 @@ export function validateManifestEntry(entry, index) {
     if (!isNullableString(entry[field])) throw new IntegrityError(code, `${label}.${field} deve ser texto ou null.`);
   }
   if (entry.executionRisk !== undefined && !isNullableString(entry.executionRisk)) throw new IntegrityError(code, `${label}.executionRisk deve ser texto ou null.`);
+  if (entry.artifactId !== undefined && !/^[A-F0-9]{24}$/.test(entry.artifactId)) throw new IntegrityError(code, `${label}.artifactId deve conter 24 caracteres hexadecimais maiúsculos quando presente.`);
   if (!Number.isSafeInteger(entry.originalSize) || entry.originalSize < 0) throw new IntegrityError(code, `${label}.originalSize deve ser inteiro não negativo.`);
   if (!SHA256_PATTERN.test(entry.originalSha256)) throw new IntegrityError(code, `${label}.originalSha256 deve ser SHA-256 hexadecimal minúsculo.`);
   if (!isNullableSize(entry.minifiedSize)) throw new IntegrityError(code, `${label}.minifiedSize deve ser inteiro não negativo ou null.`);

@@ -2,11 +2,19 @@ import { access, constants, lstat, realpath } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
 import { OUTPUT_MODES } from '../domain/index.js';
 import {
+  ARTIFACT_ID_PATTERN,
+  assertHistoricalExecutionWritable,
+  createHistoricalExecutionRecord,
+  generateArtifactId,
+  historicalExecutionRecordHash,
+  listHistoricalExecutionRecords,
+  resolveHistoricalExecutionPath,
   createBackupManifest,
   createBackupManifestEntry,
   createValidatedSourceBackup,
   assertPathHasNoLinks,
   writeBackupManifest,
+  writeHistoricalExecutionRecord,
   writeTechnicalState,
 } from '../integrity/index.js';
 import {
@@ -15,6 +23,7 @@ import {
   hashContentSha256,
   inspectRegularFile,
   readSourceUtf8,
+  removeExactFile,
   replaceFileExact,
 } from './filesystem.js';
 import { ExecutionError } from './errors.js';
@@ -115,6 +124,48 @@ function plannedRecoveryPath(plan, item) {
   return null;
 }
 
+function allocateArtifactId(generator, usedArtifactIds) {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const artifactId = generator();
+    if (!ARTIFACT_ID_PATTERN.test(artifactId)) throw new ExecutionError('ARTIFACT_ID_GENERATION_FAILED', 'O gerador produziu um artifactId fora do contrato aprovado.');
+    if (!usedArtifactIds.has(artifactId)) {
+      usedArtifactIds.add(artifactId);
+      return artifactId;
+    }
+  }
+  throw new ExecutionError('ARTIFACT_ID_COLLISION', 'Não foi possível gerar um artifactId único para a execução.');
+}
+
+function createArtifactProvenance(plan, item, journalItem, outputHash, outputSize, backup) {
+  return {
+    artifactId: journalItem.artifactId,
+    sourcePath: item.sourcePath,
+    outputPath: item.destinationPath,
+    inputHash: item.sourceHash,
+    outputHash,
+    sourceSize: item.sourceSize,
+    outputSize,
+    engine: plan.engine.id,
+    engineVersion: plan.engine.version,
+    profile: plan.profile,
+    outputMode: plan.outputMode,
+    timestamp: plan.timestamp,
+    backup: backup ? {
+      available: true,
+      backupRoot: plan.backupRoot,
+      backupRelativePath: backup.backupRelativePath,
+      originalHash: backup.originalSha256,
+      compression: 'none',
+    } : {
+      available: false,
+      backupRoot: null,
+      backupRelativePath: null,
+      originalHash: null,
+      compression: 'none',
+    },
+  };
+}
+
 function createJournal(plan) {
   const manifestPath = plan.outputMode === OUTPUT_MODES.BACKUP_OVERWRITE
     ? join(plan.backupRoot, plan.executionId, 'manifest.json')
@@ -132,8 +183,12 @@ function createJournal(plan) {
     manifestPath,
     manifestStatus: manifestPath ? 'planned' : 'not-applicable',
     manifestExpectedHash: null,
+    historyPath: resolveHistoricalExecutionPath(plan.runtimePaths.historyDirectory, plan.executionId),
+    historyStatus: 'planned',
+    historyExpectedHash: null,
     items: plan.items.map((item) => ({
       id: item.id,
+      artifactId: null,
       sourcePath: item.sourcePath,
       destinationPath: item.destinationPath,
       operation: operationFor(plan, item),
@@ -148,12 +203,14 @@ function createJournal(plan) {
   };
 }
 
-function upsertStateRecord(state, plan, item, outputHash, outputSize) {
+function upsertStateRecord(state, plan, item, artifactId, outputHash, outputSize) {
   const identity = process.platform === 'win32' ? item.sourcePath.toLowerCase() : item.sourcePath;
   const records = state.records.filter((record) => (
     (process.platform === 'win32' ? record.sourcePath?.toLowerCase() : record.sourcePath) !== identity
   ));
   records.push({
+    executionId: plan.executionId,
+    artifactId,
     sourcePath: item.sourcePath,
     outputPath: item.destinationPath,
     sourceHash: item.sourceHash,
@@ -214,7 +271,33 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
   }
 
   await recoverInterruptedExecution(plan.runtimePaths.lastExecutionJournal);
+  const persistHistory = dependencies.writeHistoricalExecutionRecord ?? writeHistoricalExecutionRecord;
+  const historyPath = await assertHistoricalExecutionWritable(plan.runtimePaths.historyDirectory, plan.executionId);
+  const priorHistory = await listHistoricalExecutionRecords(plan.runtimePaths.historyDirectory);
+  const knownArtifactIds = priorHistory.flatMap((execution) => execution.artifacts.map((artifact) => artifact.artifactId));
   if (plan.configurationSchemaVersion === 2 && plan.items.length === 0) {
+    const history = createHistoricalExecutionRecord({
+      executionId: plan.executionId,
+      meminifyVersion: options.meminifyVersion ?? plan.meminifyVersion ?? null,
+      timestamp: plan.timestamp,
+      outputMode: plan.outputMode,
+      projectRoot: plan.sources[0].path,
+      artifacts: [],
+    });
+    const expectedHistoryHash = historicalExecutionRecordHash(history);
+    try {
+      await persistHistory(plan.runtimePaths.historyDirectory, history);
+      const writtenHistory = await inspectRegularFile(historyPath);
+      if (!writtenHistory.exists || writtenHistory.hash !== expectedHistoryHash) {
+        throw new ExecutionError('HISTORY_HASH_MISMATCH', 'O histórico persistido não corresponde à execução sem artefatos.');
+      }
+    } catch (cause) {
+      const writtenHistory = await inspectRegularFile(historyPath).catch(() => ({ exists: false, hash: null }));
+      if (writtenHistory.exists && (writtenHistory.hash !== expectedHistoryHash || !await removeExactFile(historyPath, expectedHistoryHash))) {
+        throw new ExecutionError('RECOVERY_REQUIRED', 'A persistência histórica da execução sem artefatos ficou ambígua.', { cause, historyPath });
+      }
+      throw cause;
+    }
     return {
       status: 'completed',
       executionId: plan.executionId,
@@ -230,6 +313,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       noFilesChanged: true,
       journalRecorded: false,
       manifestPath: null,
+      historyPath,
     };
   }
   const journal = createJournal(plan);
@@ -237,6 +321,8 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
   const persistJournal = dependencies.writeExecutionJournal ?? writeExecutionJournal;
   const workingState = clone(plan.stateBefore.value);
   const backupManifestEntries = [];
+  const historicalArtifacts = [];
+  const usedArtifactIds = new Set(knownArtifactIds);
   await persistJournal(journalPath, journal);
   journal.status = 'prepared';
   await persistJournal(journalPath, journal);
@@ -257,6 +343,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
         const destination = await inspectRegularFile(item.destinationPath);
         if (destination.exists) throw new ExecutionError('LATE_DESTINATION_CONFLICT', `O destino passou a existir após a pré-análise: ${item.destinationPath}.`);
       }
+      journalItem.artifactId = allocateArtifactId(dependencies.generateArtifactId ?? generateArtifactId, usedArtifactIds);
 
       const backup = await prepareRecovery(plan, item, journalItem, dependencies);
       journalItem.status = 'prepared';
@@ -298,7 +385,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       journalItem.status = 'confirmed';
       await persistJournal(journalPath, journal);
 
-      const updated = upsertStateRecord(workingState, plan, item, outputHash, outputSize);
+      const updated = upsertStateRecord(workingState, plan, item, journalItem.artifactId, outputHash, outputSize);
       workingState.records = updated.records;
       await writeTechnicalState(workingState, plan.runtimePaths.technicalState);
       journalItem.stateRecorded = true;
@@ -310,12 +397,14 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
           engineVersion: plan.engine.version,
           profile: plan.profile,
           executionRisk: plan.executionRisk.technicalLevel,
+          artifactId: journalItem.artifactId,
           minifiedSize: outputSize,
           minifiedSha256: outputHash,
           status: 'minificado',
           minificationDate: plan.timestamp,
         }));
       }
+      historicalArtifacts.push(createArtifactProvenance(plan, item, journalItem, outputHash, outputSize, backup));
     }
 
     let manifestPath = null;
@@ -344,6 +433,24 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       await persistJournal(journalPath, journal);
     }
 
+    const history = createHistoricalExecutionRecord({
+      executionId: plan.executionId,
+      meminifyVersion: options.meminifyVersion ?? plan.meminifyVersion ?? null,
+      timestamp: plan.timestamp,
+      outputMode: plan.outputMode,
+      projectRoot: plan.sources[0].path,
+      artifacts: historicalArtifacts,
+    });
+    journal.historyExpectedHash = historicalExecutionRecordHash(history);
+    await persistJournal(journalPath, journal);
+    await persistHistory(plan.runtimePaths.historyDirectory, history);
+    const writtenHistory = await inspectRegularFile(historyPath);
+    if (!writtenHistory.exists || writtenHistory.hash !== journal.historyExpectedHash) {
+      throw new ExecutionError('HISTORY_HASH_MISMATCH', 'O histórico persistido não corresponde ao conteúdo esperado.');
+    }
+    journal.historyStatus = 'written';
+    await persistJournal(journalPath, journal);
+
     journal.status = 'completed';
     await persistJournal(journalPath, journal);
     return {
@@ -361,6 +468,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       noFilesChanged: journal.items.length === 0,
       journalRecorded: true,
       manifestPath,
+      historyPath,
     };
   } catch (cause) {
     const rollback = await rollbackExecutionJournal(journal, journalPath);

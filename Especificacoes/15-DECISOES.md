@@ -9,6 +9,7 @@
 - Perfis são intenções neutras traduzidas apenas por adaptadores.
 - Existem exatamente dois modos de saída: sobrescrita com backup validado e preservação da fonte com saída `.min`.
 - SHA-256 é a prova primária de integridade; timestamps e aparência visual não substituem essa prova.
+- `Dados\Historico\<executionId>.json` é a autoridade histórica imutável, sem índice global; `artifactId` usa 96 bits criptograficamente aleatórios e identifica o artefato, enquanto `estado.json` permanece estado atual. `SelfMinifier-Tag`, GZIP e `PastaBackups` não fazem parte desta decisão implementada.
 - Symlinks e junctions não são seguidos automaticamente na versão 1.
 - Toda mutação confirmada deve possuir rastreamento recuperável correspondente.
 - O desenvolvimento é incremental, assistido por IA e realizado diretamente em `main`, sem branch por tarefa e sem pull request no fluxo atual.

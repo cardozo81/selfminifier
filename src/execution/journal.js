@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path';
 import { OUTPUT_MODES } from '../domain/index.js';
 import { readJsonUtf8, writeJsonUtf8Atomic } from '../integrity/json-store.js';
+import { ARTIFACT_ID_PATTERN } from '../integrity/history.js';
 import { SHA256_PATTERN, requireObject } from '../integrity/schema.js';
 import { validateTechnicalState } from '../integrity/state.js';
 import { ExecutionError } from './errors.js';
@@ -16,6 +17,7 @@ export const ITEM_STATUSES = Object.freeze([
 
 const OPERATIONS = new Set(['overwrite-original', 'create-output', 'replace-output']);
 const MANIFEST_STATUSES = new Set(['not-applicable', 'planned', 'written', 'rolled-back']);
+const HISTORY_STATUSES = new Set(['planned', 'written', 'rolled-back']);
 const MANUAL_RESTORE_STATUSES = new Set(['restored-source', 'deleted-min', 'already-absent']);
 
 function validHash(value) {
@@ -29,6 +31,15 @@ export function validateExecutionJournal(journal) {
     if (!Object.values(OUTPUT_MODES).includes(journal.outputMode) || !JOURNAL_STATUSES.includes(journal.status) || !Array.isArray(journal.items)) throw new Error('Modo, status ou itens inválidos.');
     if (!validateCalculatedExecutionRisk(journal.executionRisk)) throw new Error('Risco da execução ausente ou inválido.');
     if (!MANIFEST_STATUSES.has(journal.manifestStatus) || (journal.manifestPath !== null && !isAbsolute(journal.manifestPath)) || !validHash(journal.manifestExpectedHash)) throw new Error('Controle de manifesto inválido.');
+    const hasHistoryLinkage = ['historyPath', 'historyStatus', 'historyExpectedHash'].some((field) => Object.hasOwn(journal, field));
+    if (hasHistoryLinkage && (
+      !isAbsolute(journal.historyPath)
+      || !HISTORY_STATUSES.has(journal.historyStatus)
+      || !validHash(journal.historyExpectedHash)
+      || (journal.historyStatus === 'written' && !journal.historyExpectedHash)
+    )) {
+      throw new Error('Controle de histórico inválido.');
+    }
     if (!isAbsolute(journal.statePath) || typeof journal.stateBefore?.existed !== 'boolean') throw new Error('Snapshot de estado ausente.');
     validateTechnicalState(journal.stateBefore.value);
     const itemIds = new Set();
@@ -36,6 +47,7 @@ export function validateExecutionJournal(journal) {
     journal.items.forEach((item) => {
       if (!item || typeof item.id !== 'string' || !OPERATIONS.has(item.operation) || !ITEM_STATUSES.includes(item.status)) throw new Error('Item inválido.');
       if (typeof item.stateRecorded !== 'boolean') throw new Error('Estado de persistência do item inválido.');
+      if (item.artifactId !== undefined && item.artifactId !== null && !ARTIFACT_ID_PATTERN.test(item.artifactId)) throw new Error('artifactId inválido.');
       if (!isAbsolute(item.sourcePath) || !isAbsolute(item.destinationPath)) throw new Error('Caminho não absoluto.');
       if (item.plannedRecoveryPath !== null && !isAbsolute(item.plannedRecoveryPath)) throw new Error('Caminho planejado de recuperação inválido.');
       if (!validHash(item.sourceHash) || !validHash(item.expectedOutputHash) || !validHash(item.previousHash)) throw new Error('Hash inválido.');
@@ -56,6 +68,9 @@ export function validateExecutionJournal(journal) {
     if (journal.status === 'completed' && journal.outputMode === OUTPUT_MODES.BACKUP_OVERWRITE
       && (journal.manifestStatus !== 'written' || !journal.manifestExpectedHash)) {
       throw new Error('Journal concluído de sobrescrita não comprova o manifesto.');
+    }
+    if (journal.status === 'completed' && hasHistoryLinkage && (journal.historyStatus !== 'written' || !journal.historyExpectedHash)) {
+      throw new Error('Journal concluído não comprova o registro histórico.');
     }
     return journal;
   } catch (cause) {

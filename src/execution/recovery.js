@@ -30,6 +30,12 @@ async function rollbackItem(item) {
 }
 
 async function validateCompletedConsistency(journal) {
+  if (journal.historyPath) {
+    const history = await inspectRegularFile(journal.historyPath).catch(() => ({ exists: false, hash: null }));
+    if (!history.exists || history.hash !== journal.historyExpectedHash) {
+      throw new ExecutionError('JOURNAL_STATE_CONTRADICTION', 'O histórico concluído não corresponde ao journal da execução.');
+    }
+  }
   if (journal.manifestPath) {
     const manifest = await inspectRegularFile(journal.manifestPath).catch(() => ({ exists: false, hash: null }));
     if (!manifest.exists || manifest.hash !== journal.manifestExpectedHash) {
@@ -54,6 +60,18 @@ async function validateCompletedConsistency(journal) {
 }
 
 export async function rollbackExecutionJournal(journal, journalPath) {
+  if (journal.historyPath) {
+    const history = await inspectRegularFile(journal.historyPath).catch(() => ({ exists: true, hash: null }));
+    if (history.exists) {
+      if (!journal.historyExpectedHash || !await removeExactFile(journal.historyPath, journal.historyExpectedHash)) {
+        journal.status = 'recovery-required';
+        await writeExecutionJournal(journalPath, journal);
+        return { status: 'recovery-required', journal };
+      }
+    }
+    journal.historyStatus = 'rolled-back';
+    await writeExecutionJournal(journalPath, journal);
+  }
   if (journal.manifestPath) {
     const manifest = await inspectRegularFile(journal.manifestPath).catch(() => ({ exists: true, hash: null }));
     if (manifest.exists) {

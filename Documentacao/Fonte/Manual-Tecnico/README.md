@@ -26,6 +26,10 @@ O INI real permanece em `Configuracao\configuracao.ini`; o modelo fica em `Confi
 
 `src/execution/planner.js` cria uma pré-análise imutável. `src/execution/executor.js` usa journal write-ahead em `Dados\Restauracao\ultima-execucao.bkp`: plano, intenção, mutação, hash final, estado e conclusão. Para `.min`, destinos preexistentes são preservados por `skip-existing`; o rollback remove somente caminhos exatos criados e registrados. `recovery-required` é usado quando o rollback não pode ser comprovado sem adivinhação.
 
+`src/integrity/history.js` mantém a autoridade histórica em `Dados\Historico\<executionId>.json`, um registro UTF-8 formatVersion 1 por execução concluída e sem índice global. Cada artefato produzido recebe `artifactId` de 96 bits por `crypto.randomBytes(12)`, em hexadecimal maiúsculo. Estado atual, journal e manifesto novos podem referenciar essa identidade; formatos antigos sem o campo permanecem válidos.
+
+O histórico conserva os hashes SHA-256 de entrada e saída e, em sobrescrita, a raiz/caminho relativo do payload realmente gravado em `_source_versions`, com `compression: none`. No modo `.min`, a ausência de payload histórico de backup é explícita. Estado e manifesto são comprovados antes da criação exclusiva do histórico; o journal só conclui depois de comprovar também o hash desse registro. `SelfMinifier-Tag`, GZIP e `PastaBackups` não estão implementados. Quando a tag existir, `outputHash` cobrirá os bytes finais completos, inclusive a tag; a tag nunca será prova de integridade.
+
 ## Restauração manual
 
 `src/restore/index.js` cria planos imutáveis e revalida o gate de segurança imediatamente antes da mutação. A restauração por backup exige manifesto, hash da cópia, caminho original, mapeamento de origem e registro de estado compatível. Cada fonte restaurada remove o registro que afirmava que ela ainda era minificada.
@@ -39,6 +43,7 @@ A restauração `.min` lê somente a última execução concluída e remove apen
 Diretórios técnicos relevantes:
 
 - `Dados\estado.json`: registros de fontes e saídas comprovadas.
+- `Dados\Historico`: metadados históricos imutáveis por execução concluída; não contém payload de backup.
 - `Dados\Temporarios`: área técnica excluída pelo scanner.
 - `Dados\Restauracao`: journal de execução, journal de restauração e cópias transitórias.
 - `_source_versions`: backups de fontes para o modo de sobrescrita.
