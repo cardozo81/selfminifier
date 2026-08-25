@@ -34,22 +34,16 @@ async function fixture(names = ['app.js']) {
   return { root, sourceRoot, files, runtime: resolveRuntimePaths(root), backupRoot: join(sourceRoot, '_source_versions') };
 }
 
-function configuration(files, outputMode) {
+function configuration(paths, outputMode) {
   return {
+    schemaVersion: 2,
     outputMode,
-    engineId: 'esbuild',
+    engine: 'esbuild',
     profile: 'Padrao',
-    globalIncludes: [],
-    globalExcludes: [],
-    sources: files.map((filePath, index) => ({
-      id: String(index + 1).padStart(3, '0'),
-      type: 'Arquivo',
-      path: filePath,
-      executeByDefault: true,
-      mode: 'Arquivo',
-      includes: [],
-      excludes: [],
-    })),
+    projectRoot: paths.sourceRoot,
+    fileTypes: ['javascript'],
+    ignoredFolders: [],
+    ignoredFiles: [],
   };
 }
 
@@ -60,7 +54,7 @@ function adapter() {
 async function planFor(paths, outputMode, options = {}) {
   const minifier = options.minifier ?? adapter();
   const plan = await createExecutionPlan({
-    configuration: configuration(paths.files, outputMode),
+    configuration: configuration(paths, outputMode),
     minifier,
     runtimeRoot: paths.root,
     backupRoot: paths.backupRoot,
@@ -70,7 +64,7 @@ async function planFor(paths, outputMode, options = {}) {
   return { plan, minifier };
 }
 
-test('pré-análise é completa, imutável e exige confirmações sem mutar arquivos', async () => {
+test('pré-análise V2 é imutável, preserva destinos .min existentes e exige confirmação', async () => {
   const paths = await fixture(['a.js', 'b.js']);
   try {
     const destinations = paths.files.map((filePath) => filePath.replace(/\.js$/, '.min.js'));
@@ -78,23 +72,26 @@ test('pré-análise é completa, imutável e exige confirmações sem mutar arqu
     await writeFile(destinations[1], 'const antigoB=1;');
     const originals = await Promise.all([...paths.files, ...destinations].map((filePath) => readFile(filePath, 'utf8')));
     const { plan, minifier } = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED);
-    assert.equal(plan.items.length, 2);
+    assert.equal(plan.items.length, 0);
     assert.equal(plan.conflicts.length, 2);
+    assert.equal(plan.conflictPolicy, 'skip-existing');
     assert.equal(plan.requiredConfirmations.some((entry) => entry.type === 'execution'), true);
+    assert.equal(plan.requiredConfirmations.some((entry) => entry.type === 'overwrite-min-conflicts'), false);
     assert.equal(Object.isFrozen(plan), true);
     assert.equal(Object.isFrozen(plan.items), true);
     assert.deepEqual(await Promise.all([...paths.files, ...destinations].map((filePath) => readFile(filePath, 'utf8'))), originals);
-    await assert.rejects(executePlan(plan, minifier, { authorizeOverwriteConflicts: true }), (error) => error instanceof ExecutionError && error.code === 'EXECUTION_CONFIRMATION_REQUIRED');
-    const denied = await executePlan(plan, minifier, { confirmed: true, authorizeOverwriteConflicts: false });
-    assert.equal(denied.status, 'cancelled');
+    await assert.rejects(executePlan(plan, minifier), (error) => error instanceof ExecutionError && error.code === 'EXECUTION_CONFIRMATION_REQUIRED');
+    const completed = await executePlan(plan, minifier, { confirmed: true });
+    assert.equal(completed.status, 'completed');
+    assert.equal(completed.noFilesChanged, true);
     assert.deepEqual(await Promise.all([...paths.files, ...destinations].map((filePath) => readFile(filePath, 'utf8'))), originals);
     const withoutRisk = structuredClone(plan);
     withoutRisk.executionRisk = null;
-    await assert.rejects(executePlan(withoutRisk, minifier, { confirmed: true, authorizeOverwriteConflicts: true }), (error) => error.code === 'RISK_CALCULATION_REQUIRED');
+    await assert.rejects(executePlan(withoutRisk, minifier, { confirmed: true }), (error) => error.code === 'RISK_CALCULATION_REQUIRED');
     const forgedRisk = structuredClone(plan);
     forgedRisk.executionRisk.technicalLevel = 'Critico';
     forgedRisk.executionRisk.displayLevel = 'Crítico';
-    await assert.rejects(executePlan(forgedRisk, minifier, { confirmed: true, authorizeOverwriteConflicts: true }), (error) => error.code === 'RISK_CALCULATION_REQUIRED');
+    await assert.rejects(executePlan(forgedRisk, minifier, { confirmed: true }), (error) => error.code === 'RISK_CALCULATION_REQUIRED');
   } finally {
     await rm(paths.root, { recursive: true, force: true });
   }
@@ -124,31 +121,12 @@ test('criação .min preserva a fonte, registra journal antes da mutação e atu
     assert.equal(state.records[0].minifiedHash, await hashFileSha256(destination));
     await rm(paths.runtime.technicalState);
     const next = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED, { executionId: 'exec-002' });
-    await assert.rejects(executePlan(next.plan, next.minifier, { confirmed: true, authorizeOverwriteConflicts: true }), (error) => error.code === 'JOURNAL_STATE_CONTRADICTION');
+    await assert.rejects(executePlan(next.plan, next.minifier, { confirmed: true }), (error) => error.code === 'JOURNAL_STATE_CONTRADICTION');
   } finally {
     await rm(paths.root, { recursive: true, force: true });
   }
 });
 
-test('sobrescrita autorizada de .min preserva recuperação separada e mantém fonte idêntica', async () => {
-  const paths = await fixture();
-  try {
-    const sourceBefore = await readFile(paths.files[0]);
-    const destination = paths.files[0].replace(/\.js$/, '.min.js');
-    const oldOutput = 'const saída_antiga = true;\n';
-    await writeFile(destination, oldOutput, 'utf8');
-    const { plan, minifier } = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED);
-    await executePlan(plan, minifier, { confirmed: true, authorizeOverwriteConflicts: true });
-    assert.deepEqual(await readFile(paths.files[0]), sourceBefore);
-    assert.notEqual(await readFile(destination, 'utf8'), oldOutput);
-    const journal = await readExecutionJournal(paths.runtime.lastExecutionJournal);
-    assert.equal(journal.items[0].operation, 'replace-output');
-    assert.equal(journal.items[0].recovery.type, 'preexisting-output');
-    assert.equal(await readFile(journal.items[0].recovery.path, 'utf8'), oldOutput);
-  } finally {
-    await rm(paths.root, { recursive: true, force: true });
-  }
-});
 
 test('modo de sobrescrita exige backup válido, gera manifesto e mantém estado comprovado', async () => {
   const paths = await fixture();
@@ -194,16 +172,6 @@ test('falhas parciais revertem somente mutações registradas nos dois modos', a
     assert.equal(await exists(created.runtime.technicalState), false);
   } finally { await rm(created.root, { recursive: true, force: true }); }
 
-  const replaced = await fixture(['a.js', 'b.js']);
-  try {
-    const destinations = replaced.files.map((filePath) => filePath.replace(/\.js$/, '.min.js'));
-    await writeFile(destinations[0], 'const antigoA=1;');
-    await writeFile(destinations[1], 'const antigoB=1;');
-    const { plan, minifier } = await planFor(replaced, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED);
-    await assert.rejects(executePlan(plan, minifier, { confirmed: true, authorizeOverwriteConflicts: true }, { hooks: { beforeItem: ({ index }) => { if (index === 1) throw new Error('falha injetada'); } } }));
-    assert.equal(await readFile(destinations[0], 'utf8'), 'const antigoA=1;');
-    assert.equal(await readFile(destinations[1], 'utf8'), 'const antigoB=1;');
-  } finally { await rm(replaced.root, { recursive: true, force: true }); }
 
   const originals = await fixture(['a.js', 'b.js']);
   try {
@@ -279,7 +247,7 @@ test('journal interrompido é recuperado deterministicamente e ambiguidade bloqu
     journal.items[0].expectedOutputHash = hashContentSha256('saída esperada diferente');
     await writeExecutionJournal(paths.runtime.lastExecutionJournal, journal);
     const { plan, minifier } = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED, { executionId: 'exec-nova' });
-    await assert.rejects(executePlan(plan, minifier, { confirmed: true, authorizeOverwriteConflicts: true }), (error) => error.code === 'RECOVERY_REQUIRED');
+    await assert.rejects(executePlan(plan, minifier, { confirmed: true }), (error) => error.code === 'RECOVERY_REQUIRED');
     assert.equal(await readFile(destination, 'utf8'), 'conteúdo externo');
   } finally { await rm(paths.root, { recursive: true, force: true }); }
 });

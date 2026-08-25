@@ -198,7 +198,7 @@ windowsTest('bridge scan-analysis retorna contagens e candidatos confiáveis', a
   }
 });
 
-windowsTest('bridge scan-analysis exige configuração V2', async () => {
+windowsTest('bridge scan-analysis rejeita configuração antiga no carregamento', async () => {
   const root = await mkdtemp(join(tmpdir(), 'selfminifier-analysis-legacy-'));
   try {
     await mkdir(join(root, 'Configuracao'), { recursive: true });
@@ -220,7 +220,7 @@ windowsTest('bridge scan-analysis exige configuração V2', async () => {
 
     const response = await runBridgeRequest({ command: 'scan-analysis' }, { projectRoot: root });
     assert.equal(response.ok, false);
-    assert.equal(response.code, 'V2_CONFIGURATION_REQUIRED');
+    assert.equal(response.diagnostic.code, 'MISSING_SCHEMA_VERSION');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

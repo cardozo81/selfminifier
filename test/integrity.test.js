@@ -328,7 +328,16 @@ test('Dados/Temporarios é exclusão técnica obrigatória do scanner', async ()
     await mkdir(temporaryDirectory, { recursive: true });
     await writeFile(join(root, 'app.js'), 'const app = 1;');
     await writeFile(join(temporaryDirectory, 'interno.js'), 'const interno = 1;');
-    const result = await scan({ globalIncludes: ['**/*.js'], globalExcludes: [], sources: [{ id: 'origem-001', path: root, type: 'Diretorio', recursive: true, mode: 'Todos', includes: [], excludes: [] }] }, { runtimeRoot: root });
+    const result = await scan({
+      schemaVersion: 2,
+      engine: 'esbuild',
+      profile: 'Padrao',
+      outputMode: 'PreservarOriginaisECriarMinificados',
+      projectRoot: root,
+      fileTypes: ['javascript'],
+      ignoredFolders: [],
+      ignoredFiles: [],
+    }, { runtimeRoot: root });
     assert.ok(result.eligible.some((item) => item.normalizedPath.endsWith('app.js')));
     assert.ok(result.ignored.some((item) => item.normalizedPath === temporaryDirectory && item.reason === 'MANDATORY_TECHNICAL_EXCLUSION'));
     assert.ok(!result.eligible.some((item) => item.normalizedPath.endsWith('interno.js')));

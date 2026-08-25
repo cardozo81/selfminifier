@@ -67,6 +67,9 @@ export async function createExecutionPlan({
   if (!configuration || typeof executionId !== 'string' || !SAFE_EXECUTION_ID.test(executionId) || executionId === '.' || executionId === '..') {
     throw new ExecutionError('INVALID_PLAN_INPUT', 'Configuração e executionId são obrigatórios para a pré-análise.');
   }
+  if (configuration.schemaVersion !== 2) {
+    throw new ExecutionError('UNSUPPORTED_CONFIGURATION_SCHEMA', 'A pré-análise exige uma configuração normalizada com schemaVersion=2.');
+  }
   if (!Object.values(OUTPUT_MODES).includes(configuration.outputMode)) {
     throw new ExecutionError('INVALID_OUTPUT_MODE', 'O modo de saída da pré-análise não é permitido.');
   }
@@ -74,11 +77,8 @@ export async function createExecutionPlan({
     throw new ExecutionError('BACKUP_ROOT_REQUIRED', 'A raiz de backup deve ser informada no modo de sobrescrita.');
   }
 
-  const isV2 = configuration.schemaVersion === 2;
-  const engineId = isV2 ? configuration.engine : configuration.engineId;
-  const configuredSources = isV2
-    ? [{ id: 'project-root', path: configuration.projectRoot, recursive: true, type: 'Diretorio' }]
-    : configuration.sources;
+  const engineId = configuration.engine;
+  const configuredSources = [{ id: 'project-root', path: configuration.projectRoot, recursive: true, type: 'Diretorio' }];
   const runtimePaths = resolveRuntimePaths(runtimeRoot);
   const scannerResult = await scan(configuration, { runtimeRoot, ...scannerOptions });
   const stateSnapshot = await loadStateSnapshot(runtimePaths.technicalState);
@@ -150,7 +150,7 @@ export async function createExecutionPlan({
       blockers.push({ code: 'UNSAFE_DESTINATION', normalizedPath: destinationPath });
       continue;
     }
-    if (isV2 && configuration.outputMode === OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED && destination.exists) {
+    if (configuration.outputMode === OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED && destination.exists) {
       conflicts.push({
         sourcePath,
         destinationPath,
@@ -190,25 +190,18 @@ export async function createExecutionPlan({
     }
   }
 
-  if (!isV2 && conflicts.length > 0) {
-    const executionRecoveryDirectory = join(runtimePaths.recoveryDirectory, executionId);
-    if ((await pathState(executionRecoveryDirectory)).exists) {
-      blockers.push({ code: 'EXECUTION_RECOVERY_COLLISION', normalizedPath: executionRecoveryDirectory });
-    }
-  }
   const executionRisk = calculateExecutionRisk({
     outputMode: configuration.outputMode,
     profile: configuration.profile,
-    conflictCount: isV2 ? 0 : conflicts.length,
+    conflictCount: 0,
   });
   const requiredConfirmations = [
     { type: 'execution', satisfied: false },
   ];
-  if (!isV2 && conflicts.length > 0) requiredConfirmations.push({ type: 'overwrite-min-conflicts', satisfied: false });
 
   return deepFreeze({
     formatVersion: 1,
-    configurationSchemaVersion: isV2 ? 2 : 1,
+    configurationSchemaVersion: 2,
     executionId,
     meminifyVersion,
     timestamp,
@@ -230,7 +223,7 @@ export async function createExecutionPlan({
       blockers,
     },
     conflicts,
-    conflictPolicy: isV2 ? 'skip-existing' : 'authorize-overwrite',
+    conflictPolicy: 'skip-existing',
     requiredConfirmations,
     stateBefore: stateSnapshot,
     scannerResult,

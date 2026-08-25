@@ -29,10 +29,14 @@ export function identifyConfigurationSchema(text) {
   const hasV2Structure = [...keys].some((key) => V2_SINGLE_KEYS.has(key) || V2_LIST_PATTERN.test(key));
 
   if (!hasVersaoSchema) {
-    if (hasV2Structure) {
-      fail('MIXED_SCHEMA', 'A configuração usa chaves do schema V2 sem declarar VersaoSchema=2.', { hasV2Structure });
+    if (hasV1Structure && hasV2Structure) {
+      fail('MIXED_SCHEMA', 'A configuração mistura estruturas V1 e V2 sem declarar um schema suportado.', { hasV1Structure, hasV2Structure });
     }
-    return { kind: 'legacy', schemaVersion: CONFIGURATION_SCHEMA_VERSIONS.LEGACY };
+    fail('MISSING_SCHEMA_VERSION', "A configuração não declara 'VersaoSchema=2'. Somente o schema V2 é suportado.", {
+      requiredVersion: CONFIGURATION_SCHEMA_VERSIONS.V2,
+      hasV1Structure,
+      hasV2Structure,
+    });
   }
 
   const versionEntry = generalEntries.find((entry) => entry.key === 'VersaoSchema');

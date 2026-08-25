@@ -9,8 +9,6 @@
     "build:docs": "node scripts/docs/build-docs.mjs"
   },
   "dependencies": {
-    "esbuild": "0.28.2",
-    "ini": "6.0.0",
-    "micromatch": "4.0.8"
+    "esbuild": "0.28.2"
   }
 }

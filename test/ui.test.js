@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 test('UI explicita cancelamento, entrada inválida e recursos indisponíveis', async () => {
   const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
   assert.match(source, /Opção inválida; nenhuma ação foi executada/);
-  assert.match(source, /Execução cancelada; nenhum arquivo foi alterado/);
+  assert.match(source, /Análise cancelada; nenhum arquivo foi alterado/);
   assert.match(source, /Listar backups conhecidos e restaurar/);
   assert.match(source, /Restauração cancelada; nenhum arquivo foi alterado/);
   assert.match(source, /Nenhum relatório operacional disponível/);
@@ -20,11 +20,10 @@ test('UI explicita cancelamento, entrada inválida e recursos indisponíveis', a
   assert.match(source, /'3' \{ \$script:TemporaryAdjustments\.outputMode = 'PreservarOriginaisECriarMinificados'.*return \}/);
   assert.doesNotMatch(source, /4\. Aplicar os ajustes desta execução/);
   assert.doesNotMatch(source, /risco da execução ainda não possui estimativa|EXECUTION_RISK_ALGORITHM_PENDING/);
-  assert.match(source, /confirmationFingerprint = \$analysis\.confirmationFingerprint/);
   assert.match(source, /command = 'scan-analysis'; adjustments = \$Adjustments/);
   assert.match(source, /Invoke-ScanAnalysis \$script:TemporaryAdjustments/);
   assert.match(source, /command = 'execute'[\s\S]*adjustments = \$Adjustments[\s\S]*confirmationFingerprint = \$analysis\.execution\.confirmationFingerprint/);
-  assert.match(source, /authorizeOverwriteConflicts = \$authorizeConflicts/);
+  assert.doesNotMatch(source, /authorizeOverwriteConflicts|Invoke-Analyze/);
   assert.doesNotMatch(source, /Modo temporário \(vazio mantém o persistente/);
   const bytes = await readFile(new URL('../src/app/ui.ps1', import.meta.url));
   assert.deepEqual([...bytes.subarray(0, 3)], [0xEF, 0xBB, 0xBF]);
@@ -58,6 +57,27 @@ test('UI configurações expõe menu, view V2 read-only e delega Comportamento a
   assert.match(source, /Arquivos ignorados:/);
   assert.match(source, /Nenhuma/);
   assert.match(source, /Nenhum/);
-  assert.match(source, /Schema detectado:/);
-  assert.match(source, /não está no schema V2/);
+  assert.doesNotMatch(source, /Schema detectado:|não está no schema V2|schema -ne 'v2'/);
+});
+
+test('UI B1.2 expõe edição de origem e tipos de arquivo com confirmação numérica', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  assert.match(source, /function Invoke-EditProjectRoot/);
+  assert.match(source, /function Invoke-EditFileTypes/);
+  assert.match(source, /'1' \{ Invoke-EditProjectRoot \}/);
+  assert.match(source, /'2' \{ Invoke-EditFileTypes \}/);
+  assert.match(source, /Origem atual:/);
+  assert.match(source, /Informe a nova pasta do projeto/);
+  assert.match(source, /Nova origem:/);
+  assert.match(source, /1\. Salvar alteração/);
+  assert.match(source, /command = 'update-configuration-v2'; projectRoot = \$entrada; confirmed = \$true/);
+  assert.match(source, /command = 'update-configuration-v2'; fileTypes = \$novoValor; confirmed = \$true/);
+  assert.match(source, /1\. CSS/);
+  assert.match(source, /2\. JavaScript/);
+  assert.match(source, /3\. CSS \+ JavaScript/);
+  assert.match(source, /Tipos atuais:/);
+  assert.match(source, /Novos tipos:/);
+  assert.match(source, /Nenhuma configuração foi alterada/);
+  assert.match(source, /'4' \{ Invoke-PersistentConfiguration \}/);
+  assert.match(source, /'7' \{ Show-CurrentConfiguration \}/);
 });

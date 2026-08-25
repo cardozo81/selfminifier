@@ -45,7 +45,7 @@ O risco estimado da execução usa os níveis técnicos `Baixo`, `Moderado`, `Al
 | `PreservarOriginaisECriarMinificados` | Baixo | Moderado | Alto |
 | `BackupESobrescreverOriginais` | Moderado | Alto | Critico |
 
-No modo `.min`, a sobrescrita globalmente autorizável de um ou mais destinos preexistentes eleva o risco em um nível, limitado a `Critico`. A quantidade de arquivos é apresentada separadamente como escopo da operação e não altera o risco na versão 0.1.0.
+No modo `.min`, destinos preexistentes são preservados e ignorados pelo planejamento V2; não existe autorização de sobrescrita desses destinos. A quantidade de arquivos é apresentada separadamente como escopo da operação e não altera o risco na versão 0.1.0.
 
 Classificação de risco é informativa e apoia a autorização; nunca substitui proteções de integridade. Entrada necessária indeterminada bloqueia a execução. Não existe autorização substituta para continuar sem risco calculado. Estados não comprovados, configuração inválida, links proibidos, readonly impeditivo, backup não validado, conflito tardio não autorizado e inconsistências de journal/estado/manifesto são bloqueios, não níveis adicionais de risco.
 

@@ -8,19 +8,19 @@ O bridge coordena configuração, análise, execução, restauração, logs e re
 
 ## Configuração e domínio
 
-`src/configuration` lê UTF-8 estrito, detecta chaves duplicadas, normaliza listas numeradas e valida enums/booleanos/origens. `src/domain/index.js` concentra modos de saída, tipos de origem e perfis. `deriveEffectiveConfiguration()` cria uma configuração temporária sem mutar a persistente.
+`src/configuration` lê UTF-8 estrito, exige `VersaoSchema=2`, detecta chaves duplicadas e valida raiz, tipos, exclusões, motor, perfil e modo. `src/domain/index.js` concentra os contratos V2 compartilhados. `deriveEffectiveConfiguration()` aceita somente o override temporário de `outputMode` e não muta a persistente.
 
 O INI real permanece em `Configuracao\configuracao.ini`; o modelo fica em `Configuracao\configuracao.ini.example`. Não há fallback silencioso para dados inválidos.
 
 ## Scanner e minificação
 
-`src/scanner` descobre arquivos em modo read-only, aplica glob com micromatch, deduplica identidades físicas e reporta links, readonly e exclusões técnicas. `src/minifiers` define o contrato neutro e compõe o registry homologado com o adapter esbuild. O adapter suporta JavaScript e CSS; perfis `Conservador`, `Padrao` e `Maximo` são traduzidos internamente. `Personalizado` falha fechado porque seu schema ainda não existe.
+`src/scanner` percorre a raiz V2 em modo read-only, aplica a seleção fechada CSS/JavaScript, deduplica identidades físicas e reporta links, readonly e exclusões técnicas. `src/minifiers` define o contrato neutro e compõe o registry homologado com o adapter esbuild. O adapter suporta JavaScript e CSS; perfis `Conservador`, `Padrao` e `Maximo` são traduzidos internamente. `Personalizado` falha fechado porque seu schema ainda não existe.
 
 ## Integridade, backup e execução
 
 `src/integrity` fornece SHA-256, JSON UTF-8 atômico, estado técnico, manifesto e cópias de backup validadas. O modo de sobrescrita grava fontes em `_source_versions/<execução>` e persiste `manifest.json` com mapeamento de origem, tamanhos e hashes.
 
-`src/execution/planner.js` cria uma pré-análise imutável. `src/execution/executor.js` usa journal write-ahead em `Dados\Restauracao\ultima-execucao.bkp`: plano, intenção, mutação, hash final, estado e conclusão. Para `.min`, conflitos são detectados antes da escrita e o rollback remove ou restaura somente caminhos exatos registrados. `recovery-required` é usado quando o rollback não pode ser comprovado sem adivinhação.
+`src/execution/planner.js` cria uma pré-análise imutável. `src/execution/executor.js` usa journal write-ahead em `Dados\Restauracao\ultima-execucao.bkp`: plano, intenção, mutação, hash final, estado e conclusão. Para `.min`, destinos preexistentes são preservados por `skip-existing`; o rollback remove somente caminhos exatos criados e registrados. `recovery-required` é usado quando o rollback não pode ser comprovado sem adivinhação.
 
 ## Restauração manual
 
@@ -47,7 +47,7 @@ Não há política automática de retenção ou remoção histórica.
 
 A confirmação da UI carrega a impressão digital SHA-256 do plano mostrado. O bridge refaz a pré-análise imediatamente antes de executar e bloqueia se escopo, hashes, destinos, conflitos ou demais condições confirmáveis divergirem.
 
-O risco de execução é calculado deterministicamente por modo e perfil antes da confirmação. Conflitos `.min` preexistentes elevam um nível, com teto `Critico`; escopo de arquivos é metadado separado. Não existe autorização substituta para risco indeterminado.
+O risco de execução é calculado deterministicamente por modo e perfil antes da confirmação. Destinos `.min` preexistentes são preservados e ignorados, portanto não elevam o risco V2; escopo de arquivos é metadado separado. Não existe autorização substituta para risco indeterminado.
 
 Use `npm.cmd` no PowerShell para evitar bloqueio de `npm.ps1` pela política de execução.
 

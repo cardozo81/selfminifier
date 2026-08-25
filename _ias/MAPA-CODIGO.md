@@ -6,7 +6,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `package.json` | Metadados, modo ES module, scripts e dependências declaradas | `ini@6.0.0`, `esbuild@0.28.2`, `micromatch@4.0.8` |
+| `package.json` | Metadados, modo ES module, scripts e dependências declaradas | `esbuild@0.28.2` |
 | `package-lock.json` | Lockfile reproduzível das dependências | npm |
 | `Configuracao/configuracao.ini.example` | Exemplo versionado da estrutura de configuração aprovada | Especificação 06 |
 | `resources/minifier-registry.json` | Registro estático dos motores homologados da versão 1 | Especificação 07 |
@@ -15,15 +15,13 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `src/domain/index.js` | Constantes de perfis, modos, tipos, schema V1/V2 e defaults aprovados | Nenhuma |
+| `src/domain/index.js` | Constantes de perfis, modos, schema V2, tipos de arquivo e defaults aprovados | Nenhuma |
 | `src/configuration/errors.js` | Erro estruturado de configuração e códigos diagnósticos | Nenhuma |
 | `src/configuration/utf8.js` | Leitura UTF-8 fatal e escrita atômica UTF-8 por temporário + rename | Node.js `fs/promises`, `util` |
-| `src/configuration/parse.js` | Pré-detecção de duplicatas, parsing estrutural, listas numeradas e normalização INI V1 | `ini@6.0.0` |
-| `src/configuration/validate.js` | Validação de domínio V1 e conjunto de motores homologados injetado | `src/domain/index.js` |
-| `src/configuration/v2.js` | Schema V2: parsing estrito, validação de raiz/tipos/exclusões, serialização e persistência | `src/domain/index.js`, `parse.js`, `utf8.js` |
-| `src/configuration/schema.js` | Identificação determinística de schema (legado/V2/versão não suportada/misto) | `src/domain/index.js`, `parse.js` |
-| `src/configuration/legacy.js` | Avaliação conservadora de configuração legada para futura migração | `src/domain/index.js` |
-| `src/configuration/index.js` | API de carregamento, parsing, configuração efetiva temporária e reexportação V2 | Módulos de configuração |
+| `src/configuration/parse.js` | Scanner INI compartilhado com detecção de seções/chaves duplicadas e linhas inválidas | `src/configuration/errors.js` |
+| `src/configuration/v2.js` | Schema V2: detecção explícita, parsing estrito, validação de raiz/tipos/exclusões, serialização e persistência | `src/domain/index.js`, `parse.js`, `schema.js`, `utf8.js` |
+| `src/configuration/schema.js` | Identificação fail-closed de V2 explícito, versão inválida/não suportada e estruturas antigas/mistas | `src/domain/index.js`, `parse.js` |
+| `src/configuration/index.js` | API V2 suportada e configuração efetiva temporária limitada a `outputMode` | Módulos de configuração |
 
 ## Minificação
 
@@ -39,9 +37,8 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
 | `src/scanner/errors.js` | Erros estruturados do scanner | Nenhuma |
-| `src/scanner/glob-selection.js` | Compilação de includes/excludes e modos de seleção | `micromatch@4.0.8` |
 | `src/scanner/filesystem.js` | Descoberta read-only, exclusões técnicas, links, permissões e identidades físicas | Node.js `fs/promises`, `path` |
-| `src/scanner/index.js` | Contrato neutro de resultados, classificação JS/CSS, deduplicação e diagnósticos | Módulos do scanner |
+| `src/scanner/index.js` | Scanner V2-only: seleção CSS/JavaScript, deduplicação, exclusões e diagnósticos determinísticos | Módulos do scanner |
 
 ## Runtime e integridade
 
@@ -66,8 +63,8 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
 | `src/execution/errors.js` | Erros estruturados de planejamento, execução e recuperação | Nenhuma |
-| `src/execution/planner.js` | Pré-análise imutável, destinos `.min`, conflitos, hashes e autorizações exigidas | Scanner, domínio e integridade |
-| `src/execution/risk.js` | Matriz determinística de risco 0.1.0 e elevação por conflito `.min` | Domínio e erros de execução |
+| `src/execution/planner.js` | Pré-análise V2 imutável, destinos `.min`, `skip-existing`, hashes e confirmação de execução | Scanner, domínio e integridade |
+| `src/execution/risk.js` | Matriz determinística de risco 0.1.0; o planner V2 calcula sem elevar destinos `.min` preservados | Domínio e erros de execução |
 | `src/execution/journal.js` | Schema e persistência do journal write-ahead da última execução | Integridade e domínio |
 | `src/execution/filesystem.js` | Criação/substituição exata, cópias de recuperação e provas SHA-256 | Node.js built-ins, integridade |
 | `src/execution/recovery.js` | Rollback exato e recuperação determinística de execução interrompida | Journal, estado e filesystem transacional |
@@ -133,11 +130,10 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | --- | --- | --- |
 | `test/version.test.js` | Testes de versão autoritativa e exposição na ponte/UI | `node:test`, runtime e bridge |
 | `scripts/quality/check-encoding.mjs` | Validação estrita de UTF-8 e sequências conhecidas de mojibake, ignorando dependências e saídas | Node.js built-ins |
-| `test/configuration.test.js` | Testes focados de domínio, INI, validação e configuração efetiva | `node:test`, módulos de configuração |
-| `test/configuration-v2.test.js` | Testes focados do schema V2, identificação, avaliação de legado e round-trip | `node:test`, módulos de configuração |
+| `test/configuration-v2.test.js` | Testes focados do schema V2-only, rejeição de formatos antigos/mistos, round-trip e override temporário | `node:test`, módulos de configuração |
 | `test/encoding.test.js` | Testes focados de texto UTF-8 e detecção de mojibake | `node:test`, script de encoding |
 | `test/minifiers.test.js` | Testes focados de registry, adapter, perfis, JS, CSS e resultados neutros | `node:test`, adapter esbuild |
-| `test/scanner.test.js` | Testes focados de recursão, glob, exclusões, links, readonly e deduplicação | `node:test`, módulos do scanner |
+| `test/scanner.test.js` | Testes focados do Scanner V2: tipos, exclusões, confinamento, links, readonly, hard links e determinismo | `node:test`, módulos do scanner |
 | `test/integrity.test.js` | Testes focados de SHA-256, estado, manifesto, backup e diretório temporário | `node:test`, módulos de integridade |
 | `test/execution.test.js` | Testes focados de pré-análise, write-ahead, conflitos, execução, rollback e interrupção | `node:test`, módulos de execução |
 | `test/runtime.test.js` | Testes focados de política Node, package/lock, dependências e bootstrap sem instalação real | `node:test`, módulos runtime |

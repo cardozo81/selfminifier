@@ -4,10 +4,9 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  assessLegacyConfiguration,
+  deriveEffectiveConfiguration,
   identifyConfigurationSchema,
   loadV2Configuration,
-  parseConfiguration,
   parseV2Configuration,
   serializeV2Configuration,
   writeV2Configuration,
@@ -48,21 +47,6 @@ function v2Ini(overrides = {}) {
   return `${lines.join('\n')}\n`;
 }
 
-function legacyIni({ globals = [], sources = [] } = {}) {
-  const lines = ['[Configuracao]', 'Motor=esbuild', 'Perfil=Padrao'];
-  globals.forEach((value, index) => lines.push(`Incluir${String(index + 1).padStart(2, '0')}=${value}`));
-  sources.forEach((source, index) => {
-    lines.push('');
-    const id = String(index + 1).padStart(3, '0');
-    lines.push(`[Origem.${id}]`, `Tipo=${source.type}`, `Caminho=${source.path}`, `ExecutarPorPadrao=${source.executeByDefault ?? true}`);
-    if (source.type === 'Diretorio') {
-      lines.push(`Recursivo=${source.recursive ?? true}`, `Modo=${source.mode ?? 'Todos'}`);
-    } else {
-      lines.push('Modo=Arquivo');
-    }
-  });
-  return `${lines.join('\n')}\n`;
-}
 
 test('V2 válida produz representação normalizada', () => {
   const config = v2(v2Ini());
@@ -91,28 +75,25 @@ test('TiposArquivo inválido falha fechado', () => {
   expectCode(() => v2(v2Ini({ TiposArquivo: 'JavaScript+CSS' })), 'INVALID_FILE_TYPES');
 });
 
-test('identificação de schema distingue legado, V2, versão inválida e misto', () => {
+test('identificação aceita somente V2 explícita e rejeita ausência, versão não suportada e mistura', () => {
   assert.deepEqual(identifyConfigurationSchema(v2Ini()), { kind: 'v2', schemaVersion: 2 });
-  const legacy = legacyIni({ sources: [{ type: 'Diretorio', path: 'C:\\Projetos\\exemplo' }] });
-  assert.deepEqual(identifyConfigurationSchema(legacy), { kind: 'legacy', schemaVersion: 1 });
+  expectCode(() => identifyConfigurationSchema('[Configuracao]\nMotor=esbuild\nPerfil=Padrao\n'), 'MISSING_SCHEMA_VERSION');
   expectCode(() => identifyConfigurationSchema(v2Ini({ VersaoSchema: '3' })), 'UNSUPPORTED_SCHEMA_VERSION');
   expectCode(() => identifyConfigurationSchema(v2Ini({ VersaoSchema: 'abc' })), 'INVALID_SCHEMA_VERSION');
-  expectCode(() => identifyConfigurationSchema(v2Ini({ VersaoSchema: null })), 'MIXED_SCHEMA');
+  expectCode(() => identifyConfigurationSchema(v2Ini({ VersaoSchema: null })), 'MISSING_SCHEMA_VERSION');
   const mixedLists = `[Configuracao]\nVersaoSchema=2\nMotor=esbuild\nPerfil=Padrao\nPastaRaiz=C:\\Projetos\\x\nIncluir01=**/*.js\n`;
   expectCode(() => identifyConfigurationSchema(mixedLists), 'MIXED_SCHEMA');
+  const oldOrigin = `[Configuracao]\nMotor=esbuild\nPerfil=Padrao\n\n[Origem.001]\nTipo=Diretorio\nCaminho=C:\\Projetos\\x\n`;
+  expectCode(() => identifyConfigurationSchema(oldOrigin), 'MISSING_SCHEMA_VERSION');
+  const mixedWithoutVersion = `[Configuracao]\nMotor=esbuild\nPastaRaiz=C:\\Projetos\\x\nIncluir01=**/*.js\n`;
+  expectCode(() => identifyConfigurationSchema(mixedWithoutVersion), 'MIXED_SCHEMA');
 });
-
-test('parser V2 exige VersaoSchema e rejeita seções de origem V1', () => {
+test('parser V2 exige VersaoSchema=2 e rejeita estruturas V1', () => {
   expectCode(() => v2(v2Ini({ VersaoSchema: null })), 'MISSING_SCHEMA_VERSION');
   expectCode(() => v2(v2Ini({ VersaoSchema: '3' })), 'UNSUPPORTED_SCHEMA_VERSION');
   const mixed = `[Configuracao]\nVersaoSchema=2\nMotor=esbuild\nPerfil=Padrao\nPastaRaiz=C:\\Projetos\\x\n\n[Origem.001]\nTipo=Diretorio\nCaminho=C:\\Projetos\\x\nExecutarPorPadrao=true\nRecursivo=true\nModo=Todos\n`;
-  expectCode(() => v2(mixed), 'UNKNOWN_SECTION');
+  expectCode(() => v2(mixed), 'MIXED_SCHEMA');
 });
-
-test('parser V1 continua rejeitando configuração V2 sem interpretação silenciosa', () => {
-  expectCode(() => parseConfiguration(v2Ini(), { allowedEngines }), 'UNKNOWN_KEY');
-});
-
 test('raiz absoluta Windows é aceita e normaliza separadores', () => {
   assert.equal(v2(v2Ini({ PastaRaiz: 'C:/Projetos/MeuSite' })).projectRoot, 'C:\\Projetos\\MeuSite');
 });
@@ -160,37 +141,17 @@ test('persistência V2 grava e lê UTF-8 sem tocar a configuração real', async
   }
 });
 
-test('legado simples de diretório único é diretamente conversível', () => {
-  const legacy = parseConfiguration(legacyIni({ sources: [{ type: 'Diretorio', path: 'C:\\Projetos\\exemplo' }] }), { allowedEngines });
-  const assessment = assessLegacyConfiguration(legacy);
-  assert.equal(assessment.classification, 'directly-convertible');
-  assert.equal(assessment.target.projectRoot, 'C:\\Projetos\\exemplo');
-  assert.deepEqual(assessment.target.fileTypes, ['css', 'javascript']);
-  assert.deepEqual(assessment.target.ignoredFolders, []);
-});
 
-test('legado com múltiplas origens é ambíguo', () => {
-  const legacy = parseConfiguration(legacyIni({ sources: [
-    { type: 'Diretorio', path: 'C:\\A' },
-    { type: 'Diretorio', path: 'C:\\B' },
-  ] }), { allowedEngines });
-  const assessment = assessLegacyConfiguration(legacy);
-  assert.equal(assessment.classification, 'ambiguous');
-  assert.ok(assessment.reasons.some((entry) => entry.code === 'MULTIPLE_SOURCES'));
-});
-
-test('legado com origem de arquivo explícito não é convertido silenciosamente', () => {
-  const legacy = parseConfiguration(legacyIni({ sources: [{ type: 'Arquivo', path: 'C:\\Projetos\\entrada.js' }] }), { allowedEngines });
-  const assessment = assessLegacyConfiguration(legacy);
-  assert.equal(assessment.classification, 'ambiguous');
-  assert.equal(assessment.target, null);
-  assert.ok(assessment.reasons.some((entry) => entry.code === 'EXPLICIT_FILE_SOURCE'));
-});
-
-test('legado com globs não é reinterpretado silenciosamente', () => {
-  const legacy = parseConfiguration(legacyIni({ globals: ['**/*.js'], sources: [{ type: 'Diretorio', path: 'C:\\Projetos\\exemplo' }] }), { allowedEngines });
-  const assessment = assessLegacyConfiguration(legacy);
-  assert.equal(assessment.classification, 'requires-explicit-review');
-  assert.equal(assessment.target, null);
-  assert.ok(assessment.reasons.some((entry) => entry.code === 'GLOBS_REQUIRE_REVIEW'));
+test('ajuste temporário V2 altera somente outputMode e revalida sem mutar a persistente', () => {
+  const persistent = v2(v2Ini());
+  const effective = deriveEffectiveConfiguration(persistent, {
+    outputMode: 'PreservarOriginaisECriarMinificados',
+  }, { allowedEngines });
+  assert.equal(effective.outputMode, 'PreservarOriginaisECriarMinificados');
+  assert.equal(persistent.outputMode, 'BackupESobrescreverOriginais');
+  assert.equal(effective.schemaVersion, 2);
+  assert.throws(
+    () => deriveEffectiveConfiguration(persistent, { projectRoot: 'C:\\Outro' }, { allowedEngines }),
+    (error) => error.code === 'UNSUPPORTED_TEMPORARY_FIELD',
+  );
 });

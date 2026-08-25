@@ -45,8 +45,9 @@ Configuracao
   pacote, não deve ser enviada ao Git e só é criada mediante confirmação.
 - Configurações persistentes só são salvas por ações persistentes confirmadas.
   Ajustar somente esta execução vale apenas em memória e nunca altera o INI.
-- O INI pode definir diretórios/origens, arquivos explícitos, recursão,
-  regras de inclusão/exclusão, perfil, modo de saída e motor homologado.
+- O único formato aceito exige VersaoSchema=2. O INI define uma única raiz de
+  projeto, tipos CSS/JavaScript, exclusões relativas, perfil, modo de saída e
+  motor homologado. Formatos antigos não são inferidos nem migrados.
 - A interface é o modo recomendado. Edição manual é avançada: valor inválido
   bloqueia a operação; o SelfMinifier não corrige nem escolhe alternativas.
 - Apagar configuracao.ini remove apenas preferências persistentes, não apaga

@@ -28,30 +28,24 @@ O modelo `.example` é distribuído sem preferências pessoais. O INI real é do
 
 Apagar `configuracao.ini` remove apenas as preferências persistentes; não remove backups, estado, relatórios ou logs. Em uma abertura posterior, a ausência é detectada e a criação pode ser oferecida explicitamente. Atualizações do aplicativo nunca sobrescrevem um INI existente; qualquer migração futura deve ser explícita.
 
-O arquivo INI usa listas numeradas, por exemplo:
+O único formato aceito é o schema V2, sempre com `VersaoSchema=2`:
 
 ```ini
 [Configuracao]
+VersaoSchema=2
 Motor=esbuild
 Perfil=Padrao
 ModoSaida=BackupESobrescreverOriginais
-Incluir01=**/*.js
-Excluir01=node_modules
-
-[Origem.001]
-Tipo=Diretorio
-Caminho=C:\Projetos\exemplo
-ExecutarPorPadrao=true
-Recursivo=true
-Modo=Todos
-Incluir01=*.js
+PastaRaiz=C:\Projetos\MeuSite
+TiposArquivo=CSS+JavaScript
+IgnorarPasta01=node_modules
+IgnorarPasta02=.git
+IgnorarArquivo01=src\config.js
 ```
 
-Use `Incluir01`, `Incluir02` e `Excluir01`; listas por ponto e vírgula, chaves repetidas, valores inválidos ou o perfil `Personalizado` bloqueiam o avanço. O perfil `Personalizado` permanece indisponível enquanto seu schema estiver pendente.
+`PastaRaiz` define uma única raiz de projeto, percorrida recursivamente. `TiposArquivo` aceita `CSS`, `JavaScript` ou `CSS+JavaScript`. Exclusões usam `IgnorarPastaNN` e `IgnorarArquivoNN` com caminhos relativos, sem curingas ou `..`.
 
-### Origens, recursão e padrões
-
-As origens podem ser diretórios ou arquivos explícitos. Para diretórios, `Recursivo=true` ou `Recursivo=false` é obrigatório. Os modos são `Todos`, `Selecionados` e `Arquivo` (somente para origem de arquivo). Inclusões e exclusões globais e por origem são avaliadas pelo scanner; links, arquivos somente leitura, extensões não suportadas e exclusões técnicas são ignorados com motivo.
+Configurações sem `VersaoSchema`, com versão diferente de 2, com seções antigas `[Origem.xxx]`, com chaves `Incluir*`/`Excluir*` ou com estruturas misturadas são rejeitadas. O SelfMinifier não infere, migra nem converte configuração antiga automaticamente.
 
 ### Modos de saída e perfis
 
@@ -64,19 +58,19 @@ O risco estimado da execução é:
 - Preservar originais e criar `.min`: Conservador = Baixo; Padrao = Moderado; Maximo = Alto.
 - Criar backup e sobrescrever originais: Conservador = Moderado; Padrao = Alto; Maximo = Crítico.
 
-Se o modo `.min` possuir destinos preexistentes cuja sobrescrita será globalmente autorizada, o risco sobe um nível, no máximo até Crítico. A quantidade de arquivos é mostrada separadamente como escopo da operação e não muda o nível em 0.1.0. Bloqueios de integridade nunca são convertidos em risco nem relaxados por essa classificação.
+No modo `.min`, destinos preexistentes são listados, preservados e ignorados; não existe autorização para sobrescrevê-los. A quantidade de arquivos é mostrada separadamente como escopo da operação e não muda o nível em 0.1.0. Bloqueios de integridade nunca são convertidos em risco nem relaxados por essa classificação.
 
 ## Analisar e minificar
 
-Escolha **Analisar arquivos** para ver origens efetivas, recursão, modo de saída, perfil, risco do perfil, encontrados, elegíveis, ignorados, conflitos `.min`, avisos e bloqueios. A análise não modifica arquivos.
+Escolha **Analisar arquivos** para ver a raiz efetiva, tipos selecionados, modo de saída, perfil, risco do perfil, encontrados, elegíveis, ignorados, destinos `.min` preexistentes, avisos e bloqueios. A análise não modifica arquivos.
 
 **Minificar** sempre refaz a pré-análise. Antes de qualquer escrita, o menu mostra o escopo, o risco determinístico e solicita confirmação. Não existe fluxo para continuar quando o risco estiver indisponível.
 
-Se um destino `.min` já existir, todos os conflitos são listados e uma autorização global específica é exigida. Recusar cancela a execução inteira sem gerar saídas parciais.
+Se um destino `.min` já existir, ele é listado, preservado e ignorado. A execução V2 nunca o sobrescreve.
 
 ## Ajustes temporários
 
-**Configurações persistentes** são gravadas em `configuracao.ini` somente por uma ação persistente com confirmação explícita. Elas podem conter origens/diretórios, arquivos explícitos, recursão, regras de inclusão/exclusão, perfil de minificação, modo de saída e motor homologado.
+**Configurações persistentes** são gravadas em `configuracao.ini` somente por uma ação persistente com confirmação explícita. Elas contêm a raiz do projeto, tipos CSS/JavaScript, exclusões relativas, perfil, modo de saída e motor homologado.
 
 **Ajustar somente esta execução** apresenta exatamente: 1 para manter o modo persistente, 2 para usar backup e sobrescrita, 3 para preservar originais e criar `.min`, e 0 para cancelar. As escolhas 1/2/3 terminam a seleção sem etapa adicional. O modo fica apenas em memória; 0 preserva o estado anterior da sessão, descarta o rascunho atual e nunca modifica o INI.
 
@@ -100,7 +94,7 @@ Relatórios mostram totais, itens ignorados com motivo, resultados de restauraç
 
 - **Configuração ausente ou inválida:** corrija `Configuracao\configuracao.ini` ou crie-o explicitamente a partir do modelo.
 - **Origem inacessível, link ou arquivo somente leitura:** o scanner informa o motivo e bloqueia quando o escopo não pode ser comprovado.
-- **Conflito `.min`:** revise a lista e confirme globalmente somente se aceitar sobrescrever todos os destinos listados.
+- **Destino `.min` preexistente:** revise a lista; o arquivo é preservado e ignorado, sem sobrescrita.
 - **Node não homologado:** instale uma linha LTS homologada; não use versões Current, EOL ou globais.
 - **PowerShell bloqueia scripts locais/Restricted:** o SelfMinifier não contorna a política. Consulte o administrador ou a política da organização; qualquer alteração deve ser explícita e apropriada ao ambiente.
 - **Dependências internas ausentes ou inválidas:** reextraia um pacote íntegro. A inicialização não baixa nem reinstala dependências.

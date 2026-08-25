@@ -40,10 +40,12 @@ test('cria log técnico UTF-8, relatório TXT e CSV escapado', async () => {
 test('execução bem-sucedida gera relatório integrado sem alterar dados do plano', async () => {
   const root = await mkdtemp(join(tmpdir(), 'selfminifier-report-execution-'));
   try {
-    const source = join(root, 'entrada.js');
+    const projectRoot = join(root, 'projeto');
+    const source = join(projectRoot, 'entrada.js');
+    await mkdir(projectRoot, { recursive: true });
     await mkdir(join(root, 'Configuracao'), { recursive: true });
     await writeFile(source, 'const valor = 1;\n', 'utf8');
-    await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nMotor=esbuild\nPerfil=Padrao\nModoSaida=PreservarOriginaisECriarMinificados\nIncluir01=**/*.js\n\n[Origem.001]\nTipo=Arquivo\nCaminho=${source}\nExecutarPorPadrao=true\nModo=Arquivo\n`, 'utf8');
+    await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nVersaoSchema=2\nMotor=esbuild\nPerfil=Padrao\nModoSaida=PreservarOriginaisECriarMinificados\nPastaRaiz=${projectRoot}\nTiposArquivo=JavaScript\n`, 'utf8');
     const analysis = await runBridgeRequest({ command: 'analyze', executionId: 'exec-report-analysis' }, { projectRoot: root });
     assert.equal(analysis.ok, true);
     const response = await runBridgeRequest({ command: 'execute', confirmed: true, confirmationFingerprint: analysis.analysis.confirmationFingerprint, executionId: 'exec-report' }, { projectRoot: root });

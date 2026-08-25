@@ -10,6 +10,7 @@ import {
 } from '../domain/index.js';
 import { ConfigurationError } from './errors.js';
 import { scanIni } from './parse.js';
+import { identifyConfigurationSchema } from './schema.js';
 import { readUtf8File, writeUtf8FileAtomic } from './utf8.js';
 
 const V2_SCHEMA_VERSION = CONFIGURATION_SCHEMA_VERSIONS.V2;
@@ -288,6 +289,7 @@ export function validateV2Configuration(configuration, { allowedEngines } = {}) 
 }
 
 export function parseV2Configuration(text, options = {}) {
+  identifyConfigurationSchema(text);
   return validateV2Configuration(parseV2ConfigurationText(text), options);
 }
 

@@ -15,13 +15,12 @@
 - Testes são focados, proporcionais e introduzidos junto com os comportamentos.
 - Commits e pushes representam checkpoints significativos e validados, não microalterações.
 - As dependências `ini@7.0.0` e `esbuild@0.28.2` foram introduzidas em versões exatas e estão bloqueadas no lockfile; versões futuras são selecionadas quando cada dependência for introduzida e devem permanecer reproduzíveis.
-- A seleção de padrões do scanner usa `micromatch@4.0.8`, fixada exatamente no manifesto e lockfile.
 - O diretório temporário interno do runtime é `Dados\Temporarios\` e permanece uma exclusão técnica obrigatória do scanner.
 - O rastreamento resistente a interrupções usa journal JSON UTF-8 write-ahead em `Dados\Restauracao\ultima-execucao.bkp`, persistido por temporário durável e `rename` antes das mutações registradas.
 - O runtime Node.js exige major mínima 24 e suporta explicitamente as linhas 24 e 25, prefere 24 LTS e autoriza instalação automática somente da versão `24.19.0` pelo pacote winget `OpenJS.NodeJS.LTS`; chamadas npm no PowerShell usam `npm.cmd`. Majors futuras não listadas falham fechado.
 - A versão de desenvolvimento atual é `0.1.2`, com `package.json` como autoridade única; nomes de pasta, ZIP e checksum são derivados dessa versão.
 - O pacote local usa uma raiz `SelfMinifier-<version>` e allowlist de launcher, manifestos npm, módulos `src`, recursos, modelo de configuração, documentação HTML gerada e dependências de runtime produzidas por instalação limpa em staging, sem copiar `node_modules` de desenvolvimento nem conteúdo local.
-- O risco de execução 0.1.0 usa matriz determinística por modo/perfil nos níveis `Baixo`, `Moderado`, `Alto` e `Critico`; conflito `.min` preexistente eleva um nível com teto `Critico`, quantidade de arquivos é escopo separado e risco indeterminado bloqueia sem autorização substituta.
+- O risco de execução 0.1.0 usa matriz determinística por modo/perfil nos níveis `Baixo`, `Moderado`, `Alto` e `Critico`; destinos `.min` preexistentes são preservados e ignorados pelo planejamento V2, quantidade de arquivos é escopo separado e risco indeterminado bloqueia sem autorização substituta.
 - Launchers `.cmd` distribuídos usam CRLF validado por bytes. O SelfMinifier não contorna nem reduz a Execution Policy; `Restricted` bloqueia com orientação para o manual offline.
 - A inicialização normal da distribuição é offline com Node homologado e dependências empacotadas válidas; dependências ausentes ou divergentes bloqueiam sem `npm ci` ou instalação silenciosa.
 

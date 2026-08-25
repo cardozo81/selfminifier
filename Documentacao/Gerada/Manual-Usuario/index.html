@@ -36,24 +36,19 @@ a { color: #005a9c; }
 <p>A configuração persistente é <code>Configuracao\configuracao.ini</code>; o modelo versionado é <code>Configuracao\configuracao.ini.example</code>. Se o arquivo real não existir, o menu informa o caminho e só o cria a partir do modelo após confirmação. Ele nunca sobrescreve uma configuração existente.</p>
 <p>O modelo <code>.example</code> é distribuído sem preferências pessoais. O INI real é do usuário: não acompanha o pacote, não é versionado e só pode ser criado ou atualizado por uma ação persistente confirmada. A interface é o meio recomendado; edição manual é uma opção avançada. Valores manuais inválidos bloqueiam a operação, sem correção ou fallback silencioso.</p>
 <p>Apagar <code>configuracao.ini</code> remove apenas as preferências persistentes; não remove backups, estado, relatórios ou logs. Em uma abertura posterior, a ausência é detectada e a criação pode ser oferecida explicitamente. Atualizações do aplicativo nunca sobrescrevem um INI existente; qualquer migração futura deve ser explícita.</p>
-<p>O arquivo INI usa listas numeradas, por exemplo:</p>
+<p>O único formato aceito é o schema V2, sempre com <code>VersaoSchema=2</code>:</p>
 <pre><code>[Configuracao]
+VersaoSchema=2
 Motor=esbuild
 Perfil=Padrao
 ModoSaida=BackupESobrescreverOriginais
-Incluir01=**/*.js
-Excluir01=node_modules
-
-[Origem.001]
-Tipo=Diretorio
-Caminho=C:\Projetos\exemplo
-ExecutarPorPadrao=true
-Recursivo=true
-Modo=Todos
-Incluir01=*.js</code></pre>
-<p>Use <code>Incluir01</code>, <code>Incluir02</code> e <code>Excluir01</code>; listas por ponto e vírgula, chaves repetidas, valores inválidos ou o perfil <code>Personalizado</code> bloqueiam o avanço. O perfil <code>Personalizado</code> permanece indisponível enquanto seu schema estiver pendente.</p>
-<h3>Origens, recursão e padrões</h3>
-<p>As origens podem ser diretórios ou arquivos explícitos. Para diretórios, <code>Recursivo=true</code> ou <code>Recursivo=false</code> é obrigatório. Os modos são <code>Todos</code>, <code>Selecionados</code> e <code>Arquivo</code> (somente para origem de arquivo). Inclusões e exclusões globais e por origem são avaliadas pelo scanner; links, arquivos somente leitura, extensões não suportadas e exclusões técnicas são ignorados com motivo.</p>
+PastaRaiz=C:\Projetos\MeuSite
+TiposArquivo=CSS+JavaScript
+IgnorarPasta01=node_modules
+IgnorarPasta02=.git
+IgnorarArquivo01=src\config.js</code></pre>
+<p><code>PastaRaiz</code> define uma única raiz de projeto, percorrida recursivamente. <code>TiposArquivo</code> aceita <code>CSS</code>, <code>JavaScript</code> ou <code>CSS+JavaScript</code>. Exclusões usam <code>IgnorarPastaNN</code> e <code>IgnorarArquivoNN</code> com caminhos relativos, sem curingas ou <code>..</code>.</p>
+<p>Configurações sem <code>VersaoSchema</code>, com versão diferente de 2, com seções antigas <code>[Origem.xxx]</code>, com chaves <code>Incluir*</code>/<code>Excluir*</code> ou com estruturas misturadas são rejeitadas. O SelfMinifier não infere, migra nem converte configuração antiga automaticamente.</p>
 <h3>Modos de saída e perfis</h3>
 <p>O modo persistente padrão é **Criar backup e sobrescrever os arquivos originais**. Ele cria e valida uma cópia em <code>_source_versions</code> antes de substituir o original. A alternativa é **Preservar os arquivos originais e criar arquivos <code>.min</code>**, que conserva a fonte e cria um destino <code>.min.js</code> ou <code>.min.css</code> ao lado dela. O menu Configurações apresenta essas opções por número e só salva uma mudança após confirmação explícita.</p>
 <p>Os perfis disponíveis são <code>Conservador</code> (risco muito baixo), <code>Padrao</code> (baixo) e <code>Maximo</code> (moderado). O motor homologado atual é esbuild para JavaScript e CSS, sem bundling.</p>
@@ -62,13 +57,13 @@ Incluir01=*.js</code></pre>
 <li>Preservar originais e criar <code>.min</code>: Conservador = Baixo; Padrao = Moderado; Maximo = Alto.</li>
 <li>Criar backup e sobrescrever originais: Conservador = Moderado; Padrao = Alto; Maximo = Crítico.</li>
 </ul>
-<p>Se o modo <code>.min</code> possuir destinos preexistentes cuja sobrescrita será globalmente autorizada, o risco sobe um nível, no máximo até Crítico. A quantidade de arquivos é mostrada separadamente como escopo da operação e não muda o nível em 0.1.0. Bloqueios de integridade nunca são convertidos em risco nem relaxados por essa classificação.</p>
+<p>No modo <code>.min</code>, destinos preexistentes são listados, preservados e ignorados; não existe autorização para sobrescrevê-los. A quantidade de arquivos é mostrada separadamente como escopo da operação e não muda o nível em 0.1.0. Bloqueios de integridade nunca são convertidos em risco nem relaxados por essa classificação.</p>
 <h2>Analisar e minificar</h2>
-<p>Escolha **Analisar arquivos** para ver origens efetivas, recursão, modo de saída, perfil, risco do perfil, encontrados, elegíveis, ignorados, conflitos <code>.min</code>, avisos e bloqueios. A análise não modifica arquivos.</p>
+<p>Escolha **Analisar arquivos** para ver a raiz efetiva, tipos selecionados, modo de saída, perfil, risco do perfil, encontrados, elegíveis, ignorados, destinos <code>.min</code> preexistentes, avisos e bloqueios. A análise não modifica arquivos.</p>
 <p>**Minificar** sempre refaz a pré-análise. Antes de qualquer escrita, o menu mostra o escopo, o risco determinístico e solicita confirmação. Não existe fluxo para continuar quando o risco estiver indisponível.</p>
-<p>Se um destino <code>.min</code> já existir, todos os conflitos são listados e uma autorização global específica é exigida. Recusar cancela a execução inteira sem gerar saídas parciais.</p>
+<p>Se um destino <code>.min</code> já existir, ele é listado, preservado e ignorado. A execução V2 nunca o sobrescreve.</p>
 <h2>Ajustes temporários</h2>
-<p>**Configurações persistentes** são gravadas em <code>configuracao.ini</code> somente por uma ação persistente com confirmação explícita. Elas podem conter origens/diretórios, arquivos explícitos, recursão, regras de inclusão/exclusão, perfil de minificação, modo de saída e motor homologado.</p>
+<p>**Configurações persistentes** são gravadas em <code>configuracao.ini</code> somente por uma ação persistente com confirmação explícita. Elas contêm a raiz do projeto, tipos CSS/JavaScript, exclusões relativas, perfil, modo de saída e motor homologado.</p>
 <p>**Ajustar somente esta execução** apresenta exatamente: 1 para manter o modo persistente, 2 para usar backup e sobrescrita, 3 para preservar originais e criar <code>.min</code>, e 0 para cancelar. As escolhas 1/2/3 terminam a seleção sem etapa adicional. O modo fica apenas em memória; 0 preserva o estado anterior da sessão, descarta o rascunho atual e nunca modifica o INI.</p>
 <h2>Backups e restauração manual</h2>
 <p>No modo de sobrescrita, a restauração lista backups válidos em <code>_source_versions</code> e também aceita uma pasta exata informada manualmente. O manifesto, a cópia de backup, os hashes, os caminhos e o estado técnico são validados antes de formar um plano.</p>
@@ -82,7 +77,7 @@ Incluir01=*.js</code></pre>
 <ul>
 <li>**Configuração ausente ou inválida:** corrija <code>Configuracao\configuracao.ini</code> ou crie-o explicitamente a partir do modelo.</li>
 <li>**Origem inacessível, link ou arquivo somente leitura:** o scanner informa o motivo e bloqueia quando o escopo não pode ser comprovado.</li>
-<li>**Conflito <code>.min</code>:** revise a lista e confirme globalmente somente se aceitar sobrescrever todos os destinos listados.</li>
+<li>**Destino <code>.min</code> preexistente:** revise a lista; o arquivo é preservado e ignorado, sem sobrescrita.</li>
 <li>**Node não homologado:** instale uma linha LTS homologada; não use versões Current, EOL ou globais.</li>
 <li>**PowerShell bloqueia scripts locais/Restricted:** o SelfMinifier não contorna a política. Consulte o administrador ou a política da organização; qualquer alteração deve ser explícita e apropriada ao ambiente.</li>
 <li>**Dependências internas ausentes ou inválidas:** reextraia um pacote íntegro. A inicialização não baixa nem reinstala dependências.</li>

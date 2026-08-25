@@ -37,42 +37,6 @@ function Confirmar-Acao {
     return ((Read-Host "$Question (s/N)").Trim().ToLowerInvariant() -eq 's')
 }
 
-function Show-Analysis {
-    param($Analysis)
-    Show-Mensagem "`nEscopo efetivo" Cyan
-    Show-Mensagem "Modo: $($Analysis.outputMode) | Perfil: $($Analysis.profile) | Risco do perfil: $($Analysis.profileRisk)"
-    Show-Mensagem "Risco estimado da execução: $($Analysis.executionRisk.displayLevel)" Yellow
-    Show-Mensagem "Escopo da operação: $($Analysis.scope.fileCount) arquivo(s) elegível(is)." Gray
-    if ($Analysis.backupRoot) { Show-Mensagem "Raiz dos backups: $($Analysis.backupRoot)" Cyan }
-    if ($Analysis.executionRisk.conflictElevation) { Show-Mensagem 'Fator de risco: sobrescrita global autorizável de destino .min preexistente.' Yellow }
-    foreach ($source in $Analysis.sources) { Show-Mensagem "Origem $($source.id): $($source.path) | Recursivo: $($source.recursive)" Cyan }
-    Show-Mensagem "Encontrados: $($Analysis.counts.found) | Elegíveis: $($Analysis.counts.eligible) | Ignorados: $($Analysis.counts.ignored)"
-    if ($Analysis.conflicts.Count -gt 0) {
-        Show-Mensagem 'Conflitos de destinos .min:' Yellow
-        foreach ($conflict in $Analysis.conflicts) { Show-Mensagem "- $($conflict.destinationPath)" Yellow }
-    }
-    if ($Analysis.diagnostics.blockers.Count -gt 0) {
-        Show-Mensagem 'Bloqueios:' Red
-        foreach ($blocker in $Analysis.diagnostics.blockers) { Show-Mensagem "- $($blocker.code): $($blocker.message)" Red }
-    }
-    if ($Analysis.diagnostics.warnings.Count -gt 0) {
-        Show-Mensagem 'Avisos:' Yellow
-        foreach ($warning in $Analysis.diagnostics.warnings) { Show-Mensagem "- $($warning.message)" Yellow }
-    }
-}
-
-function Invoke-Analyze {
-    param([hashtable]$Adjustments)
-    $request = @{ command = 'analyze'; adjustments = $Adjustments }
-    $response = Invoke-SelfMinifierBridge $request
-    if (-not $response.ok) {
-        $message = if ($response.diagnostic -and $response.diagnostic.message) { $response.diagnostic.message } elseif ($response.message) { $response.message } elseif ($response.code -eq 'CONFIGURATION_MISSING') { "Configuração persistente ausente: $($response.configurationPath). Crie-a explicitamente pelo menu Configurações." } elseif ($response.code) { "A análise foi bloqueada ($($response.code))." } else { 'A análise foi bloqueada por uma resposta sem diagnóstico.' }
-        Show-Mensagem "Erro: $message" Red
-        return $null
-    }
-    Show-Analysis $response.analysis
-    return $response.analysis
-}
 
 function Show-Artefatos {
     param([ValidateSet('reports', 'logs')][string]$Kind)
@@ -145,6 +109,24 @@ function Get-ModoSaidaDescricao {
     }
 }
 
+function Get-TiposArquivoValor {
+    param($FileTypes)
+    if ($FileTypes -contains 'css' -and $FileTypes -contains 'javascript') { return 'CSS+JavaScript' }
+    if ($FileTypes -contains 'css') { return 'CSS' }
+    if ($FileTypes -contains 'javascript') { return 'JavaScript' }
+    return ''
+}
+
+function Get-TiposArquivoDescricao {
+    param($FileTypes)
+    switch (Get-TiposArquivoValor $FileTypes) {
+        'CSS' { return 'CSS' }
+        'JavaScript' { return 'JavaScript' }
+        'CSS+JavaScript' { return 'CSS + JavaScript' }
+        default { return ($FileTypes -join ', ') }
+    }
+}
+
 function Get-BridgeErrorMessage {
     param($Response, [string]$Fallback = 'A operação foi bloqueada por um diagnóstico indisponível.')
     if ($Response.diagnostic -and $Response.diagnostic.message) { return $Response.diagnostic.message }
@@ -212,6 +194,95 @@ function Invoke-PersistentConfiguration {
     }
 }
 
+function Invoke-EditProjectRoot {
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if (-not $summary.ok -or -not $summary.configuration) {
+        Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+        return
+    }
+    $current = $summary.configuration.projectRoot
+    Show-Mensagem "`nORIGEM DO PROJETO" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem 'Origem atual:' Cyan
+    Show-Mensagem $current White
+    $entrada = (Read-Host "`nInforme a nova pasta do projeto. 0 = Cancelar").Trim()
+    if ($entrada -eq '0' -or $entrada -eq '') {
+        Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow
+        return
+    }
+    if ($entrada -eq $current) {
+        Show-Mensagem 'A nova origem é igual à atual; nenhuma alteração foi necessária.' Green
+        return
+    }
+    Show-Mensagem "`nOrigem atual:" Cyan
+    Show-Mensagem $current White
+    Show-Mensagem 'Nova origem:' Cyan
+    Show-Mensagem $entrada White
+    Write-Host '1. Salvar alteração'
+    Write-Host '0. Cancelar'
+    $escolha = (Read-Host 'Escolha').Trim()
+    switch ($escolha) {
+        '1' {
+            $saved = Invoke-SelfMinifierBridge @{ command = 'update-configuration-v2'; projectRoot = $entrada; confirmed = $true }
+            if (-not $saved.ok) {
+                $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar a nova origem do projeto.'
+                if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
+                Show-Mensagem "Erro: $mensagem" Red
+                return
+            }
+            Show-Mensagem "Origem do projeto salva: $($saved.configuration.projectRoot)" Green
+        }
+        '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
+        default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
+    }
+}
+
+function Invoke-EditFileTypes {
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if (-not $summary.ok -or -not $summary.configuration) {
+        Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+        return
+    }
+    $current = Get-TiposArquivoValor $summary.configuration.fileTypes
+    Show-Mensagem "`nTIPOS DE ARQUIVO" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem "Tipos atuais: $(Get-TiposArquivoDescricao $summary.configuration.fileTypes)" Cyan
+    Write-Host '1. CSS'
+    Write-Host '2. JavaScript'
+    Write-Host '3. CSS + JavaScript'
+    Write-Host '0. Cancelar'
+    $escolha = (Read-Host 'Escolha').Trim()
+    if ($escolha -eq '0') { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow; return }
+    $novoValor = switch ($escolha) {
+        '1' { 'CSS' }
+        '2' { 'JavaScript' }
+        '3' { 'CSS+JavaScript' }
+        default { $null }
+    }
+    if ($null -eq $novoValor) { Show-Mensagem 'Escolha inválida; nenhuma configuração foi alterada.' Yellow; return }
+    if ($novoValor -eq $current) { Show-Mensagem 'Os tipos selecionados já estão configurados; nenhuma alteração foi necessária.' Green; return }
+    $novoDescricao = if ($novoValor -eq 'CSS+JavaScript') { 'CSS + JavaScript' } else { $novoValor }
+    Show-Mensagem "`nTipos atuais: $(Get-TiposArquivoDescricao $summary.configuration.fileTypes)" Cyan
+    Show-Mensagem "Novos tipos: $novoDescricao" Cyan
+    Write-Host '1. Salvar alteração'
+    Write-Host '0. Cancelar'
+    $confirmacao = (Read-Host 'Escolha').Trim()
+    switch ($confirmacao) {
+        '1' {
+            $saved = Invoke-SelfMinifierBridge @{ command = 'update-configuration-v2'; fileTypes = $novoValor; confirmed = $true }
+            if (-not $saved.ok) {
+                $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar os tipos de arquivo.'
+                if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
+                Show-Mensagem "Erro: $mensagem" Red
+                return
+            }
+            Show-Mensagem "Tipos de arquivo salvos: $(Get-TiposArquivoDescricao $saved.configuration.fileTypes)" Green
+        }
+        '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
+        default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
+    }
+}
+
 function Show-ConfigNotAvailable {
     param([string]$Label)
     Show-Mensagem "$Label ainda não está disponível nesta etapa da implementação." Yellow
@@ -228,25 +299,13 @@ function Show-CurrentConfiguration {
         }
         return
     }
-    if ($summary.schema -ne 'v2') {
-        Show-Mensagem "`nCONFIGURAÇÃO ATUAL" Cyan
-        Show-Mensagem '────────────────────────────────────' Cyan
-        Show-Mensagem 'A configuração atual não está no schema V2.' Yellow
-        Show-Mensagem "Schema detectado: $($summary.schema)" Gray
-        Show-Mensagem 'A visualização V2 não está disponível sem uma representação segura equivalente.' Yellow
-        return
-    }
     $config = $summary.configuration
     Show-Mensagem "`nCONFIGURAÇÃO ATUAL" Cyan
     Show-Mensagem '────────────────────────────────────' Cyan
     Show-Mensagem "Schema: V2 (VersaoSchema=$($config.schemaVersion))" Gray
     Show-Mensagem 'Origem do projeto (PastaRaiz):' Cyan
     Show-Mensagem $config.projectRoot White
-    if ($config.fileTypes -contains 'css' -and $config.fileTypes -contains 'javascript') { $tipoDescricao = 'CSS + JavaScript' }
-    elseif ($config.fileTypes -contains 'css') { $tipoDescricao = 'CSS' }
-    elseif ($config.fileTypes -contains 'javascript') { $tipoDescricao = 'JavaScript' }
-    else { $tipoDescricao = ($config.fileTypes -join ', ') }
-    Show-Mensagem "Tipos de arquivo (TiposArquivo): $tipoDescricao" Cyan
+    Show-Mensagem "Tipos de arquivo (TiposArquivo): $(Get-TiposArquivoDescricao $config.fileTypes)" Cyan
     Show-Mensagem "Motor (Motor): $($config.engine)" Cyan
     Show-Mensagem "Perfil (Perfil): $($config.profile)" Cyan
     Show-Mensagem 'Comportamento de saída (ModoSaida):' Cyan
@@ -280,8 +339,8 @@ function Show-ConfigurationMenu {
         Write-Host '0. Voltar'
         $choice = (Read-Host 'Escolha').Trim()
         switch ($choice) {
-            '1' { Show-ConfigNotAvailable 'Origem do projeto' }
-            '2' { Show-ConfigNotAvailable 'Tipos de arquivo' }
+            '1' { Invoke-EditProjectRoot }
+            '2' { Invoke-EditFileTypes }
             '3' { Show-ConfigNotAvailable 'Exclusões' }
             '4' { Invoke-PersistentConfiguration }
             '5' { Show-ConfigNotAvailable 'Interface e mensagens' }
@@ -420,12 +479,7 @@ function Invoke-ScanAnalysis {
 }
 
 function Invoke-ProjectAnalysis {
-    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
-    if ($summary.ok -and $summary.configuration -and $summary.configuration.schemaVersion -eq 2) {
-        Invoke-ScanAnalysis $script:TemporaryAdjustments
-    } else {
-        [void](Invoke-Analyze $script:TemporaryAdjustments)
-    }
+    Invoke-ScanAnalysis $script:TemporaryAdjustments
 }
 
 function Start-SelfMinifierUi {
@@ -447,22 +501,7 @@ function Start-SelfMinifierUi {
         try {
             switch ($choice) {
                 '1' { Invoke-ProjectAnalysis }
-                '2' {
-                    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
-                    if ($summary.ok -and $summary.configuration -and $summary.configuration.schemaVersion -eq 2) {
-                        Invoke-ScanAnalysis $script:TemporaryAdjustments
-                        break
-                    }
-                    $analysis = Invoke-Analyze $script:TemporaryAdjustments
-                    if ($null -eq $analysis -or $analysis.status -ne 'ready') { Show-Mensagem 'A minificação foi bloqueada pela pré-análise.' Red; break }
-                    if (-not (Confirmar-Acao 'Confirmar a minificação do escopo exibido')) { Show-Mensagem 'Execução cancelada.' Yellow; break }
-                    $overwrite = $true
-                    $authorizeConflicts = $false
-                    if ($analysis.conflicts.Count -gt 0) { $overwrite = Confirmar-Acao 'Autorizar globalmente a sobrescrita de todos os destinos .min listados'; $authorizeConflicts = $overwrite }
-                    if (-not $overwrite) { Show-Mensagem 'Execução cancelada; nenhum arquivo foi alterado.' Yellow; break }
-                    $response = Invoke-SelfMinifierBridge @{ command = 'execute'; adjustments = $script:TemporaryAdjustments; confirmed = $true; authorizeOverwriteConflicts = $authorizeConflicts; confirmationFingerprint = $analysis.confirmationFingerprint }
-                    if ($response.ok -and $response.result.status -eq 'completed') { Show-Mensagem 'Minificação concluída.' Green } elseif ($response.ok -and $response.result.status -eq 'cancelled') { Show-Mensagem 'Execução cancelada.' Yellow } else { Show-Mensagem "Falha: $($response.diagnostic.message)" Red }
-                }
+                '2' { Invoke-ScanAnalysis $script:TemporaryAdjustments }
                 '3' { Invoke-TemporaryAdjustment }
                 '4' { Show-ConfigurationMenu }
                 '5' { Show-RestoreMenu }

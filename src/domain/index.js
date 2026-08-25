@@ -19,19 +19,7 @@ export const PROFILE_DEFINITIONS = Object.freeze({
   [PROFILES.PERSONALIZADO]: Object.freeze({ risk: 'depende das opções selecionadas' }),
 });
 
-export const SOURCE_TYPES = Object.freeze({
-  DIRECTORY: 'Diretorio',
-  FILE: 'Arquivo',
-});
-
-export const SOURCE_MODES = Object.freeze({
-  ALL: 'Todos',
-  SELECTED: 'Selecionados',
-  FILE: 'Arquivo',
-});
-
 export const CONFIGURATION_SCHEMA_VERSIONS = Object.freeze({
-  LEGACY: 1,
   V2: 2,
 });
 

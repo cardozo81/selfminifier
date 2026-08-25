@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runBridgeRequest } from '../src/app/bridge.mjs';
@@ -74,7 +74,7 @@ windowsTest('summary com coleções vazias preserva listas vazias explícitas', 
   }
 });
 
-test('summary para configuração legada reporta schema legado sem inventar V2', async () => {
+test('summary rejeita configuração antiga sem schema antes de expor configuração', async () => {
   const root = await mkdtemp(join(tmpdir(), 'selfminifier-config-ui-legacy-'));
   try {
     await mkdir(join(root, 'Configuracao'), { recursive: true });
@@ -95,10 +95,10 @@ test('summary para configuração legada reporta schema legado sem inventar V2',
     ].join('\n'), 'utf8');
 
     const summary = await runBridgeRequest({ command: 'summary' }, { projectRoot: root });
-    assert.equal(summary.ok, true);
-    assert.equal(summary.schema, 'legacy');
-    assert.equal(summary.configuration.schemaVersion, undefined);
-    assert.ok(Array.isArray(summary.configuration.sources));
+    assert.equal(summary.ok, false);
+    assert.equal(summary.configuration, null);
+    assert.equal(summary.schema, undefined);
+    assert.equal(summary.diagnostic.code, 'MISSING_SCHEMA_VERSION');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -125,6 +125,27 @@ windowsTest('summary para configuração V2 inválida preserva o diagnóstico ex
     assert.equal(summary.ok, false);
     assert.equal(summary.configuration, null);
     assert.equal(summary.diagnostic.code, 'UNSUPPORTED_ENGINE');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('create-configuration cria o exemplo oficial e o recarrega como V2 válida', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-config-create-'));
+  try {
+    const configurationDirectory = join(root, 'Configuracao');
+    await mkdir(configurationDirectory, { recursive: true });
+    const example = await readFile(new URL('../Configuracao/configuracao.ini.example', import.meta.url), 'utf8');
+    await writeFile(join(configurationDirectory, 'configuracao.ini.example'), example, 'utf8');
+
+    const created = await runBridgeRequest({ command: 'create-configuration', confirmed: true }, { projectRoot: root });
+    assert.equal(created.ok, true);
+    assert.equal(created.created, true);
+    const summary = await runBridgeRequest({ command: 'summary' }, { projectRoot: root });
+    assert.equal(summary.ok, true);
+    assert.equal(summary.schema, 'v2');
+    assert.equal(summary.configuration.schemaVersion, 2);
+    assert.equal(summary.configuration.engine, 'esbuild');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

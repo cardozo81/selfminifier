@@ -163,12 +163,3 @@ test('direct dependency engine validation accepts Node 25 when declared and bloc
     assert.equal(result.diagnostics[0].code, 'DEPENDENCY_NODE_ENGINE_UNSUPPORTED');
   } finally { await rm(blockedRoot, { recursive: true, force: true }); }
 });
-
-test('ini 6.0.0 é a dependência direta exata e declara compatibilidade com Node 25', async () => {
-  const manifest = JSON.parse(await readFile(join(process.cwd(), 'package.json'), 'utf8'));
-  const installed = JSON.parse(await readFile(join(process.cwd(), 'node_modules', 'ini', 'package.json'), 'utf8'));
-  assert.equal(manifest.dependencies.ini, '6.0.0');
-  assert.equal(installed.version, '6.0.0');
-  assert.match(installed.engines.node, /\^20\.17\.0/);
-  assert.match(installed.engines.node, />=22\.9\.0/);
-});

@@ -7,10 +7,12 @@ import { runBridgeRequest } from '../src/app/bridge.mjs';
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'selfminifier-bridge-'));
-  const source = join(root, 'entrada.js');
+  const projectRoot = join(root, 'projeto');
+  const source = join(projectRoot, 'entrada.js');
+  await mkdir(projectRoot, { recursive: true });
   await writeFile(source, 'const valor = 1;\n', 'utf8');
   await mkdir(join(root, 'Configuracao'), { recursive: true });
-  await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nMotor=esbuild\nPerfil=Padrao\nModoSaida=PreservarOriginaisECriarMinificados\nIncluir01=**/*.js\n\n[Origem.001]\nTipo=Arquivo\nCaminho=${source}\nExecutarPorPadrao=true\nModo=Arquivo\n`, 'utf8');
+  await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nVersaoSchema=2\nMotor=esbuild\nPerfil=Padrao\nModoSaida=PreservarOriginaisECriarMinificados\nPastaRaiz=${projectRoot}\nTiposArquivo=JavaScript\n`, 'utf8');
   return { root, source };
 }
 
@@ -31,8 +33,10 @@ test('bridge retorna análise estruturada e risco determinístico', async () => 
 test('bridge propaga erro de configuração sem fallback', async () => {
   const root = await mkdtemp(join(tmpdir(), 'selfminifier-bridge-invalid-'));
   try {
+    const projectRoot = join(root, 'projeto');
+    await mkdir(projectRoot, { recursive: true });
     await mkdir(join(root, 'Configuracao'), { recursive: true });
-    await writeFile(join(root, 'Configuracao', 'configuracao.ini'), '[Configuracao]\nMotor=nao-homologado\nPerfil=Padrao\n', 'utf8');
+    await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nVersaoSchema=2\nMotor=nao-homologado\nPerfil=Padrao\nModoSaida=PreservarOriginaisECriarMinificados\nPastaRaiz=${projectRoot}\nTiposArquivo=JavaScript\n`, 'utf8');
     const response = await runBridgeRequest({ command: 'analyze' }, { projectRoot: root });
     assert.equal(response.ok, false);
     assert.equal(response.diagnostic.code, 'UNSUPPORTED_ENGINE');
@@ -72,7 +76,6 @@ test('execução bloqueia quando escopo ou conflitos mudam depois da análise co
     const response = await runBridgeRequest({
       command: 'execute',
       confirmed: true,
-      authorizeOverwriteConflicts: true,
       confirmationFingerprint: analyzed.analysis.confirmationFingerprint,
     }, { projectRoot: root });
     assert.equal(response.ok, false);
@@ -92,8 +95,13 @@ test('alteração persistente do modo exige confirmação e grava somente o enum
     const invalid = await runBridgeRequest({ command: 'update-output-mode', outputMode: 'Outro', confirmed: true }, { projectRoot: root });
     assert.equal(invalid.ok, false);
     assert.equal(await readFile(configurationPath, 'utf8'), before);
-    const saved = await runBridgeRequest({ command: 'update-output-mode', outputMode: 'PreservarOriginaisECriarMinificados', confirmed: true }, { projectRoot: root });
+    const saved = await runBridgeRequest({ command: 'update-output-mode', outputMode: 'BackupESobrescreverOriginais', confirmed: true }, { projectRoot: root });
     assert.equal(saved.ok, true);
-    assert.match(await readFile(configurationPath, 'utf8'), /ModoSaida=PreservarOriginaisECriarMinificados/);
+    assert.equal(saved.configuration.schemaVersion, 2);
+    assert.equal(saved.configuration.outputMode, 'BackupESobrescreverOriginais');
+    const persisted = await readFile(configurationPath, 'utf8');
+    assert.match(persisted, /^\[Configuracao\]\nVersaoSchema=2\n/);
+    assert.match(persisted, /ModoSaida=BackupESobrescreverOriginais/);
+    assert.match(persisted, /TiposArquivo=JavaScript/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

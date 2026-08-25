@@ -13,10 +13,10 @@ async function executionFixture(mode, names = ['entrada.js'], executionId = 'exe
   await mkdir(join(root, 'Configuracao'), { recursive: true });
   await mkdir(sourceDirectory, { recursive: true });
   for (const name of names) await writeFile(join(sourceDirectory, name), `const ${name.replace(/\W/g, '_')} = 1;\n`, 'utf8');
-  await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nMotor=esbuild\nPerfil=Padrao\nModoSaida=${mode}\nIncluir01=**/*.js\n\n[Origem.001]\nTipo=Diretorio\nCaminho=${sourceDirectory}\nExecutarPorPadrao=true\nRecursivo=false\nModo=Todos\nIncluir01=*.js\n`, 'utf8');
+  await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nVersaoSchema=2\nMotor=esbuild\nPerfil=Padrao\nModoSaida=${mode}\nPastaRaiz=${sourceDirectory}\nTiposArquivo=JavaScript\n`, 'utf8');
   const analysis = await runBridgeRequest({ command: 'analyze', executionId: `${executionId}-analysis` }, { projectRoot: root });
   assert.equal(analysis.ok, true, analysis.diagnostic?.message);
-  const response = await runBridgeRequest({ command: 'execute', confirmed: true, authorizeOverwriteConflicts: true, confirmationFingerprint: analysis.analysis.confirmationFingerprint, executionId }, { projectRoot: root });
+  const response = await runBridgeRequest({ command: 'execute', confirmed: true, confirmationFingerprint: analysis.analysis.confirmationFingerprint, executionId }, { projectRoot: root });
   assert.equal(response.ok, true, response.diagnostic?.message);
   return { root, sourceDirectory, executionId };
 }
@@ -91,21 +91,21 @@ test('.min remove somente saída criada; saída preexistente permanece', async (
     await writeFile(join(sourceDirectory, 'nova.js'), 'const nova = 1;\n', 'utf8');
     await writeFile(join(sourceDirectory, 'existente.js'), 'const existente = 2;\n', 'utf8');
     await writeFile(join(sourceDirectory, 'existente.min.js'), 'conteúdo anterior', 'utf8');
-    await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nMotor=esbuild\nPerfil=Padrao\nModoSaida=PreservarOriginaisECriarMinificados\nIncluir01=**/*.js\n\n[Origem.001]\nTipo=Diretorio\nCaminho=${sourceDirectory}\nExecutarPorPadrao=true\nRecursivo=false\nModo=Todos\nIncluir01=*.js\n`, 'utf8');
+    await writeFile(join(root, 'Configuracao', 'configuracao.ini'), `[Configuracao]\nVersaoSchema=2\nMotor=esbuild\nPerfil=Padrao\nModoSaida=PreservarOriginaisECriarMinificados\nPastaRaiz=${sourceDirectory}\nTiposArquivo=JavaScript\n`, 'utf8');
     const analysis = await runBridgeRequest({ command: 'analyze', executionId: 'exec-min-analysis' }, { projectRoot: root });
     assert.equal(analysis.ok, true);
-    const execution = await runBridgeRequest({ command: 'execute', confirmed: true, authorizeOverwriteConflicts: true, confirmationFingerprint: analysis.analysis.confirmationFingerprint, executionId: 'exec-min' }, { projectRoot: root });
+    const execution = await runBridgeRequest({ command: 'execute', confirmed: true, confirmationFingerprint: analysis.analysis.confirmationFingerprint, executionId: 'exec-min' }, { projectRoot: root });
     assert.equal(execution.ok, true);
     const plan = await createLastMinRestorePlan({ projectRoot: root });
     assert.equal(plan.items.length, 1);
-    assert.equal(plan.ignored[0].reason, 'PREEXISTING_MIN_NOT_RESTORED');
+    assert.equal(plan.items[0].destinationPath, join(sourceDirectory, 'nova.min.js'));
+    assert.equal(plan.items.some((item) => item.destinationPath === join(sourceDirectory, 'existente.min.js')), false);
     const result = await executeRestorePlan(plan, { confirmed: true });
     assert.equal(result.items[0].status, 'deleted-min');
     await assert.rejects(readFile(join(sourceDirectory, 'nova.min.js')));
     assert.ok((await readFile(join(sourceDirectory, 'existente.min.js'), 'utf8')).length > 0);
     const state = await readTechnicalState(join(root, 'Dados', 'estado.json'));
-    assert.equal(state.records.length, 1);
-    assert.equal(state.records[0].sourcePath, join(sourceDirectory, 'existente.js'));
+    assert.equal(state.records.length, 0);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
