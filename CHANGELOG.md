@@ -2,6 +2,13 @@
 
 ## Não lançado
 
+### 0.2.0
+
+- Configuração Schema V2 exclusiva e editável pela interface, incluindo origem, tipos, exclusões, perfil, comportamento e visualização atual.
+- Fluxo principal consolidado em **Minificar projeto**, com ajuste temporário de modo restrito ao fluxo, análise quantitativa, prévia opcional e revalidação por fingerprint antes da execução.
+- Prévia sem paginação para até 10 candidatos e com páginas de 10 e controles contextuais a partir de 11 candidatos.
+- Remoção definitiva do caminho operacional de Configuração V1 e atualização dos testes e manuais correspondentes.
+
 ### 0.1.2
 
 - Compatibilidade explícita com Node.js 25.x, incluindo validação de Node.js 25.8.2.

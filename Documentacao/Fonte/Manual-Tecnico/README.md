@@ -6,6 +6,8 @@ O fluxo de dependências é `PowerShell → Node CLI → núcleo`. `Executar.ps1
 
 O bridge coordena configuração, análise, execução, restauração, logs e relatórios. Diagnósticos estruturados são retornados sem stack traces para a interface; detalhes técnicos seguem para logs.
 
+A UI consolida análise e execução em **Minificar projeto**. Cada entrada nesse fluxo cria uma tabela local de ajustes temporários; o override de `outputMode` alcança análise e execução, mas é descartado ao sair. A prévia usa lotes de 10 somente quando há 11 ou mais candidatos e expõe apenas controles de navegação válidos. A execução revalida o fingerprint apresentado antes de qualquer mutação.
+
 ## Configuração e domínio
 
 `src/configuration` lê UTF-8 estrito, exige `VersaoSchema=2`, detecta chaves duplicadas e valida raiz, tipos, exclusões, motor, perfil e modo. `src/domain/index.js` concentra os contratos V2 compartilhados. `deriveEffectiveConfiguration()` aceita somente o override temporário de `outputMode` e não muta a persistente.

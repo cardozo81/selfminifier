@@ -136,6 +136,7 @@ function Get-BridgeErrorMessage {
 }
 
 function Invoke-TemporaryAdjustment {
+    param([hashtable]$Adjustments)
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; return }
     while ($true) {
@@ -144,12 +145,12 @@ function Invoke-TemporaryAdjustment {
         Write-Host '1. Manter a configuração persistente atual'
         Write-Host '2. Criar backup e sobrescrever os arquivos originais'
         Write-Host '3. Preservar os arquivos originais e criar arquivos .min'
-        Write-Host '0. Cancelar e voltar ao menu'
+        Write-Host '0. Cancelar'
         $choice = (Read-Host 'Escolha').Trim()
         switch ($choice) {
-            '1' { [void]$script:TemporaryAdjustments.Remove('outputMode'); Show-Mensagem 'Modo temporário definido para a configuração persistente.' Green; return }
-            '2' { $script:TemporaryAdjustments.outputMode = 'BackupESobrescreverOriginais'; Show-Mensagem 'Modo temporário: criar backup e sobrescrever os arquivos originais.' Green; return }
-            '3' { $script:TemporaryAdjustments.outputMode = 'PreservarOriginaisECriarMinificados'; Show-Mensagem 'Modo temporário: preservar os arquivos originais e criar arquivos .min.' Green; return }
+            '1' { [void]$Adjustments.Remove('outputMode'); Show-Mensagem 'Modo temporário definido para a configuração persistente.' Green; return }
+            '2' { $Adjustments.outputMode = 'BackupESobrescreverOriginais'; Show-Mensagem 'Modo temporário: criar backup e sobrescrever os arquivos originais.' Green; return }
+            '3' { $Adjustments.outputMode = 'PreservarOriginaisECriarMinificados'; Show-Mensagem 'Modo temporário: preservar os arquivos originais e criar arquivos .min.' Green; return }
             '0' { Show-Mensagem 'Ajustes temporários cancelados; nenhuma alteração foi aplicada.' Yellow; return }
             default { Show-Mensagem 'Escolha inválida; nenhum ajuste foi aplicado. Escolha uma opção numerada.' Yellow }
         }
@@ -680,14 +681,15 @@ function Show-ProjectAnalysis {
 
 function Show-CandidatePreview {
     param($Analysis)
-    $candidates = if ($Analysis.execution -and $Analysis.execution.items) {
-        @($Analysis.execution.items | ForEach-Object {
+    $candidates = @()
+    if ($Analysis.execution -and @($Analysis.execution.items).Count -gt 0) {
+        $candidates = @($Analysis.execution.items | ForEach-Object {
             [pscustomobject]@{ fileType = $_.fileType; relativePath = $_.relativePath }
         })
     } else {
-        @($Analysis.candidates.css) + @($Analysis.candidates.javascript)
+        $candidates = @($Analysis.candidates.css) + @($Analysis.candidates.javascript)
     }
-    $total = $candidates.Count
+    $total = @($candidates).Count
     if ($total -eq 0) {
         Show-Mensagem 'Nenhum arquivo elegível para minificação.' Yellow
         return
@@ -700,7 +702,11 @@ function Show-CandidatePreview {
         $pageItems = @($candidates | Select-Object -Skip $start -First $pageSize)
         Show-Mensagem "`nARQUIVOS QUE SERÃO MINIFICADOS" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
-        Show-Mensagem "Página $page de $totalPages (Total: $total)" Gray
+        if ($total -gt $pageSize) {
+            Show-Mensagem "Página $page de $totalPages" Gray
+        }
+        Show-Mensagem "Total: $total" Gray
+        Show-Mensagem ''
         $cssItems = @($pageItems | Where-Object { $_.fileType -eq 'css' })
         $jsItems = @($pageItems | Where-Object { $_.fileType -eq 'javascript' })
         if ($cssItems.Count -gt 0) {
@@ -711,15 +717,16 @@ function Show-CandidatePreview {
             Show-Mensagem 'JavaScript' Cyan
             foreach ($item in $jsItems) { Show-Mensagem "- $($item.relativePath)" White }
         }
-        if ($totalPages -gt 1) {
-            Write-Host '1. Próxima página'
-            Write-Host '2. Página anterior'
+        Show-Mensagem ''
+        if ($total -gt $pageSize) {
+            if ($page -lt $totalPages) { Write-Host '1. Próxima página' }
+            if ($page -gt 1) { Write-Host '2. Página anterior' }
         }
         Write-Host '0. Voltar'
         $choice = (Read-Host 'Escolha').Trim()
         switch ($choice) {
-            '1' { if ($page -lt $totalPages) { $page++ } else { Show-Mensagem 'Você já está na última página.' Yellow } }
-            '2' { if ($page -gt 1) { $page-- } else { Show-Mensagem 'Você já está na primeira página.' Yellow } }
+            '1' { if ($total -gt $pageSize -and $page -lt $totalPages) { $page++ } else { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow } }
+            '2' { if ($total -gt $pageSize -and $page -gt 1) { $page-- } else { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow } }
             '0' { return }
             default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
         }
@@ -735,16 +742,28 @@ function Invoke-ScanAnalysis {
     }
     $analysis = $response.analysis
     Show-ProjectAnalysis $analysis
-    if (@($analysis.errors).Count -gt 0) {
-        Show-Mensagem 'Problemas de descoberta:' Red
-        foreach ($error in @($analysis.errors)) { Show-Mensagem "- $($error.reason): $($error.message)" Red }
-    }
     if (@($analysis.execution.conflicts).Count -gt 0) {
         Show-Mensagem 'Conflitos de destino .min (serão ignorados e preservados):' Yellow
         foreach ($conflict in @($analysis.execution.conflicts)) { Show-Mensagem "- $($conflict.destinationPath)" Yellow }
     }
+    $blockers = @($analysis.execution.diagnostics.blockers)
+    if ($blockers.Count -gt 0 -or $analysis.execution.status -eq 'blocked') {
+        Show-Mensagem 'A minificação está bloqueada:' Red
+        foreach ($blocker in $blockers) {
+            if ($blocker.message) { Show-Mensagem "- $($blocker.message)" Red }
+            elseif ($blocker.reason) { Show-Mensagem "- $($blocker.reason)" Red }
+            else { Show-Mensagem "- $($blocker.code)" Red }
+        }
+        Show-Mensagem 'Nenhum arquivo foi alterado.' Yellow
+        return
+    }
+    if (@($analysis.execution.items).Count -eq 0) {
+        Show-Mensagem 'Nenhum arquivo será minificado nesta análise.' Yellow
+        Show-Mensagem 'Nenhum arquivo foi alterado.' Yellow
+        return
+    }
     while ($true) {
-        Write-Host "`n1. Ver arquivos"
+        Write-Host "`n1. Ver arquivos que serão minificados"
         Write-Host '2. Iniciar minificação'
         Write-Host '0. Cancelar'
         $choice = (Read-Host 'Escolha').Trim()
@@ -758,10 +777,15 @@ function Invoke-ScanAnalysis {
                     confirmationFingerprint = $analysis.execution.confirmationFingerprint
                 }
                 if (-not $execution.ok) {
-                    Show-Mensagem "Minificação bloqueada: $(Get-BridgeErrorMessage $execution 'A execução falhou sem diagnóstico disponível.')" Red
+                    if ($execution.diagnostic.code -eq 'PLAN_CHANGED_AFTER_ANALYSIS') {
+                        Show-Mensagem 'O projeto mudou após a análise. Analise novamente antes de minificar.' Yellow
+                    } else {
+                        Show-Mensagem "Minificação bloqueada: $(Get-BridgeErrorMessage $execution 'A execução falhou sem diagnóstico disponível.')" Red
+                    }
                     return
                 }
-                Show-Mensagem "Execução: $($execution.result.executionId)" Cyan
+                Show-Mensagem "Execução concluída: $($execution.result.status)" Green
+                Show-Mensagem "Modo de saída: $(Get-ModoSaidaDescricao $execution.plan.outputMode)" Cyan
                 Show-Mensagem "Planejados: $($execution.result.counts.planned)" White
                 Show-Mensagem "Processados com sucesso: $($execution.result.counts.createdSuccessfully)" Green
                 Show-Mensagem "Conflitos .min preservados: $($execution.result.counts.skippedConflicts)" $(if ($execution.result.counts.skippedConflicts -gt 0) { 'Yellow' } else { 'Gray' })
@@ -778,35 +802,57 @@ function Invoke-ScanAnalysis {
     }
 }
 
-function Invoke-ProjectAnalysis {
-    Invoke-ScanAnalysis $script:TemporaryAdjustments
+function Invoke-MinifyProject {
+    $ajustes = @{}
+    while ($true) {
+        $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+        if (-not $summary.ok -or -not $summary.configuration) {
+            Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+            Show-Mensagem 'Corrija a configuração em Configurações antes de minificar.' Gray
+            return
+        }
+        $config = $summary.configuration
+        $modoEfetivo = if ($ajustes.ContainsKey('outputMode')) { $ajustes.outputMode } else { $config.outputMode }
+        Show-Mensagem "`nMINIFICAR PROJETO" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem "Projeto: $($config.projectRoot)" Cyan
+        Show-Mensagem "Tipos: $(Get-TiposArquivoDescricao $config.fileTypes)" Cyan
+        Show-Mensagem "Perfil: $(Get-PerfilDescricao $config.profile)" Cyan
+        Show-Mensagem "Modo de saída: $(Get-ModoSaidaDescricao $modoEfetivo)" Cyan
+        Write-Host '1. Analisar projeto'
+        Write-Host '2. Ajustar somente esta execução'
+        Write-Host '0. Cancelar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Invoke-ScanAnalysis $ajustes }
+            '2' { Invoke-TemporaryAdjustment $ajustes }
+            '0' { Show-Mensagem 'Operação cancelada; nenhum arquivo foi alterado.' Yellow; return }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
 }
 
 function Start-SelfMinifierUi {
     $identity = Invoke-SelfMinifierBridge @{ command = 'version' }
     if (-not $identity.ok) { Show-Mensagem "Não foi possível obter a versão do SelfMinifier. $($identity.diagnostic.message)" Red; return }
     Write-Host "`nSELFMINIFIER v$($identity.version)" -ForegroundColor Cyan
-    $script:TemporaryAdjustments = @{}
     while ($true) {
-        Write-Host "`n=== SelfMinifier ===" -ForegroundColor Cyan
-        Write-Host '1. Analisar arquivos'
-        Write-Host '2. Minificar'
-        Write-Host '3. Ajustar somente esta execução'
-        Write-Host '4. Configurações'
-        Write-Host '5. Backups e restauração'
-        Write-Host '6. Relatórios'
-        Write-Host '7. Logs técnicos'
+        Write-Host "`nSELFMINIFIER" -ForegroundColor Cyan
+        Write-Host '────────────────────────────────────' -ForegroundColor Cyan
+        Write-Host '1. Minificar projeto'
+        Write-Host '2. Configurações'
+        Write-Host '3. Backups e restauração'
+        Write-Host '4. Relatórios'
+        Write-Host '5. Logs técnicos'
         Write-Host '0. Sair'
         $choice = (Read-Host 'Escolha').Trim()
         try {
             switch ($choice) {
-                '1' { Invoke-ProjectAnalysis }
-                '2' { Invoke-ScanAnalysis $script:TemporaryAdjustments }
-                '3' { Invoke-TemporaryAdjustment }
-                '4' { Show-ConfigurationMenu }
-                '5' { Show-RestoreMenu }
-                '6' { Show-Artefatos reports }
-                '7' { Show-Artefatos logs }
+                '1' { Invoke-MinifyProject }
+                '2' { Show-ConfigurationMenu }
+                '3' { Show-RestoreMenu }
+                '4' { Show-Artefatos reports }
+                '5' { Show-Artefatos logs }
                 '0' { return }
                 default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
             }

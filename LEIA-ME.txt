@@ -1,4 +1,4 @@
-SelfMinifier 0.1.2
+SelfMinifier 0.2.0
 
 O SelfMinifier minifica arquivos JavaScript e CSS no Windows com análise prévia,
 confirmação explícita e mecanismos de backup/restauração.
@@ -6,7 +6,7 @@ confirmação explícita e mecanismos de backup/restauração.
 Como iniciar
 - Para uso normal, clique duas vezes em Executar.cmd.
 - Executar.ps1 é a alternativa técnica/direta.
-- O SelfMinifier 0.1.2 suporta Node.js 24.x (LTS recomendado) e 25.x. A major
+- O SelfMinifier 0.2.0 suporta Node.js 24.x (LTS recomendado) e 25.x. A major
   mínima é 24; majors futuras não listadas não são aceitas automaticamente.
 - Na primeira execução, o programa valida o Node.js e as dependências. Se o
   Node.js estiver ausente, a instalação homologada pode ser oferecida com sua
@@ -22,8 +22,10 @@ Como iniciar
   administrador conforme as regras da máquina/organização.
 
 Uso seguro
-- Analise os arquivos antes de minificar. Nenhum arquivo é alterado sem a sua
-  confirmação explícita.
+- Use Minificar projeto para ajustar opcionalmente o modo desta operação, analisar,
+  conferir o resumo quantitativo e a prévia dos candidatos, iniciar a minificação e
+  receber o resultado. A impressão digital é revalidada antes da escrita. Nenhum
+  arquivo é alterado sem a sua confirmação explícita.
 - A análise sempre mostra risco determinístico da execução: Baixo, Moderado,
   Alto ou Crítico. Se o risco não puder ser calculado, a execução é bloqueada;
   não existe autorização para continuar sem essa classificação.
@@ -32,10 +34,14 @@ Uso seguro
 - Preservar os arquivos originais e criar arquivos .min mantém a fonte e cria
   .min.js ou .min.css ao lado dela; pode ser salvo como modo persistente.
 - O menu Configurações usa escolhas numeradas e confirmação explícita para
-  editar origem do projeto, tipos, exclusões, perfil e modo de saída, e mostra
-  a configuração atual em modo somente leitura. Ajustar somente esta execução
-  pode substituir o modo apenas naquela execução e nunca altera configuracao.ini;
-  cancelar os ajustes descarta todo o rascunho.
+  editar Origem do projeto, Tipos de arquivo, Exclusões, Perfil de minificação e
+  Comportamento; Ver configuração atual é somente leitura.
+- Ajustar somente esta execução existe apenas dentro de Minificar projeto, alcança
+  a análise e a execução, nunca altera configuracao.ini e desaparece ao encerrar
+  esse fluxo ou iniciar outro fluxo independente.
+- A prévia mostra total e lista sem controles de paginação para 1 a 10 candidatos.
+  Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo
+  válidos para a página atual.
 - Backups e restauração ficam disponíveis no menu. Relatórios ficam em
   Dados\Relatorios e logs técnicos em Dados\Logs.
 

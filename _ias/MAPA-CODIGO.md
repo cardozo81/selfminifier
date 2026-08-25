@@ -85,7 +85,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
 | `src/app/bridge.mjs` | Bridge JSON para resumo, pré-análise, impressão digital do plano confirmado, execução e criação segura da configuração | Configuração, scanner e execução |
-| `src/app/ui.ps1` | Menu PowerShell, apresentação pt-BR, ajustes temporários e confirmações | `src/app/bridge.mjs` |
+| `src/app/ui.ps1` | Menu PowerShell consolidado, fluxo **Minificar projeto**, prévia de candidatos, ajustes temporários por fluxo e confirmações numéricas | `src/app/bridge.mjs` |
 | `Executar.ps1` | Bootstrap validado e abertura do menu interativo | `src/bootstrap/cli.mjs`, `src/app/ui.ps1` |
 
 ## Observabilidade
@@ -94,7 +94,8 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | --- | --- | --- |
 | `src/observability/index.mjs` | Logs técnicos UTF-8, relatórios operacionais TXT/CSV e leitura/listagem read-only | Resultados de análise/execução, Node.js `fs/promises` |
 | `test/observability.test.js` | Testes focados de logs, relatórios, CSV, falhas, recuperação e leitura read-only | `src/observability/index.mjs`, bridge |
-| `test/ui.test.js` | Validação textual mínima dos fluxos PowerShell de listagem, cancelamento e indisponibilidade | `src/app/ui.ps1` |
+| `test/ui.test.js` | Validação textual dos menus, configuração e fluxo principal PowerShell | `src/app/ui.ps1` |
+| `test/ui-workflow.test.js` | Validação executável da paginação da prévia e do ciclo de vida do ajuste temporário B2/B2.1 | `src/app/ui.ps1`, Windows PowerShell |
 
 ## Restauração manual
 

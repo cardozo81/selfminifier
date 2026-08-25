@@ -1,21 +1,29 @@
 # Experiência de uso e interface de linha de comando
 
-## Interface planejada
+## Interface implementada
 
-PowerShell é a interface interativa planejada. CMD pode existir somente como lançador fino para operações específicas de build ou release.
+PowerShell é a interface interativa implementada. CMD pode existir somente como lançador fino para operações específicas de build ou release.
 
 A interface deve ser guiada e compreensível sem exigir que o usuário conheça npm, esbuild, sintaxe interna de glob, hashes ou adaptadores. Rótulos e mensagens apresentados ao usuário são obrigatoriamente em pt-BR.
 
-## Menu principal conceitual
+## Menu principal
 
-- Analisar arquivos
-- Minificar
-- Ajustar somente esta execução
-- Configurações
-- Backups e restauração
-- Relatórios
-- Logs técnicos
-- Sair
+```text
+SELFMINIFIER
+────────────────────────────────────
+1. Minificar projeto
+2. Configurações
+3. Backups e restauração
+4. Relatórios
+5. Logs técnicos
+0. Sair
+```
+
+## Fluxo principal de minificação
+
+O fluxo implementado é: **Minificar projeto → ajuste temporário opcional do modo de saída → análise → resumo quantitativo → prévia opcional dos candidatos → iniciar minificação → revalidação por fingerprint → resultado**.
+
+A prévia apresenta o total e a lista sem controles de paginação quando existem de 1 a 10 candidatos. Com 11 ou mais candidatos, usa páginas de 10 itens e mostra somente os controles de página anterior ou próxima que forem válidos na posição atual.
 
 ## Apresentação semântica
 

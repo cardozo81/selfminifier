@@ -18,7 +18,18 @@ As dependências de runtime já acompanham a distribuição. Com Node homologado
 
 A política do Windows PowerShell precisa permitir scripts locais. O SelfMinifier não usa Bypass, não reduz e não altera permanentemente essa política. Sob `Restricted`, `Executar.cmd` mostra a restrição, aponta para este manual e termina com erro. Qualquer mudança apropriada de política deve ser decidida e executada explicitamente pelo usuário ou administrador conforme as regras da máquina ou organização.
 
-Após o bootstrap, o menu oferece análise, minificação, ajuste temporário, configurações, backups/restauração, relatórios e logs técnicos.
+Após o bootstrap, o menu principal é:
+
+```text
+SELFMINIFIER
+────────────────────────────────────
+1. Minificar projeto
+2. Configurações
+3. Backups e restauração
+4. Relatórios
+5. Logs técnicos
+0. Sair
+```
 
 ## Configuração
 
@@ -62,9 +73,11 @@ No modo `.min`, destinos preexistentes são listados, preservados e ignorados; n
 
 ## Analisar e minificar
 
-Escolha **Analisar arquivos** para ver a raiz efetiva, tipos selecionados, modo de saída, perfil, risco do perfil, encontrados, elegíveis, ignorados, destinos `.min` preexistentes, avisos e bloqueios. A análise não modifica arquivos.
+Escolha **Minificar projeto** para ver a raiz do projeto, os tipos efetivos, o perfil e o modo de saída efetivo e, então, **Analisar projeto** ou **Ajustar somente esta execução**. A análise mostra CSS/JavaScript encontrados, ignorados, já minificados e elegíveis, com os motivos de exclusão, e permite **Ver arquivos que serão minificados** ou **Iniciar minificação**. Com 1 a 10 candidatos, a prévia mostra total e lista sem controles de paginação. Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo válidos. A análise não modifica arquivos.
 
-**Minificar** sempre refaz a pré-análise. Antes de qualquer escrita, o menu mostra o escopo, o risco determinístico e solicita confirmação. Não existe fluxo para continuar quando o risco estiver indisponível.
+**Iniciar minificação** reutiliza a execução V2 validada, que refaz a pré-análise e valida a impressão digital imediatamente antes de escrever. Se o projeto mudou após a análise, a execução é bloqueada e o usuário deve analisar novamente.
+
+Se não houver arquivos a minificar ou se houver bloqueios, a interface explica o resultado e não oferece minificação; nenhum arquivo é alterado.
 
 Se um destino `.min` já existir, ele é listado, preservado e ignorado. A execução V2 nunca o sobrescreve.
 
@@ -72,7 +85,7 @@ Se um destino `.min` já existir, ele é listado, preservado e ignorado. A execu
 
 **Configurações persistentes** são gravadas em `configuracao.ini` somente por uma ação persistente com confirmação explícita. Elas contêm a raiz do projeto, tipos CSS/JavaScript, exclusões relativas, perfil, modo de saída e motor homologado.
 
-**Ajustar somente esta execução** apresenta exatamente: 1 para manter o modo persistente, 2 para usar backup e sobrescrita, 3 para preservar originais e criar `.min`, e 0 para cancelar. As escolhas 1/2/3 terminam a seleção sem etapa adicional. O modo fica apenas em memória; 0 preserva o estado anterior da sessão, descarta o rascunho atual e nunca modifica o INI.
+**Ajustar somente esta execução** está integrado ao fluxo **Minificar projeto** e apresenta exatamente: 1 para manter o modo persistente, 2 para usar backup e sobrescrita, 3 para preservar originais e criar `.min`, e 0 para cancelar. As escolhas 1/2/3 terminam a seleção sem etapa adicional e retornam ao fluxo de minificação. O modo fica apenas em memória, alcança análise e execução e desaparece quando o fluxo termina ou quando outro fluxo independente é iniciado; 0 preserva o ajuste anterior do fluxo corrente, descarta somente a seleção em andamento e nunca modifica o INI.
 
 ## Backups e restauração manual
 

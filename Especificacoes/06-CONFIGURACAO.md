@@ -63,9 +63,9 @@ Ausência ou inacessibilidade da raiz configurada segue `10-SEGURANCA-E-INTEGRID
 
 ## Configuração efetiva temporária
 
-A configuração persistente e a configuração efetiva de uma execução são objetos distintos. O ajuste temporário atualmente suportado altera somente o modo de saída da execução atual.
+A configuração persistente e a configuração efetiva são objetos distintos. O ajuste temporário atualmente suportado altera somente o modo de saída do fluxo corrente de **Minificar projeto**.
 
-Um ajuste temporário nunca modifica `Configuracao\configuracao.ini`. A persistência só ocorre quando o usuário entra explicitamente na área de configuração persistente e salva.
+Um ajuste temporário alcança a análise e a execução desse fluxo, nunca modifica `Configuracao\configuracao.ini` e desaparece quando o fluxo termina ou quando um novo fluxo independente é iniciado. A persistência só ocorre quando o usuário entra explicitamente na área de configuração persistente e salva.
 
 A seleção temporária do modo de saída apresenta exatamente:
 
@@ -74,4 +74,4 @@ A seleção temporária do modo de saída apresenta exatamente:
 - `3`: usar temporariamente `PreservarOriginaisECriarMinificados`;
 - `0`: cancelar a operação temporária atual.
 
-As opções 1, 2 e 3 concluem a seleção sem etapa adicional de aplicação. A opção 0 descarta o rascunho da operação atual, preserva o estado efetivo anterior da sessão e nunca modifica o INI.
+As opções 1, 2 e 3 concluem a seleção sem etapa adicional de aplicação. A opção 0 descarta somente a seleção temporária em andamento, preserva o ajuste anterior do fluxo corrente, se houver, e nunca modifica o INI.

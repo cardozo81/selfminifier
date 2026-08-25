@@ -31,7 +31,15 @@ a { color: #005a9c; }
 <p>Para o uso normal, execute <code>Executar.cmd</code> com duplo clique na raiz. Ele apenas inicia <code>Executar.ps1</code> relativo ao pacote, sem alterar a política de execução do PowerShell. <code>Executar.ps1</code> é a alternativa técnica/direta. O bootstrap valida Node, npm, <code>package.json</code>, <code>package-lock.json</code> e dependências. Se Node estiver ausente ou não homologado, pode oferecer a instalação exata autorizada via winget. Recusar a instalação não altera o sistema.</p>
 <p>As dependências de runtime já acompanham a distribuição. Com Node homologado instalado, o início normal funciona offline e não executa <code>npm ci</code> nem <code>npm install</code>. Dependência ausente ou divergente bloqueia a abertura; reextraia uma distribuição íntegra.</p>
 <p>A política do Windows PowerShell precisa permitir scripts locais. O SelfMinifier não usa Bypass, não reduz e não altera permanentemente essa política. Sob <code>Restricted</code>, <code>Executar.cmd</code> mostra a restrição, aponta para este manual e termina com erro. Qualquer mudança apropriada de política deve ser decidida e executada explicitamente pelo usuário ou administrador conforme as regras da máquina ou organização.</p>
-<p>Após o bootstrap, o menu oferece análise, minificação, ajuste temporário, configurações, backups/restauração, relatórios e logs técnicos.</p>
+<p>Após o bootstrap, o menu principal é:</p>
+<pre><code>SELFMINIFIER
+────────────────────────────────────
+1. Minificar projeto
+2. Configurações
+3. Backups e restauração
+4. Relatórios
+5. Logs técnicos
+0. Sair</code></pre>
 <h2>Configuração</h2>
 <p>A configuração persistente é <code>Configuracao\configuracao.ini</code>; o modelo versionado é <code>Configuracao\configuracao.ini.example</code>. Se o arquivo real não existir, o menu informa o caminho e só o cria a partir do modelo após confirmação. Ele nunca sobrescreve uma configuração existente.</p>
 <p>O modelo <code>.example</code> é distribuído sem preferências pessoais. O INI real é do usuário: não acompanha o pacote, não é versionado e só pode ser criado ou atualizado por uma ação persistente confirmada. A interface é o meio recomendado; edição manual é uma opção avançada. Valores manuais inválidos bloqueiam a operação, sem correção ou fallback silencioso.</p>
@@ -59,12 +67,13 @@ IgnorarArquivo01=src\config.js</code></pre>
 </ul>
 <p>No modo <code>.min</code>, destinos preexistentes são listados, preservados e ignorados; não existe autorização para sobrescrevê-los. A quantidade de arquivos é mostrada separadamente como escopo da operação e não muda o nível em 0.1.0. Bloqueios de integridade nunca são convertidos em risco nem relaxados por essa classificação.</p>
 <h2>Analisar e minificar</h2>
-<p>Escolha **Analisar arquivos** para ver a raiz efetiva, tipos selecionados, modo de saída, perfil, risco do perfil, encontrados, elegíveis, ignorados, destinos <code>.min</code> preexistentes, avisos e bloqueios. A análise não modifica arquivos.</p>
-<p>**Minificar** sempre refaz a pré-análise. Antes de qualquer escrita, o menu mostra o escopo, o risco determinístico e solicita confirmação. Não existe fluxo para continuar quando o risco estiver indisponível.</p>
+<p>Escolha **Minificar projeto** para ver a raiz do projeto, os tipos efetivos, o perfil e o modo de saída efetivo e, então, **Analisar projeto** ou **Ajustar somente esta execução**. A análise mostra CSS/JavaScript encontrados, ignorados, já minificados e elegíveis, com os motivos de exclusão, e permite **Ver arquivos que serão minificados** ou **Iniciar minificação**. Com 1 a 10 candidatos, a prévia mostra total e lista sem controles de paginação. Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo válidos. A análise não modifica arquivos.</p>
+<p>**Iniciar minificação** reutiliza a execução V2 validada, que refaz a pré-análise e valida a impressão digital imediatamente antes de escrever. Se o projeto mudou após a análise, a execução é bloqueada e o usuário deve analisar novamente.</p>
+<p>Se não houver arquivos a minificar ou se houver bloqueios, a interface explica o resultado e não oferece minificação; nenhum arquivo é alterado.</p>
 <p>Se um destino <code>.min</code> já existir, ele é listado, preservado e ignorado. A execução V2 nunca o sobrescreve.</p>
 <h2>Ajustes temporários</h2>
 <p>**Configurações persistentes** são gravadas em <code>configuracao.ini</code> somente por uma ação persistente com confirmação explícita. Elas contêm a raiz do projeto, tipos CSS/JavaScript, exclusões relativas, perfil, modo de saída e motor homologado.</p>
-<p>**Ajustar somente esta execução** apresenta exatamente: 1 para manter o modo persistente, 2 para usar backup e sobrescrita, 3 para preservar originais e criar <code>.min</code>, e 0 para cancelar. As escolhas 1/2/3 terminam a seleção sem etapa adicional. O modo fica apenas em memória; 0 preserva o estado anterior da sessão, descarta o rascunho atual e nunca modifica o INI.</p>
+<p>**Ajustar somente esta execução** está integrado ao fluxo **Minificar projeto** e apresenta exatamente: 1 para manter o modo persistente, 2 para usar backup e sobrescrita, 3 para preservar originais e criar <code>.min</code>, e 0 para cancelar. As escolhas 1/2/3 terminam a seleção sem etapa adicional e retornam ao fluxo de minificação. O modo fica apenas em memória, alcança análise e execução e desaparece quando o fluxo termina ou quando outro fluxo independente é iniciado; 0 preserva o ajuste anterior do fluxo corrente, descarta somente a seleção em andamento e nunca modifica o INI.</p>
 <h2>Backups e restauração manual</h2>
 <p>No modo de sobrescrita, a restauração lista backups válidos em <code>_source_versions</code> e também aceita uma pasta exata informada manualmente. O manifesto, a cópia de backup, os hashes, os caminhos e o estado técnico são validados antes de formar um plano.</p>
 <p>Se o arquivo atual ainda corresponde ao hash minificado registrado, basta a confirmação normal. Se foi alterado ou está ausente, há uma confirmação adicional; recusá-la preserva esse item. O arquivo minificado atual não recebe backup durante a restauração.</p>
