@@ -35,13 +35,15 @@ const MOJIBAKE_PATTERNS = Object.freeze([
   '\u00c3\u00b3',
   '\u00c3\u00ba',
   '\u00c3\u00ad',
-  '\u00c2',
   '\u00ef\u00bf\u00bd',
   '\u00e2\u20ac',
   '\u00e2\u20ac\u2122',
   '\u00e2\u20ac\u0153',
   '\u00e2\u20ac\u009d',
   '\ufffd',
+]);
+const MOJIBAKE_REGEXES = Object.freeze([
+  /\u00C2[^\u0000-\u007F]/,
 ]);
 
 function isTextCandidate(name) {
@@ -66,10 +68,26 @@ export function validateTextContent(text, filePath = '<memória>') {
       throw new Error(`Mojibake confirmado em ${filePath}: sequência '${pattern}'.`);
     }
   }
+  for (const regex of MOJIBAKE_REGEXES) {
+    if (regex.test(text)) {
+      throw new Error(`Mojibake confirmado em ${filePath}: 'Â' seguido de caractere não ASCII.`);
+    }
+  }
+}
+
+function validateCmdCrlf(bytes, filePath) {
+  for (let index = 0; index < bytes.length; index += 1) {
+    if (bytes[index] === 0x0A && (index === 0 || bytes[index - 1] !== 0x0D)) {
+      throw new Error(`Fim de linha sem CRLF em ${filePath}: LF isolado no byte ${index}.`);
+    }
+  }
 }
 
 export async function validateFile(filePath) {
   const bytes = await readFile(filePath);
+  if (extname(filePath).toLowerCase() === '.cmd') {
+    validateCmdCrlf(bytes, filePath);
+  }
   let text;
   try {
     text = UTF8_DECODER.decode(bytes);

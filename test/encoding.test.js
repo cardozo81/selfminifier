@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { run, validateTextContent } from '../scripts/quality/check-encoding.mjs';
+import { run, validateFile, validateTextContent } from '../scripts/quality/check-encoding.mjs';
 
 test('aceita UTF-8 válido com palavras portuguesas', () => {
   assert.doesNotThrow(() => validateTextContent('NÃO configuração usuário execução', 'memória'));
@@ -51,4 +51,51 @@ test('validação aceita arquivo ativo UTF-8 normal', async () => {
     const files = await run(root);
     assert.equal(files.includes('ativo.txt'), true);
   });
+});
+
+test('aceita A-circunflexo legítimo em palavras portuguesas', () => {
+  const aCircunflexo = String.fromCharCode(0xC2);
+  assert.doesNotThrow(() => validateTextContent(`SEM${aCircunflexo}NTICOS DIN${aCircunflexo}MICOS PAR${aCircunflexo}METROS`, 'legítimo'));
+});
+
+test('rejeita A-circunflexo seguido de caractere não ASCII (mojibake CP1252)', () => {
+  const mojibake = String.fromCharCode(0xC2, 0xA9); // A-circunflexo + símbolo de copyright montados em runtime
+  assert.throws(() => validateTextContent(`${mojibake} rodapé`, 'corrompido'), /Mojibake confirmado/);
+});
+
+test('validação aceita .cmd com CRLF físico', async () => {
+  await withTempDir(async (root) => {
+    await writeFile(join(root, 'Executar.cmd'), '@echo off\r\necho ok\r\n', 'utf8');
+    const files = await run(root);
+    assert.equal(files.includes('Executar.cmd'), true);
+  });
+});
+
+test('validação rejeita .cmd com LF apenas', async () => {
+  await withTempDir(async (root) => {
+    await writeFile(join(root, 'Executar.cmd'), '@echo off\necho ok\n', 'utf8');
+    await assert.rejects(run(root), /Fim de linha sem CRLF/);
+  });
+});
+
+test('validação rejeita .cmd com finais de linha mistos', async () => {
+  await withTempDir(async (root) => {
+    await writeFile(join(root, 'Executar.cmd'), '@echo off\r\necho ok\n', 'utf8');
+    await assert.rejects(run(root), /Fim de linha sem CRLF/);
+  });
+});
+
+test('validação não aplica regra CRLF a arquivos que não são .cmd', async () => {
+  await withTempDir(async (root) => {
+    await writeFile(join(root, 'script.ps1'), 'Write-Host "oi"\n', 'utf8');
+    await writeFile(join(root, 'app.js'), 'const x = 1;\n', 'utf8');
+    const files = await run(root);
+    assert.equal(files.includes('script.ps1'), true);
+    assert.equal(files.includes('app.js'), true);
+  });
+});
+
+test('arquivos .cmd reais do repositório passam no gate CRLF', async () => {
+  await validateFile('Executar.cmd');
+  await validateFile('publicar.cmd');
 });
