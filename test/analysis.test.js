@@ -22,7 +22,7 @@ test('buildAnalysis expõe contagens do resultado do scanner sem reclassificar',
       { relativePath: 'bundle.min.js', fileType: 'javascript', sourceId: 'project-root', reason: 'ALREADY_MINIFIED' },
       { relativePath: 'readonly.js', fileType: 'javascript', sourceId: 'project-root', reason: 'READONLY_FILE' },
     ],
-    counts: { cssFound: 1, javascriptFound: 3, ignored: 2, alreadyMinified: 1, eligible: 2 },
+    counts: { cssFound: 1, javascriptFound: 3, ignored: 2, alreadyMinified: 1, eligible: 2, candidateBytes: 760422 },
   });
 
   const analysis = buildAnalysis(result, {
@@ -37,9 +37,17 @@ test('buildAnalysis expõe contagens do resultado do scanner sem reclassificar',
   assert.equal(analysis.counts.ignored, 2);
   assert.equal(analysis.counts.alreadyMinified, 1);
   assert.equal(analysis.counts.eligible, 2);
+  assert.equal(analysis.counts.candidateBytes, 760422);
   assert.deepEqual(analysis.exclusions, { folders: 2, files: 1 });
   assert.deepEqual(analysis.candidates.css.map((item) => item.relativePath), ['assets/a.css']);
   assert.deepEqual(analysis.candidates.javascript.map((item) => item.relativePath), ['src/app.js']);
+});
+
+test('buildAnalysis retorna candidateBytes zero quando o scanner não informa bytes', () => {
+  const result = scannerResult({ counts: { cssFound: 0, javascriptFound: 0, ignored: 0, alreadyMinified: 0, eligible: 0 } });
+  const analysis = buildAnalysis(result, {});
+  assert.equal(analysis.counts.eligible, 0);
+  assert.equal(analysis.counts.candidateBytes, 0);
 });
 
 test('candidatos são agrupados e ordenados deterministicamente', () => {
@@ -191,8 +199,37 @@ windowsTest('bridge scan-analysis retorna contagens e candidatos confiáveis', a
     assert.equal(response.analysis.counts.eligible, 2);
     assert.equal(response.analysis.counts.alreadyMinified, 1);
     assert.equal(response.analysis.counts.ignored, 2);
+    const expectedBytes = (await lstat(join(project, 'app.js'))).size + (await lstat(join(project, 'site.css'))).size;
+    assert.equal(response.analysis.counts.candidateBytes, expectedBytes);
     assert.deepEqual(response.analysis.candidates.css.map((item) => item.relativePath), ['site.css']);
     assert.deepEqual(response.analysis.candidates.javascript.map((item) => item.relativePath), ['app.js']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('bridge scan-analysis retorna candidateBytes zero sem candidatos', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-analysis-zero-'));
+  const project = join(root, 'site');
+  try {
+    await mkdir(project, { recursive: true });
+    await mkdir(join(root, 'Configuracao'), { recursive: true });
+    await writeFile(join(project, 'bundle.min.js'), 'const min = 1;');
+    await writeFile(join(root, 'Configuracao', 'configuracao.ini'), [
+      '[Configuracao]',
+      'VersaoSchema=2',
+      'Motor=esbuild',
+      'Perfil=Padrao',
+      'ModoSaida=PreservarOriginaisECriarMinificados',
+      `PastaRaiz=${project}`,
+      'TiposArquivo=CSS+JavaScript',
+      '',
+    ].join('\n'), 'utf8');
+
+    const response = await runBridgeRequest({ command: 'scan-analysis' }, { projectRoot: root });
+    assert.equal(response.ok, true);
+    assert.equal(response.analysis.counts.eligible, 0);
+    assert.equal(response.analysis.counts.candidateBytes, 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

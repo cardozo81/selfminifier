@@ -75,7 +75,7 @@ No modo `.min`, destinos preexistentes são listados, preservados e ignorados; n
 
 ## Analisar e minificar
 
-Escolha **Minificar projeto** para ver a raiz do projeto, os tipos efetivos, o perfil e o modo de saída efetivo e, então, **Analisar projeto** ou **Ajustar somente esta execução**. A análise mostra CSS/JavaScript encontrados, ignorados, já minificados e elegíveis, com os motivos de exclusão, e permite **Ver arquivos que serão minificados** ou **Iniciar minificação**. Com 1 a 10 candidatos, a prévia mostra total e lista sem controles de paginação. Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo válidos. A análise não modifica arquivos.
+Escolha **Minificar projeto** para ver a raiz do projeto, os tipos efetivos, o perfil e o modo de saída efetivo e, então, **Analisar projeto** ou **Ajustar somente esta execução**. A análise mostra CSS/JavaScript encontrados, ignorados, já minificados, candidatos e o tamanho total dos candidatos em KB, com os motivos de exclusão, e permite **Ver arquivos que serão minificados** ou **Iniciar minificação**. Com 1 a 10 candidatos, a prévia mostra total e lista sem controles de paginação. Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo válidos. A análise não modifica arquivos.
 
 **Iniciar minificação** reutiliza a execução V2 validada, que refaz a pré-análise e valida a impressão digital imediatamente antes de escrever. Se o projeto mudou após a análise, a execução é bloqueada e o usuário deve analisar novamente.
 

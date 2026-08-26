@@ -181,3 +181,13 @@ test('UI B2.1 corrige prévia paginada e ciclo de vida do ajuste temporário', a
   assert.match(source, /if \(\$page -gt 1\) \{ Write-Host '2\. Página anterior' \}/);
   assert.doesNotMatch(source, /Página \$page de \$totalPages \(Total: \$total\)/);
 });
+
+test('UI F1 mostra candidatos e tamanho total em KB', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  assert.match(source, /Arquivos candidatos:/);
+  assert.match(source, /Tamanho total:/);
+  assert.match(source, /function Format-Kilobytes/);
+  assert.match(source, /\$Analysis\.counts\.candidateBytes/);
+  assert.match(source, /1KB/);
+  assert.doesNotMatch(source, /Arquivos elegíveis/);
+});

@@ -238,6 +238,7 @@ export async function createExecutionPlan({
   ];
   const ignoredByReason = {};
   for (const item of ignored) ignoredByReason[item.reason] = (ignoredByReason[item.reason] ?? 0) + 1;
+  const candidateBytes = items.reduce((total, item) => total + item.sourceSize, 0);
   const classifiedScannerResult = {
     ...scannerResult,
     eligible: items.map((item) => ({
@@ -255,6 +256,7 @@ export async function createExecutionPlan({
         item.reason === 'ALREADY_MINIFIED' || item.reason === 'ALREADY_MINIFIED_UNCHANGED' || item.reason === 'ALREADY_MINIFIED_BY_SELFMINIFIER'
       )).length,
       eligible: items.length,
+      candidateBytes,
       ignoredByReason,
     },
   };

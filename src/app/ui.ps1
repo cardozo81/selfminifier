@@ -37,6 +37,14 @@ function Confirmar-Acao {
     return ((Read-Host "$Question (s/N)").Trim().ToLowerInvariant() -eq 's')
 }
 
+function Format-Kilobytes {
+    param([long]$Bytes)
+    if ($Bytes -le 0) { return '0 KB' }
+    $kb = [math]::Round($Bytes / 1KB, 1)
+    $text = $kb.ToString('0.0', [System.Globalization.CultureInfo]::InvariantCulture)
+    return "$($text.Replace('.', ',')) KB"
+}
+
 
 function Show-Artefatos {
     param([ValidateSet('reports', 'logs')][string]$Kind)
@@ -968,7 +976,8 @@ function Show-ProjectAnalysis {
     Show-Mensagem "JavaScript encontrados:    $($Analysis.counts.javascriptFound)"
     Show-Mensagem "Ignorados:                 $($Analysis.counts.ignored)"
     Show-Mensagem "Já minificados:            $($Analysis.counts.alreadyMinified)"
-    Show-Mensagem "Arquivos elegíveis:        $($Analysis.counts.eligible)"
+    Show-Mensagem "Arquivos candidatos:       $($Analysis.counts.eligible)"
+    Show-Mensagem "Tamanho total:             $(Format-Kilobytes $Analysis.counts.candidateBytes)"
     foreach ($entry in @($Analysis.ignoredByReason)) {
         Show-Mensagem "- $($entry.label): $($entry.count)" Gray
     }

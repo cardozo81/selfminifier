@@ -122,6 +122,7 @@ export function buildAnalysis(scannerResult, { projectRoot = null, fileTypes = [
       ignored: scannerResult?.counts?.ignored ?? ignored.length,
       alreadyMinified: scannerResult?.counts?.alreadyMinified ?? 0,
       eligible: scannerResult?.counts?.eligible ?? eligible.length,
+      candidateBytes: scannerResult?.counts?.candidateBytes ?? 0,
     },
     ignoredByReason: buildReasonBreakdown(ignored),
     candidates: buildCandidates(eligible),
