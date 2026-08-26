@@ -83,7 +83,7 @@ A política de Node exige major mínima 24 e aceita as linhas 24.x e 25.x, com 2
 
 ## UTF-8, qualidade e desenvolvimento
 
-Texto humano e artefatos documentais usam UTF-8. `scripts/quality/check-encoding.mjs` verifica arquivos textuais e sequências de mojibake conhecidas. O projeto usa `node:test` com fixtures temporárias para configuração, scanner, execução, integridade, observabilidade e restauração.
+Texto humano e artefatos documentais usam UTF-8. `scripts/quality/check-encoding.mjs` valida arquivos textuais, exige fisicamente finais de linha CRLF nos launchers `.cmd` do working tree (rejeitando LF isolado, CR isolado e misturas) e detecta sequências conhecidas de mojibake; o A-circunflexo isolado é aceito como legítimo, e só é caracterizado como mojibake CP1252 quando seguido de caractere não ASCII. O projeto usa `node:test` com fixtures temporárias para configuração, scanner, execução, integridade, observabilidade e restauração.
 
 O desenvolvimento ocorre diretamente em `main`, com commits validados e allowlist explícita de arquivos ao preparar um checkpoint. Não use `git add .`, force-push, fallback silencioso ou exclusão por curingas.
 

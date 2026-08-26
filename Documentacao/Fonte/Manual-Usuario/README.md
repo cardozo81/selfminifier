@@ -114,7 +114,7 @@ Use **Pesquisar SelfMinifier-Tag** e informe os 24 caracteres da Tag ou o marcad
 
 Use **Consultar histórico por arquivo ou caminho** para procurar ocorrências em `sourcePath` e `outputPath`. Os resultados aparecem do mais recente para o mais antigo e são numerados para inspeção. Cada resultado continua sendo um artefato independente; caminhos iguais não formam uma cadeia de revisões nem provam continuidade de identidade.
 
-A tela de detalhes separa **Dado histórico persistido** de **Estado verificado agora**. Ela mostra Tag, data, execução, versão, caminhos, modo, motor/perfil, hashes técnicos, backup histórico e capacidade de recuperação. Para verificar um arquivo atual, selecione-o explicitamente. Os estados significam:
+A tela de detalhes separa **Dado histórico persistido** de **Estado verificado agora**. Ela mostra Tag, data, execução, versão, caminhos, modo, motor/perfil, hashes técnicos, backup histórico e capacidade de recuperação. Para verificar um arquivo atual, selecione-o explicitamente. A interface apresenta esses estados com rótulos amigáveis em pt-BR, preservando os códigos técnicos internos. Os estados significam:
 
 - `MATCH`: Tag e SHA-256 completos correspondem ao artefato histórico;
 - `CONTENT_CHANGED`: a Tag é conhecida, mas os bytes atuais diferem; isso não determina a causa;
