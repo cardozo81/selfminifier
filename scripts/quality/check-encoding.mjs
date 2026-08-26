@@ -80,6 +80,9 @@ function validateCmdCrlf(bytes, filePath) {
     if (bytes[index] === 0x0A && (index === 0 || bytes[index - 1] !== 0x0D)) {
       throw new Error(`Fim de linha sem CRLF em ${filePath}: LF isolado no byte ${index}.`);
     }
+    if (bytes[index] === 0x0D && (index === bytes.length - 1 || bytes[index + 1] !== 0x0A)) {
+      throw new Error(`Fim de linha sem CRLF em ${filePath}: CR isolado no byte ${index}.`);
+    }
   }
 }
 

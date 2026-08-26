@@ -78,6 +78,20 @@ test('validação rejeita .cmd com LF apenas', async () => {
   });
 });
 
+test('validação rejeita .cmd com CR apenas', async () => {
+  await withTempDir(async (root) => {
+    await writeFile(join(root, 'Executar.cmd'), '@echo off\recho ok\r', 'utf8');
+    await assert.rejects(run(root), /Fim de linha sem CRLF/);
+  });
+});
+
+test('validação rejeita .cmd com mistura de CRLF e CR', async () => {
+  await withTempDir(async (root) => {
+    await writeFile(join(root, 'Executar.cmd'), '@echo off\r\necho ok\r', 'utf8');
+    await assert.rejects(run(root), /Fim de linha sem CRLF/);
+  });
+});
+
 test('validação rejeita .cmd com finais de linha mistos', async () => {
   await withTempDir(async (root) => {
     await writeFile(join(root, 'Executar.cmd'), '@echo off\r\necho ok\n', 'utf8');
