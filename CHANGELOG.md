@@ -2,12 +2,19 @@
 
 ## Não lançado
 
-### 0.2.0
+### 0.2.0-rc.1
 
-- Configuração Schema V2 exclusiva e editável pela interface, incluindo origem, tipos, exclusões, perfil, comportamento e visualização atual.
-- Fluxo principal consolidado em **Minificar projeto**, com ajuste temporário de modo restrito ao fluxo, análise quantitativa, prévia opcional e revalidação por fingerprint antes da execução.
-- Prévia sem paginação para até 10 candidatos e com páginas de 10 e controles contextuais a partir de 11 candidatos.
-- Remoção definitiva do caminho operacional de Configuração V1 e atualização dos testes e manuais correspondentes.
+- Configuração Schema V2 exclusiva e editável pela interface: origem, tipos, exclusões, perfil, comportamento e visualização atual; remoção definitiva do caminho operacional de Configuração V1.
+- Fluxo principal consolidado em **Minificar projeto**, com ajuste temporário de modo restrito ao fluxo, análise quantitativa, prévia sem paginação até 10 candidatos e paginada a partir de 11, e revalidação por fingerprint antes da execução.
+- Configuração Schema V3 com `PastaBackups` para armazenamento externo de backups, validação fail-closed de separação física e lexical de `PastaRaiz` e transição V2→V3 explícita pela interface.
+- Fundação de proveniência persistente com `SelfMinifier-Tag` e `artifactId` criptográfico de 96 bits, usando SHA-256 dos bytes finais para classificar conteúdo já minificado sem reminificação automática.
+- Backups compactados com GZIP e manifesto v2, mantendo compatibilidade de restauração com backups legados não compactados.
+- Pesquisa histórica por SelfMinifier-Tag e por caminho, inspeção que separa dado persistido de estado atual e recuperação histórica como exportação exclusiva para destino explícito, sem sobrescrever origem ou saída atuais.
+- Restauração normal e recuperação histórica integradas ao menu **Backups e restauração**, com estados de integridade e disponibilidade explícitos e confirmações numéricas.
+- Integridade e segurança fail-closed: prova física de caminhos, rejeição de reparse points, journal write-ahead, rollback exato e bloqueio `recovery-required` sem autorização substituta.
+- Otimização de desempenho da validação histórica sequencial.
+- Correções de encoding UTF-8 nos launchers e preservação da comunicação JSON do bridge sob console UTF-8.
+- Documentação alinhada: manuais revisados contra o código, plataforma Windows documentada, dívida futura (Linux/macOS, retenção e arquivamento) registrada como não implementada, e geração HTML corrigida (ênfase e estilo de código).
 
 ### 0.1.2
 

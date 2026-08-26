@@ -1,4 +1,4 @@
-SelfMinifier 0.2.0
+SelfMinifier 0.2.0-rc.1
 
 O SelfMinifier minifica arquivos JavaScript e CSS no Windows com análise prévia,
 confirmação explícita e mecanismos de backup/restauração.
@@ -6,7 +6,7 @@ confirmação explícita e mecanismos de backup/restauração.
 Como iniciar
 - Para uso normal, clique duas vezes em Executar.cmd.
 - Executar.ps1 é a alternativa técnica/direta.
-- O SelfMinifier 0.2.0 suporta Node.js 24.x (LTS recomendado) e 25.x. A major
+- O SelfMinifier 0.2.0-rc.1 suporta Node.js 24.x (LTS recomendado) e 25.x. A major
   mínima é 24; majors futuras não listadas não são aceitas automaticamente.
 - Na primeira execução, o programa valida o Node.js e as dependências. Se o
   Node.js estiver ausente, a instalação homologada pode ser oferecida com sua

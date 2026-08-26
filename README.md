@@ -1,6 +1,6 @@
 # SelfMinifier
 
-Status atual: versão `0.2.0`, com interface interativa, minificação transacional, restauração manual segura, documentação offline e empacotamento local validado.
+Status atual: versão `0.2.0-rc.1`, com interface interativa, minificação transacional, restauração manual segura, documentação offline e empacotamento local validado.
 
 O SelfMinifier (anteriormente Meminify) tem como objetivo oferecer minificação segura e controlada de arquivos JavaScript e CSS. O projeto é direcionado ao Windows, com interface interativa em PowerShell e execução baseada em Node.js.
 
@@ -20,4 +20,4 @@ Use `Executar.cmd` para iniciar o menu PowerShell. O menu principal consolidado 
 
 Já existem domínio/configuração, adapter esbuild, scanner read-only, integridade SHA-256, execução transacional, bootstrap Windows, menu PowerShell, restauração manual, logs, relatórios e empacotamento local. O algoritmo final de risco de execução, o perfil `Personalizado`, retenção automática e GitHub Release permanecem pendentes.
 
-Use `publicar.cmd` para gerar localmente `dist/SelfMinifier-0.2.0.zip` e seu checksum SHA-256. O SelfMinifier 0.2.0 suporta Node.js 24.x (LTS recomendado) e 25.x; a major mínima é 24 e majors futuras não são aceitas automaticamente. Em um clone sem dependências locais, o launcher informa a situação e só executa `npm ci` após confirmação explícita; a mesma operação continua automaticamente após a revalidação. Esse fluxo não publica GitHub Release.
+Use `publicar.cmd` para gerar localmente `dist/SelfMinifier-0.2.0-rc.1.zip` e seu checksum SHA-256. O SelfMinifier 0.2.0-rc.1 suporta Node.js 24.x (LTS recomendado) e 25.x; a major mínima é 24 e majors futuras não são aceitas automaticamente. Em um clone sem dependências locais, o launcher informa a situação e só executa `npm ci` após confirmação explícita; a mesma operação continua automaticamente após a revalidação. Esse fluxo não publica GitHub Release.
