@@ -6,6 +6,14 @@ export { assertPhysicalPath, proveDirectoryWritable } from './physical-path.js';
 export { createBackupManifest, createBackupManifestEntry, readBackupManifest, validateBackupManifest, writeBackupManifest } from './manifest.js';
 export { readTechnicalState, validateTechnicalState, writeTechnicalState } from './state.js';
 export {
+  NO_SELFMINIFIER_TAG,
+  SELFMINIFIER_TAG_NAME,
+  classifySelfMinifierTag,
+  createSelfMinifierTag,
+  insertSelfMinifierTag,
+  inspectSelfMinifierTags,
+} from './selfminifier-tag.js';
+export {
   ARTIFACT_ID_PATTERN,
   assertHistoricalExecutionWritable,
   createHistoricalExecutionRecord,

@@ -413,7 +413,7 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
     if (request.command === 'scan-analysis') {
       const configuration = persistent.configuration;
       const { plan } = await createPlan(request, persistent, application.version);
-      const analysis = buildAnalysis(plan.scannerResult, {
+      const analysis = buildAnalysis(plan.analysisResult ?? plan.scannerResult, {
         projectRoot: configuration.projectRoot,
         fileTypes: configuration.fileTypes,
         ignoredFolders: configuration.ignoredFolders,

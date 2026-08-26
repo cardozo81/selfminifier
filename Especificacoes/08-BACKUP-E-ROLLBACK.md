@@ -39,7 +39,11 @@ O payload de backup continua em `_source_versions` nesta fase. `Dados\Historico`
 
 Registros novos podem ligar `executionId` e `artifactId` ao estado atual, ao journal e ao manifesto. Registros antigos sem esses campos continuam válidos e não são migrados ou regravados.
 
-`SelfMinifier-Tag` não é inserido nesta fase. `artifactId` é identidade persistente; SHA-256 continua sendo prova de integridade. Quando a tag for implementada, `outputHash` significará o SHA-256 dos bytes finais completos do artefato, incluindo a tag inserida. Não haverá remoção de marcador nem hash normalizado, e a presença de uma tag nunca substituirá a prova SHA-256.
+A marca oficial usa a sintaxe fechada `/*! SelfMinifier-Tag: <artifactId> */`, em que o valor é exatamente o `artifactId` do artefato. A Tag é identidade, não prova de integridade. JavaScript preserva shebang como primeira linha e recebe a Tag depois dele; CSS preserva um `@charset` inicial válido e recebe a Tag depois dessa regra.
+
+Para novas saídas, o fluxo é: minificar → inserir a Tag → obter os bytes finais completos → calcular SHA-256 incluindo a Tag → persistir o mesmo hash no journal, estado, histórico e manifesto, onde aplicável → escrever exatamente esses bytes. Não há remoção ou normalização do marcador antes do hash.
+
+Uma Tag conhecida só comprova artefato já minificado quando o SHA-256 do arquivo completo coincide com o `outputHash` histórico, independentemente do caminho atual; cópias idênticas são válidas. Conteúdo alterado, Tag desconhecida, múltipla ou inválida não é reminificado automaticamente. Sem Tag, o reconhecimento legado por caminho e `minifiedHash` do estado continua disponível para artefatos antigos.
 
 No protocolo write-ahead, caminho e SHA-256 esperado do histórico entram no journal antes da criação exclusiva do registro. Estado e manifesto obrigatórios são comprovados primeiro; o histórico é então gravado e comprovado; somente depois o journal recebe `completed`. Falha anterior à conclusão remove o histórico apenas pelo caminho e hash exatos, e qualquer divergência permanece `recovery-required`. Colisão de `executionId` bloqueia sem sobrescrever o registro existente.
 
@@ -49,7 +53,7 @@ O backup guarda somente a fonte não minificada imediatamente antes de sua sobre
 
 O diretório neutro de backup é `_source_versions`. A sequência obrigatória é:
 
-`fonte` → `SHA-256 da fonte` → `criar backup` → `validar existência do backup` → `validar SHA-256 do backup` → `minificar em memória/temporário` → `validar resultado` → `SHA-256 final` → `substituição segura no mesmo caminho` → `atualizar estado`
+`fonte` → `SHA-256 da fonte` → `criar backup` → `validar existência do backup` → `validar SHA-256 do backup` → `minificar em memória/temporário` → `validar resultado` → `artifactId` → inserir `SelfMinifier-Tag` → `SHA-256` dos bytes finais completos → substituição segura no mesmo caminho → atualizar estado
 
 Falha crítica em qualquer prova anterior à substituição impede a sobrescrita.
 

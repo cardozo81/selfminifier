@@ -261,7 +261,7 @@ test('backup interno V2 legado permanece descobrível e restaurável', async () 
   } finally { await rm(paths.root, { recursive: true, force: true }); }
 });
 
-test('V3 não altera comportamento .min nem ALREADY_MINIFIED_UNCHANGED', async () => {
+test('V3 não altera comportamento .min nem reconhecimento por SelfMinifier-Tag', async () => {
   const minPaths = await fixture({ schemaVersion: 3, backupRoot: null, outputMode: OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED });
   try {
     await runBridgeRequest({ command: 'update-backup-root', backupRoot: minPaths.externalA, confirmed: true }, { projectRoot: minPaths.root });
@@ -277,7 +277,7 @@ test('V3 não altera comportamento .min nem ALREADY_MINIFIED_UNCHANGED', async (
     await analyzeAndExecute(overwrite.root, 'b3-a2-first');
     const second = await runBridgeRequest({ command: 'analyze', executionId: 'b3-a2-second' }, { projectRoot: overwrite.root });
     assert.equal(second.ok, true);
-    assert.equal(second.analysis.ignored.some((item) => item.reason === 'ALREADY_MINIFIED_UNCHANGED'), true);
+    assert.equal(second.analysis.ignored.some((item) => item.reason === 'ALREADY_MINIFIED_BY_SELFMINIFIER'), true);
   } finally { await rm(overwrite.root, { recursive: true, force: true }); }
 });
 

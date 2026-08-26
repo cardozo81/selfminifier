@@ -55,6 +55,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `src/integrity/hash.js` | SHA-256 incremental de arquivos | Node.js `crypto`, `fs` |
 | `src/integrity/json-store.js` | Leitura UTF-8 estrita e persistência JSON por arquivo temporário e rename | Node.js built-ins |
 | `src/integrity/history.js` | `artifactId` criptográfico, schema histórico formatVersion 1, criação imutável, leitura, listagem e busca sequencial fail-closed | Node.js `crypto`, `fs/promises`, integridade |
+| `src/integrity/selfminifier-tag.js` | Sintaxe fechada, inspeção, classificação histórica e inserção segura de `SelfMinifier-Tag` em CSS/JavaScript | Histórico, SHA-256, `artifactId` |
 | `src/integrity/physical-path.js` | Prova lexical/canônica, identidade física, rejeição nativa de reparse points e sonda de escrita exclusiva | Node.js built-ins, `fsutil.exe` no Windows |
 | `src/integrity/schema.js` | Validação dos registros técnicos e entradas de manifesto | Módulos de integridade |
 | `src/integrity/state.js` | Validação e persistência de `Dados/estado.json` | Módulos de integridade |

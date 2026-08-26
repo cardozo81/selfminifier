@@ -7,6 +7,7 @@ import {
   createHistoricalExecutionRecord,
   generateArtifactId,
   historicalExecutionRecordHash,
+  insertSelfMinifierTag,
   listHistoricalExecutionRecords,
   resolveHistoricalExecutionPath,
   createBackupManifest,
@@ -374,8 +375,9 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       if (minified.status !== 'success' || typeof minified.output !== 'string' || minified.output.length === 0) {
         throw new ExecutionError('INVALID_MINIFIED_OUTPUT', `O minificador não produziu saída válida para ${item.sourcePath}.`);
       }
-      const outputHash = hashContentSha256(minified.output);
-      const outputSize = Buffer.byteLength(minified.output, 'utf8');
+      const finalOutput = insertSelfMinifierTag(minified.output, item.fileType, journalItem.artifactId);
+      const outputHash = hashContentSha256(finalOutput);
+      const outputSize = Buffer.byteLength(finalOutput, 'utf8');
       journalItem.expectedOutputHash = outputHash;
       journalItem.status = 'mutation-intent';
       await persistJournal(journalPath, journal);
@@ -383,9 +385,9 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
 
       try {
         if (journalItem.operation === 'create-output') {
-          await createNewFileExact(item.destinationPath, minified.output, outputHash);
+          await createNewFileExact(item.destinationPath, finalOutput, outputHash);
         } else {
-          await replaceFileExact(item.destinationPath, minified.output, journalItem.previousHash, outputHash);
+          await replaceFileExact(item.destinationPath, finalOutput, journalItem.previousHash, outputHash);
         }
       } catch (cause) {
         if (cause?.code === 'LATE_DESTINATION_CONFLICT' || cause?.code === 'TARGET_CHANGED') {

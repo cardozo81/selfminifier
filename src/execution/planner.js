@@ -2,11 +2,18 @@ import { access, constants, lstat, mkdir } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { validateExternalBackupRoot } from '../configuration/index.js';
 import { CONFIGURATION_SCHEMA_VERSIONS, OUTPUT_MODES, PROFILE_DEFINITIONS } from '../domain/index.js';
-import { assertPhysicalPath, hashFileSha256, proveDirectoryWritable } from '../integrity/index.js';
+import {
+  NO_SELFMINIFIER_TAG,
+  assertPhysicalPath,
+  classifySelfMinifierTag,
+  hashFileSha256,
+  proveDirectoryWritable,
+} from '../integrity/index.js';
 import { readTechnicalState } from '../integrity/state.js';
 import { resolveRuntimePaths } from '../runtime/paths.js';
 import { scan } from '../scanner/index.js';
 import { ExecutionError } from './errors.js';
+import { readSourceUtf8 } from './filesystem.js';
 import { calculateExecutionRisk } from './risk.js';
 
 function deepFreeze(value) {
@@ -129,6 +136,23 @@ export async function createExecutionPlan({
     }
     const sourceHash = await hashFileSha256(sourcePath);
     const sourceStats = await lstat(sourcePath);
+    const tagClassification = await classifySelfMinifierTag({
+      content: await readSourceUtf8(sourcePath),
+      fileType: eligible.fileType,
+      currentHash: sourceHash,
+      historyDirectory: runtimePaths.historyDirectory,
+    });
+    if (tagClassification.reason !== NO_SELFMINIFIER_TAG) {
+      ignored.push({
+        ...eligible,
+        status: tagClassification.reason === 'ALREADY_MINIFIED_BY_SELFMINIFIER' ? 'ignored' : 'blocked',
+        reason: tagClassification.reason,
+        artifactId: tagClassification.artifactId,
+        historicalOutputHash: tagClassification.historicalOutputHash,
+        historicalExecutionId: tagClassification.historicalExecutionId ?? null,
+      });
+      continue;
+    }
     const recorded = findStateRecord(stateSnapshot.value, sourcePath);
     if (configuration.outputMode === OUTPUT_MODES.BACKUP_OVERWRITE && recorded?.minifiedHash === sourceHash) {
       ignored.push({ ...eligible, status: 'ignored', reason: 'ALREADY_MINIFIED_UNCHANGED' });
@@ -212,6 +236,28 @@ export async function createExecutionPlan({
   const requiredConfirmations = [
     { type: 'execution', satisfied: false },
   ];
+  const ignoredByReason = {};
+  for (const item of ignored) ignoredByReason[item.reason] = (ignoredByReason[item.reason] ?? 0) + 1;
+  const classifiedScannerResult = {
+    ...scannerResult,
+    eligible: items.map((item) => ({
+      normalizedPath: item.sourcePath,
+      relativePath: item.relativePath,
+      sourceId: item.sourceId,
+      fileType: item.fileType,
+      status: 'eligible',
+    })),
+    ignored,
+    counts: {
+      ...scannerResult.counts,
+      ignored: ignored.length,
+      alreadyMinified: ignored.filter((item) => (
+        item.reason === 'ALREADY_MINIFIED' || item.reason === 'ALREADY_MINIFIED_UNCHANGED' || item.reason === 'ALREADY_MINIFIED_BY_SELFMINIFIER'
+      )).length,
+      eligible: items.length,
+      ignoredByReason,
+    },
+  };
 
   return deepFreeze({
     formatVersion: 1,
@@ -243,5 +289,6 @@ export async function createExecutionPlan({
     requiredConfirmations,
     stateBefore: stateSnapshot,
     scannerResult,
+    analysisResult: classifiedScannerResult,
   });
 }
