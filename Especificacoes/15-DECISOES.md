@@ -52,3 +52,38 @@ As seguintes decisões permanecem deliberadamente sem valor inventado. A área f
 - versões exatas de futuras dependências — fase que introduzir cada dependência;
 
 Esses pontos exigem decisão explícita em tarefa futura. Nenhum padrão, fallback ou valor deve ser inferido enquanto permanecerem pendentes.
+
+## Evoluções estratégicas pendentes (dívidas técnicas)
+
+Duas evoluções futuras possuem a mesma prioridade estratégica de planejamento e permanecem deliberadamente fora da implementação atual (F4/`0.2.0`). Ambas são insumo autoritativo para a futura fase de definição de requisitos; nenhuma delas está implementada e nenhuma decisão em aberto deve ser tratada como aprovada.
+
+| Identificador | Evolução | Escopo temático |
+| --- | --- | --- |
+| DT-MP | Compatibilidade de plataforma — suportar plataformas explicitamente qualificadas sem enfraquecer integridade | `01-PREMISSAS.md`, `04-ARQUITETURA.md` |
+| DT-ME | Compatibilidade de motores — suportar N adaptadores explicitamente homologados sem acoplar o núcleo | `07-MINIFICACAO-E-MOTORES.md`, `04-ARQUITETURA.md` |
+
+### Relação estratégica
+
+```text
+STRATEGIC COMPATIBILITY EVOLUTION
+
+DT-MP — Platform compatibility
+└── support explicitly qualified platforms without weakening integrity
+
+DT-ME — Engine compatibility
+└── support N explicitly homologated adapters without coupling the core
+```
+
+### Invariantes
+
+- O Windows permanece o único suporte atual validado; multiplataforma é trabalho futuro e não é alegação de produto atual.
+- O esbuild permanece o único motor atualmente homologado; nenhum candidato é homologado por mera plausibilidade técnica.
+- Conveniência multiplataforma nunca deve enfraquecer integridade, recuperação ou garantias fail-closed existentes.
+- Não há fallback implícito de motor; os princípios fail-closed permanecem autoritativos.
+
+### Decisões em aberto (não decididas)
+
+- **DT-MP:** quais sistemas operacionais adicionais serão suportados primeiro; versões mínimas; permanência do PowerShell como tecnologia de UI fora do Windows; existência de nova abstração de UI; formato de launcher, instalador e pacote; detalhes de implementação de filesystem; regras de migração de caminhos; cadência de release por plataforma.
+- **DT-ME:** quais motores adicionais serão suportados; se Terser, SWC, Lightning CSS ou outro candidato será homologado; número total de motores; seleção global versus seleção por tipo de arquivo; schema final de configuração; representação `MotorJavaScript`/`MotorCSS` ou equivalente; estratégia de migração da configuração existente; motor padrão por tipo; política de fallback; limiares de benchmark; detalhes da política de deprecação/remoção de motores; versões exatas de futuras dependências.
+
+Nenhum desses pontos deve ser preenchido com valor inventado; pertencem à futura fase de definição de requisitos.

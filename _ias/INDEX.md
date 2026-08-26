@@ -19,6 +19,7 @@ Este arquivo direciona cada área à sua fonte autoritativa. Leia somente os doc
 | Pacote e distribuição | `Especificacoes/13-DISTRIBUICAO.md` |
 | Documentação | `Especificacoes/14-DOCUMENTACAO.md` |
 | Decisões aprovadas e pendentes | `Especificacoes/15-DECISOES.md` |
+| Evoluções estratégicas pendentes (DT-MP e DT-ME) | `Especificacoes/15-DECISOES.md`, `Especificacoes/04-ARQUITETURA.md`, `Especificacoes/07-MINIFICACAO-E-MOTORES.md` |
 
 O mapa dos arquivos efetivamente implementados fica em `_ias/MAPA-CODIGO.md`.
 

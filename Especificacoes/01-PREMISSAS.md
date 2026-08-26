@@ -8,6 +8,8 @@ O SelfMinifier é uma ferramenta para Windows destinada à minificação control
 
 O motor, os tipos suportados e os limites de minificação são definidos em `07-MINIFICACAO-E-MOTORES.md`.
 
+A evolução multiplataforma é dívida técnica estratégica futura (DT-MP, registrada em `15-DECISOES.md`) e não altera o suporte atual: o Windows permanece a única plataforma suportada, e nenhuma outra plataforma é declarada suportada antes de qualificação explícita.
+
 ## Regra fundamental
 
 ```text
