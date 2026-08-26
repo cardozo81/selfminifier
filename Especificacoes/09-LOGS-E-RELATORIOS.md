@@ -20,6 +20,8 @@ Pode conter:
 - códigos de saída;
 - diagnósticos.
 
+Pesquisa por Tag/caminho, inspeção histórica e recuperação/exportação reutilizam esse log. Devem registrar comando, duração, sucesso ou bloqueio, códigos e metadados necessários à investigação, sem persistir conteúdo de arquivos ou dados apenas de apresentação. Falha ao registrar não muda o contrato funcional nem mascara o diagnóstico original.
+
 ## Relatórios operacionais
 
 Locais planejados:

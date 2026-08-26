@@ -75,41 +75,245 @@ function Invoke-RestoreFlow {
     Show-Mensagem "Restauração: $($result.result.status)" $(if ($result.result.status -eq 'completed') { 'Green' } else { 'Yellow' })
 }
 
-function Show-RestoreMenu {
-    Write-Host "`n1. Listar backups conhecidos e restaurar"
-    Write-Host '2. Informar pasta de backup manualmente'
-    Write-Host '3. Restaurar última execução .min'
-    Write-Host '0. Voltar'
-    $choice = (Read-Host 'Escolha').Trim()
-    switch ($choice) {
-        '1' {
-            $response = Invoke-SelfMinifierBridge @{ command = 'list-backups' }
-            if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; return }
-            $known = @($response.backups)
-            if ($known.Count -eq 0) { Show-Mensagem 'Nenhum backup conhecido.' Yellow; return }
-            for ($index = 0; $index -lt $known.Count; $index++) {
-                $item = $known[$index]
-                $shownPath = if ($item.expectedPath) { $item.expectedPath } else { $item.directory }
-                Write-Host "$($index + 1). $($item.executionId) [$($item.status)] - $shownPath"
-            }
-            $selected = (Read-Host 'Número; Enter cancela').Trim()
-            $number = 0
-            if (-not $selected -or -not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $known.Count) { Show-Mensagem 'Seleção cancelada ou inválida; nenhum arquivo foi alterado.' Yellow; return }
-            $chosen = $known[$number - 1]
-            if ($chosen.status -ne 'valid') {
-                Show-Mensagem "Restauração indisponível: $($chosen.diagnostic.message)" Red
-                Show-Mensagem "Local histórico esperado: $($chosen.expectedPath)" Yellow
-                return
-            }
-            Invoke-RestoreFlow backup $chosen.directory
+function Get-HistoryErrorMessage {
+    param($Response, [string]$Fallback = 'A operação histórica foi bloqueada.')
+    $code = if ($Response.diagnostic -and $Response.diagnostic.code) { $Response.diagnostic.code } elseif ($Response.code) { $Response.code } else { '' }
+    switch ($code) {
+        'TAG_NOT_FOUND' { return 'Nenhum histórico autoritativo do SelfMinifier foi encontrado para essa Tag. Isso não significa que um arquivo esteja corrompido.' }
+        'HISTORY_ARTIFACT_ID_CONFLICT' { return 'Foram encontrados registros históricos conflitantes para a mesma SelfMinifier-Tag. A operação foi bloqueada para preservar a integridade; nenhum registro foi escolhido automaticamente.' }
+        'INVALID_ARTIFACT_ID' { return 'A SelfMinifier-Tag informada é inválida. Informe os 24 caracteres hexadecimais ou o marcador exato.' }
+        'INVALID_HISTORY_PATH' { return 'Informe um caminho completo de arquivo para consultar o histórico.' }
+        'ROOT_UNAVAILABLE' { return 'O local histórico do backup não está acessível. A recuperação foi bloqueada; o local atual de backups não será usado como substituto.' }
+        'PAYLOAD_MISSING' { return 'O registro histórico existe, mas o conteúdo de backup esperado não foi encontrado.' }
+        'MANIFEST_MISSING_OR_INVALID' { return 'Os metadados necessários para a recuperação histórica estão ausentes ou inválidos.' }
+        'HASH_MISMATCH' { return 'O conteúdo do backup não corresponde à prova de integridade histórica. A recuperação foi bloqueada.' }
+        'UNSUPPORTED_FORMAT' { return 'O formato desse backup histórico não é suportado.' }
+        'HISTORICAL_BACKUP_UNAVAILABLE' { return 'Esta execução não possui backup histórico da origem; a recuperação do original não está disponível.' }
+        'EXPORT_TARGET_EXISTS' { return 'O arquivo de destino já existe e não será sobrescrito. Escolha outro destino.' }
+        'HISTORICAL_EXPORT_TARGET_FORBIDDEN' { return 'O destino escolhido coincide com um arquivo histórico de origem ou saída. Escolha outro arquivo para exportação.' }
+        'UNSAFE_EXPORT_DESTINATION' { return 'O destino não pôde ser comprovado como seguro. Verifique o caminho e escolha outro local.' }
+        default {
+            $message = if ($Response.diagnostic -and $Response.diagnostic.message) { $Response.diagnostic.message } elseif ($Response.message) { $Response.message } else { $Fallback }
+            if ($code) { return "$message (código técnico: $code). Consulte Logs técnicos para obter os detalhes registrados." }
+            return $message
         }
-        '2' { $directory = (Read-Host 'Pasta exata do backup').Trim(); if ($directory) { Invoke-RestoreFlow backup $directory } else { Show-Mensagem 'Restauração cancelada.' Yellow } }
-        '3' { Invoke-RestoreFlow last-min }
-        '0' { return }
-        default { Show-Mensagem 'Opção inválida; nenhum arquivo foi alterado.' Yellow }
     }
 }
 
+function Get-CurrentIntegrityPresentation {
+    param([string]$State)
+    switch ($State) {
+        'MATCH' { return 'O arquivo atual corresponde exatamente ao artefato histórico.' }
+        'CONTENT_CHANGED' { return 'A Tag é conhecida, mas o conteúdo atual não corresponde ao hash histórico. Isso comprova uma alteração; não determina sua causa.' }
+        'TAG_MISMATCH' { return 'O arquivo selecionado contém outra SelfMinifier-Tag.' }
+        'TAG_MISSING' { return 'O arquivo atual não contém a SelfMinifier-Tag histórica esperada.' }
+        'TAG_INVALID' { return 'O arquivo atual contém um marcador reservado inválido ou inconsistente.' }
+        'FILE_UNAVAILABLE' { return 'O artefato histórico existe, mas o arquivo atual não está disponível para inspeção.' }
+        default { return 'A integridade de um arquivo atual ainda não foi verificada.' }
+    }
+}
+
+function Get-HistoricalBackupPresentation {
+    param([string]$State)
+    switch ($State) {
+        'AVAILABLE' { return 'Backup histórico disponível e validável.' }
+        'NOT_AVAILABLE' { return 'Esta execução não possui backup histórico da origem.' }
+        'ROOT_UNAVAILABLE' { return 'O local histórico do backup não está acessível.' }
+        'PAYLOAD_MISSING' { return 'O registro existe, mas o conteúdo de backup esperado não foi encontrado.' }
+        'MANIFEST_MISSING_OR_INVALID' { return 'Os metadados de recuperação estão ausentes ou inválidos.' }
+        'HASH_MISMATCH' { return 'O conteúdo do backup não corresponde à prova de integridade histórica.' }
+        'UNSUPPORTED_FORMAT' { return 'O formato desse backup histórico não é suportado.' }
+        default { return 'A disponibilidade física do backup histórico ainda não foi verificada.' }
+    }
+}
+
+function Show-CurrentIntegrityObservation {
+    param($Observation)
+    $state = if ($Observation -and $Observation.state) { $Observation.state } else { 'NOT_INSPECTED' }
+    Show-Mensagem "Integridade atual [$state]: $(Get-CurrentIntegrityPresentation $state)" $(if ($state -eq 'MATCH') { 'Green' } elseif ($state -eq 'NOT_INSPECTED' -or $state -eq 'FILE_UNAVAILABLE') { 'Yellow' } else { 'Red' })
+    if ($Observation -and $Observation.path) { Write-Host "Arquivo inspecionado: $($Observation.path)" }
+}
+
+function Show-HistoricalBackupObservation {
+    param($Observation)
+    $state = if ($Observation -and $Observation.state) { $Observation.state } else { 'NOT_INSPECTED' }
+    Show-Mensagem "Backup histórico [$state]: $(Get-HistoricalBackupPresentation $state)" $(if ($state -eq 'AVAILABLE') { 'Green' } elseif ($state -eq 'NOT_INSPECTED' -or $state -eq 'NOT_AVAILABLE') { 'Yellow' } else { 'Red' })
+}
+
+function Show-HistoricalArtifactSummary {
+    param($Inspection)
+    $historical = $Inspection.historical
+    Write-Host ''
+    Show-Mensagem 'DADO HISTÓRICO PERSISTIDO' Cyan
+    Write-Host "SelfMinifier-Tag: /*! SelfMinifier-Tag: $($historical.artifactId) */"
+    Write-Host "Data/hora: $($historical.timestamp)"
+    Write-Host "Execução: $($historical.executionId)"
+    Write-Host "Versão do SelfMinifier: $($historical.meminifyVersion)"
+    Write-Host "Origem histórica: $($historical.sourcePath)"
+    Write-Host "Saída histórica: $($historical.outputPath)"
+    Write-Host "Modo de saída: $($historical.outputMode)"
+    if ($historical.engine) { Write-Host "Engine: $($historical.engine) $($historical.engineVersion)" }
+    if ($historical.profile) { Write-Host "Perfil: $($historical.profile)" }
+    Write-Host 'Detalhes técnicos:'
+    Write-Host "  SHA-256 da origem: $($historical.inputHash)"
+    Write-Host "  SHA-256 da saída final: $($historical.outputHash)"
+    if ($historical.backup -and $historical.backup.compression) { Write-Host "  Tipo de backup: $($historical.backup.compression)" }
+    if ($historical.backup -and $historical.backup.backupRoot) { Write-Host "  Local histórico do backup: $($historical.backup.backupRoot)" }
+    Write-Host ''
+    Show-Mensagem 'ESTADO VERIFICADO AGORA' Cyan
+    Show-CurrentIntegrityObservation $Inspection.observations.currentIntegrity
+    Show-HistoricalBackupObservation $Inspection.observations.backupAvailability
+    Write-Host "Recuperação histórica disponível: $(if ($Inspection.observations.recoveryCapability) { 'SIM' } else { 'NÃO' })"
+    if ($historical.outputMode -eq 'PreservarOriginaisECriarMinificados' -and -not $historical.backup.available) {
+        Show-Mensagem 'O artefato .min permanece pesquisável e inspecionável, mas essa execução não criou backup histórico da origem. O arquivo-fonte atual não substitui esse backup e a recuperação histórica não será oferecida.' Yellow
+    }
+}
+
+function Invoke-HistoricalRecoveryExport {
+    param($Inspection)
+    $historical = $Inspection.historical
+    if (-not $Inspection.observations.recoveryCapability) {
+        Show-Mensagem 'A recuperação histórica não está disponível nas condições verificadas acima.' Red
+        return
+    }
+    Write-Host ''
+    Show-Mensagem 'RECUPERAR ORIGINAL HISTÓRICO PARA OUTRO ARQUIVO' Cyan
+    Write-Host 'Esta operação exporta bytes históricos comprovados para um destino separado.'
+    Write-Host 'Ela NÃO executa a restauração normal e NÃO altera a origem ou a saída atual.'
+    $destination = (Read-Host 'Informe o caminho completo e explícito do novo arquivo; Enter cancela').Trim()
+    if (-not $destination) { Show-Mensagem 'Exportação histórica cancelada; nenhum arquivo foi criado.' Yellow; return }
+    Write-Host "Destino solicitado: $destination"
+    Write-Host '1. Exportar o original histórico para esse novo arquivo'
+    Write-Host '0. Cancelar'
+    $confirmation = (Read-Host 'Escolha').Trim()
+    if ($confirmation -ne '1') { Show-Mensagem 'Exportação histórica cancelada; nenhum arquivo foi criado.' Yellow; return }
+    $response = Invoke-SelfMinifierBridge @{ command = 'recover-historical-original'; artifactId = $historical.artifactId; destinationPath = $destination }
+    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A exportação histórica foi bloqueada.') Red; return }
+    Show-Mensagem 'Original histórico exportado com sucesso.' Green
+    Write-Host "Destino exato: $($response.result.destinationPath)"
+    Write-Host "SelfMinifier-Tag do artefato: $($response.result.artifactId)"
+    Write-Host "Execução histórica: $($response.result.executionId)"
+    Write-Host "SHA-256 exportado: $($response.result.exportedHash)"
+    Show-Mensagem 'Os arquivos atuais de origem e saída não foram modificados por esta recuperação histórica.' Green
+}
+
+function Invoke-HistoricalArtifactFlow {
+    param([string]$ArtifactId, [string]$CurrentPath = '')
+    $request = @{ command = 'inspect-historical-artifact'; artifactId = $ArtifactId }
+    if ($CurrentPath) { $request.currentPath = $CurrentPath }
+    $response = Invoke-SelfMinifierBridge $request
+    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'Não foi possível inspecionar o artefato histórico.') Red; return }
+    $inspection = $response.result
+    while ($true) {
+        Show-HistoricalArtifactSummary $inspection
+        Write-Host ''
+        Write-Host '1. Verificar a integridade de um arquivo atual selecionado'
+        if ($inspection.observations.recoveryCapability) { Write-Host '2. Recuperar original histórico para outro arquivo' }
+        Write-Host '0. Voltar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' {
+                $selectedPath = (Read-Host 'Caminho completo do arquivo atual; Enter cancela').Trim()
+                if (-not $selectedPath) { Show-Mensagem 'Inspeção atual cancelada.' Yellow; continue }
+                $next = Invoke-SelfMinifierBridge @{ command = 'inspect-historical-artifact'; artifactId = $ArtifactId; currentPath = $selectedPath }
+                if (-not $next.ok) { Show-Mensagem (Get-HistoryErrorMessage $next 'A inspeção do arquivo atual foi bloqueada.') Red; continue }
+                $inspection = $next.result
+            }
+            '2' {
+                if (-not $inspection.observations.recoveryCapability) { Show-Mensagem 'Opção indisponível: o backup histórico não foi comprovado como recuperável.' Red; continue }
+                Invoke-HistoricalRecoveryExport $inspection
+            }
+            '0' { return }
+            default { Show-Mensagem 'Opção inválida; nenhuma operação foi executada.' Yellow }
+        }
+    }
+}
+
+function Invoke-SearchHistoricalTag {
+    Write-Host ''
+    Show-Mensagem 'PESQUISAR SELFMINIFIER-TAG' Cyan
+    $tag = (Read-Host 'Informe a Tag de 24 caracteres ou o marcador exato; Enter cancela').Trim()
+    if (-not $tag) { Show-Mensagem 'Pesquisa cancelada.' Yellow; return }
+    $response = Invoke-SelfMinifierBridge @{ command = 'search-history-by-tag'; tag = $tag }
+    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A pesquisa histórica foi bloqueada.') Red; return }
+    Show-Mensagem 'Histórico autoritativo encontrado para a SelfMinifier-Tag.' Green
+    Invoke-HistoricalArtifactFlow $response.result.artifactId
+}
+
+function Invoke-SearchHistoryByPath {
+    Write-Host ''
+    Show-Mensagem 'CONSULTAR HISTÓRICO POR ARQUIVO OU CAMINHO' Cyan
+    Write-Host 'Cada ocorrência é um artefato histórico independente; a lista não representa uma cadeia de revisões.'
+    $historyPath = (Read-Host 'Informe o caminho completo; Enter cancela').Trim()
+    if (-not $historyPath) { Show-Mensagem 'Consulta cancelada.' Yellow; return }
+    $response = Invoke-SelfMinifierBridge @{ command = 'search-history-by-path'; path = $historyPath }
+    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A consulta por caminho foi bloqueada.') Red; return }
+    $records = @($response.result.records)
+    if ($records.Count -eq 0) { Show-Mensagem 'Nenhuma ocorrência histórica foi encontrada para esse caminho.' Yellow; return }
+    Show-Mensagem "Ocorrências históricas em ordem mais recente primeiro: $($records.Count)" Cyan
+    for ($index = 0; $index -lt $records.Count; $index++) {
+        $record = $records[$index]
+        Write-Host "$($index + 1). $($record.timestamp) | Tag $($record.artifactId) | execução $($record.executionId)"
+        Write-Host "   Origem: $($record.sourcePath)"
+        Write-Host "   Saída: $($record.outputPath)"
+    }
+    $selected = (Read-Host 'Número para inspecionar; Enter cancela').Trim()
+    if (-not $selected) { Show-Mensagem 'Seleção cancelada.' Yellow; return }
+    $number = 0
+    if (-not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $records.Count) { Show-Mensagem 'Seleção inválida; nenhuma operação foi executada.' Yellow; return }
+    Invoke-HistoricalArtifactFlow $records[$number - 1].artifactId
+}
+
+function Invoke-KnownBackupRestoreSelection {
+    $response = Invoke-SelfMinifierBridge @{ command = 'list-backups' }
+    if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; return }
+    $known = @($response.backups)
+    if ($known.Count -eq 0) { Show-Mensagem 'Nenhum backup conhecido.' Yellow; return }
+    for ($index = 0; $index -lt $known.Count; $index++) {
+        $item = $known[$index]
+        $shownPath = if ($item.expectedPath) { $item.expectedPath } else { $item.directory }
+        Write-Host "$($index + 1). $($item.executionId) [$($item.status)] - $shownPath"
+    }
+    $selected = (Read-Host 'Número; Enter cancela').Trim()
+    $number = 0
+    if (-not $selected -or -not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $known.Count) { Show-Mensagem 'Seleção cancelada ou inválida; nenhum arquivo foi alterado.' Yellow; return }
+    $chosen = $known[$number - 1]
+    if ($chosen.status -ne 'valid') {
+        Show-Mensagem "Restauração indisponível: $($chosen.diagnostic.message)" Red
+        Show-Mensagem "Local histórico esperado: $($chosen.expectedPath)" Yellow
+        return
+    }
+    Invoke-RestoreFlow backup $chosen.directory
+}
+
+function Show-RestoreMenu {
+    while ($true) {
+        Write-Host ''
+        Show-Mensagem 'BACKUPS, RESTAURAÇÃO E HISTÓRICO' Cyan
+        Show-Mensagem 'RESTAURAÇÃO NORMAL: pode repor arquivos gerenciados nos caminhos atuais.' Yellow
+        Write-Host '1. Listar backups conhecidos e restaurar normalmente'
+        Write-Host '2. Informar pasta de backup para restauração normal'
+        Write-Host '3. Restaurar normalmente a última execução .min'
+        Write-Host ''
+        Show-Mensagem 'RECUPERAÇÃO HISTÓRICA: pesquisa o histórico imutável e exporta para outro arquivo; não sobrescreve o trabalho atual.' Cyan
+        Write-Host '4. Pesquisar SelfMinifier-Tag'
+        Write-Host '5. Consultar histórico por arquivo ou caminho'
+        Write-Host '0. Voltar'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Invoke-KnownBackupRestoreSelection }
+            '2' {
+                $directory = (Read-Host 'Pasta exata do backup').Trim()
+                if ($directory) { Invoke-RestoreFlow backup $directory } else { Show-Mensagem 'Restauração cancelada.' Yellow }
+            }
+            '3' { Invoke-RestoreFlow last-min }
+            '4' { Invoke-SearchHistoricalTag }
+            '5' { Invoke-SearchHistoryByPath }
+            '0' { return }
+            default { Show-Mensagem 'Opção inválida; nenhum arquivo foi alterado.' Yellow }
+        }
+    }
+}
 function Get-ModoSaidaDescricao {
     param([string]$Mode)
     switch ($Mode) {

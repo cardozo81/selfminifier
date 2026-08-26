@@ -40,7 +40,9 @@ A inspeção separa fatos persistidos de observações atuais. Arquivo atual del
 
 `recoverHistoricalOriginal` exige `inputHash === backup.originalHash`, payload íntegro, pai físico seguro e destino absoluto inexistente. A criação exclusiva reutiliza `createNewFileExact` e confirma o hash final. Origem e saída históricas são destinos proibidos; nenhum estado, journal ou arquivo atual é modificado. `backup.available=false` bloqueia com `HISTORICAL_BACKUP_UNAVAILABLE`.
 
-O bridge expõe `search-history-by-tag`, `search-history-by-path`, `inspect-historical-artifact` e `recover-historical-original`. A UI PowerShell final permanece fora desta fase.
+O bridge expõe `search-history-by-tag`, `search-history-by-path`, `inspect-historical-artifact` e `recover-historical-original`. Cada chamada registra no logger técnico existente comando, duração, status, código de bloqueio e metadados compactos; conteúdo de arquivos não é registrado. Falha de logging não altera o contrato funcional nem mascara o diagnóstico original.
+
+`src/app/ui.ps1` apresenta essas operações no submenu do item principal **Backups e restauração**, sem renumerar o menu. As opções de restauração normal continuam chamando `plan-restore`/`execute-restore`; pesquisa por Tag e por caminho conduz a uma inspeção que separa o registro persistido das observações atuais. A recuperação só aparece quando `recoveryCapability=true`, exige destino explícito inexistente e confirmação numérica, e chama `recover-historical-original` como exportação separada. Cancelar ou voltar não dispara operação.
 
 ## Restauração manual
 
@@ -50,7 +52,7 @@ A restauração `.min` lê somente a última execução concluída e remove apen
 
 ## Logs, relatórios e diretórios de dados
 
-`src/observability/index.mjs` produz logs técnicos em `Dados\Logs` e relatórios TXT/CSV em `Dados\Relatorios`. Relatórios não expõem stack traces e preservam motivos de itens ignorados ou pulados. A visualização pelo menu é read-only.
+`src/observability/index.mjs` produz logs técnicos em `Dados\Logs` e relatórios TXT/CSV em `Dados\Relatorios`. As quatro operações históricas reutilizam `writeTechnicalLog` para sucesso e bloqueio, sem criar outro subsistema. Relatórios não expõem stack traces e preservam motivos de itens ignorados ou pulados. A visualização pelo menu é read-only.
 
 Diretórios técnicos relevantes:
 

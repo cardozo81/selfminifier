@@ -25,6 +25,20 @@ O fluxo implementado é: **Minificar projeto → ajuste temporário opcional do 
 
 A prévia apresenta o total e a lista sem controles de paginação quando existem de 1 a 10 candidatos. Com 11 ou mais candidatos, usa páginas de 10 itens e mostra somente os controles de página anterior ou próxima que forem válidos na posição atual.
 
+## Backups, restauração e histórico
+
+O item 3 do menu principal abre um submenu contínuo e preserva a navegação existente. Os rótulos distinguem explicitamente:
+
+- **Restauração normal:** lista backups, aceita uma pasta deliberadamente informada e restaura a última execução `.min` por meio do contrato gerenciado existente;
+- **Recuperação histórica:** pesquisa por SelfMinifier-Tag ou caminho, inspeciona o artefato e exporta a origem comprovada para outro destino.
+
+A pesquisa por Tag aceita o `artifactId` ou o marcador exato. `TAG_NOT_FOUND` informa somente ausência de histórico autoritativo; `HISTORY_ARTIFACT_ID_CONFLICT` bloqueia sem escolher registro. A pesquisa por caminho apresenta ocorrências independentes em ordem mais recente primeiro e nunca as chama de revisões.
+
+A inspeção separa **Dado histórico persistido** de **Estado verificado agora**. Os estados `MATCH`, `CONTENT_CHANGED`, `TAG_MISMATCH`, `TAG_MISSING`, `TAG_INVALID` e `FILE_UNAVAILABLE` recebem mensagens próprias. `CONTENT_CHANGED` não implica causa maliciosa.
+
+Os estados de backup `AVAILABLE`, `NOT_AVAILABLE`, `ROOT_UNAVAILABLE`, `PAYLOAD_MISSING`, `MANIFEST_MISSING_OR_INVALID`, `HASH_MISMATCH` e `UNSUPPORTED_FORMAT` permanecem distintos. A recuperação só é oferecida quando o backend retorna capacidade comprovada. Em `.min` sem backup, pesquisa e inspeção continuam disponíveis, mas a fonte atual nunca é tratada como backup histórico.
+
+A exportação histórica solicita destino explícito, mostra o caminho e exige confirmação numérica. Destino existente, inseguro ou coincidente com origem/saída bloqueia sem opção de sobrescrita. Cancelar ou voltar não executa operação.
 ## Apresentação semântica
 
 - verde: sucesso;

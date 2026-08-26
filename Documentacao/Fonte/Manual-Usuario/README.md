@@ -103,19 +103,32 @@ Uma restauração interrompida ou ambígua entra em `recovery-required`. Nesse e
 
 ## Pesquisa e recuperação histórica
 
-O backend permite pesquisar uma `SelfMinifier-Tag` pelo marcador completo ou pelo `artifactId`, consultar todas as minificações historicamente associadas a um caminho e exibir os metadados registrados: execução, data, versão do SelfMinifier, motor, perfil, modo, caminhos, tamanhos, hashes e referência de backup. A pesquisa não depende da localização atual do arquivo e não considera caminhos como identidade.
+Escolha **3. Backups e restauração** no menu principal. O submenu mantém separadas duas áreas:
 
-Quando um arquivo atual é indicado deliberadamente, sua integridade é observada separadamente: `MATCH` confirma Tag e SHA-256 completos; alterações, Tag divergente, ausente ou inválida e arquivo indisponível são reportados sem inferência. Cópias ou arquivos renomeados com a mesma Tag e os mesmos bytes continuam íntegros.
+- **Restauração normal:** lista backups conhecidos, aceita uma pasta de backup informada deliberadamente e restaura a última execução `.min` usando a transação gerenciada existente. Essa operação pode repor ou remover arquivos nos caminhos atuais conforme o plano exibido e as confirmações.
+- **Recuperação histórica:** pesquisa o histórico imutável e, quando há backup comprovado, exporta o original para outro arquivo. Ela não restaura no lugar e não modifica a origem ou a saída atual.
 
-A disponibilidade da origem histórica usa somente a raiz registrada na execução. Manifestos legados v1 raw e manifestos v2 GZIP são validados, e ausência, corrupção ou raiz indisponível bloqueiam sem procurar na pasta de backups configurada atualmente.
+Use **Pesquisar SelfMinifier-Tag** e informe os 24 caracteres da Tag ou o marcador completo, por exemplo `/*! SelfMinifier-Tag: 7F31A2C82A884E91B04F22D7 */`. Se não houver registro autoritativo, a interface informa que a Tag não foi encontrada sem declarar corrupção. Registros conflitantes bloqueiam a operação e nenhum deles é escolhido automaticamente.
 
-Recuperar a origem histórica cria uma exportação em um caminho absoluto escolhido explicitamente. O destino deve ter pasta física segura e ainda não existir; o SelfMinifier nunca exporta automaticamente sobre a origem ou saída atual. Os bytes exportados devem corresponder ao SHA-256 original. Essa operação é diferente de **Backups e restauração manual**, que repõe arquivos no lugar original. Históricos do modo `.min` continuam pesquisáveis, mas não oferecem recuperação quando registram `backup.available=false`.
+Use **Consultar histórico por arquivo ou caminho** para procurar ocorrências em `sourcePath` e `outputPath`. Os resultados aparecem do mais recente para o mais antigo e são numerados para inspeção. Cada resultado continua sendo um artefato independente; caminhos iguais não formam uma cadeia de revisões nem provam continuidade de identidade.
 
-A interface final para essas operações ainda não foi implementada; nesta fase os contratos estão disponíveis no backend/bridge para a futura experiência B3-UX.
+A tela de detalhes separa **Dado histórico persistido** de **Estado verificado agora**. Ela mostra Tag, data, execução, versão, caminhos, modo, motor/perfil, hashes técnicos, backup histórico e capacidade de recuperação. Para verificar um arquivo atual, selecione-o explicitamente. Os estados significam:
 
+- `MATCH`: Tag e SHA-256 completos correspondem ao artefato histórico;
+- `CONTENT_CHANGED`: a Tag é conhecida, mas os bytes atuais diferem; isso não determina a causa;
+- `TAG_MISMATCH`: o arquivo selecionado contém outra Tag;
+- `TAG_MISSING`: a Tag esperada está ausente;
+- `TAG_INVALID`: o marcador reservado é inválido ou inconsistente;
+- `FILE_UNAVAILABLE`: o histórico existe, mas o arquivo atual não pôde ser inspecionado.
+
+A disponibilidade do backup histórico também é apresentada sem agrupar situações distintas: `AVAILABLE` permite seguir para recuperação; `NOT_AVAILABLE` indica que a execução não criou backup; `ROOT_UNAVAILABLE` indica local histórico inacessível; `PAYLOAD_MISSING` indica conteúdo esperado ausente; `MANIFEST_MISSING_OR_INVALID` indica metadados inválidos; `HASH_MISMATCH` indica divergência da prova histórica; e `UNSUPPORTED_FORMAT` indica formato não suportado. Somente `AVAILABLE` oferece a ação de recuperação.
+
+Para **Recuperar original histórico para outro arquivo**, primeiro inspecione um artefato recuperável. A interface explica que não se trata de restauração normal, solicita um caminho completo e explícito, mostra esse destino e exige confirmação numérica. O destino não é escolhido automaticamente e deve ainda não existir. Se já existir, nada é sobrescrito: escolha outro arquivo. No sucesso, a interface mostra destino, Tag, execução e SHA-256 exportado e confirma que origem e saída atuais não foram modificadas.
+
+Históricos do modo `.min` continuam pesquisáveis e inspecionáveis. Quando `backup.available=false`, a interface informa que aquela execução não criou backup histórico da origem, não trata a fonte atual como substituta e não oferece recuperação.
 ## Relatórios e logs
 
-Após análise, execução ou restauração, o SelfMinifier pode gerar relatórios operacionais UTF-8 em `Dados\Relatorios` (TXT e CSV) e logs técnicos UTF-8 em `Dados\Logs`. O menu permite listar e visualizar esses arquivos em modo somente leitura.
+Após análise, execução, restauração ou operação histórica, o SelfMinifier registra rastreabilidade técnica UTF-8 em `Dados\Logs`; os fluxos operacionais aplicáveis também podem gerar relatórios TXT/CSV em `Dados\Relatorios`. O menu permite listar e visualizar esses arquivos em modo somente leitura.
 
 Relatórios mostram totais, itens ignorados com motivo, resultados de restauração e falhas. Logs técnicos podem conter caminhos, diagnósticos e stack traces; eles não são exibidos como mensagem normal do menu.
 

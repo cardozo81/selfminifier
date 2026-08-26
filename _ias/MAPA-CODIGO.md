@@ -90,8 +90,8 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `src/app/bridge.mjs` | Bridge JSON para configuração, análise, execução, pesquisa/inspeção histórica, exportação segura e restauração | Configuração, scanner, execução, histórico e restauração |
-| `src/app/ui.ps1` | Menu PowerShell consolidado, fluxo **Minificar projeto**, prévia de candidatos, ajustes temporários por fluxo e confirmações numéricas | `src/app/bridge.mjs` |
+| `src/app/bridge.mjs` | Bridge JSON para configuração, análise, execução, pesquisa/inspeção histórica, exportação segura e restauração; rastreia operações históricas no logger existente | Configuração, scanner, execução, histórico, observabilidade e restauração |
+| `src/app/ui.ps1` | Menu PowerShell consolidado, fluxo **Minificar projeto** e submenu de restauração normal, pesquisa, inspeção e exportação histórica com confirmações numéricas | `src/app/bridge.mjs` |
 | `Executar.ps1` | Bootstrap validado e abertura do menu interativo | `src/bootstrap/cli.mjs`, `src/app/ui.ps1` |
 
 ## Observabilidade
@@ -102,7 +102,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `test/observability.test.js` | Testes focados de logs, relatórios, CSV, falhas, recuperação e leitura read-only | `src/observability/index.mjs`, bridge |
 | `test/ui.test.js` | Validação textual dos menus, configuração e fluxo principal PowerShell | `src/app/ui.ps1` |
 | `test/ui-workflow.test.js` | Validação executável da paginação da prévia e do ciclo de vida do ajuste temporário B2/B2.1 | `src/app/ui.ps1`, Windows PowerShell |
-
+| `test/b3-ux.test.js` e `test/b3-ux-harness.ps1` | Navegação, estados históricos, seleção, exportação, cancelamento, regressões e logging B3-UX | UI PowerShell, bridge e observabilidade |
 ## Pesquisa e recuperação histórica
 
 | Arquivo | Responsabilidade | Dependências relevantes |

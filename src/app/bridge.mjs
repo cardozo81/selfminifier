@@ -112,6 +112,85 @@ async function persistArtifacts({ projectRoot, plan, result = null, resultStatus
   return artifacts;
 }
 
+function summarizeHistoricalResult(command, result) {
+  if (command === 'search-history-by-path') {
+    return {
+      order: result.order,
+      recordCount: result.records?.length ?? 0,
+      artifactIds: (result.records ?? []).map((record) => record.artifactId),
+    };
+  }
+  if (command === 'inspect-historical-artifact') {
+    return {
+      artifactId: result.historical?.artifactId,
+      executionId: result.historical?.executionId,
+      currentIntegrity: result.observations?.currentIntegrity?.state,
+      backupAvailability: result.observations?.backupAvailability?.state,
+      recoveryCapability: result.observations?.recoveryCapability,
+    };
+  }
+  if (command === 'recover-historical-original') {
+    return {
+      artifactId: result.artifactId,
+      executionId: result.executionId,
+      destinationPath: result.destinationPath,
+      exportedHash: result.exportedHash,
+      exportedSize: result.exportedSize,
+      status: result.status,
+    };
+  }
+  return { artifactId: result.artifactId, executionId: result.executionId };
+}
+
+async function runHistoricalOperation({ projectRoot, applicationVersion, command, requestSummary, action }) {
+  const startedAt = performance.now();
+  try {
+    const result = await action();
+    try {
+      await writeTechnicalLog({
+        projectRoot,
+        executionId: result.executionId ?? result.historical?.executionId ?? ('history-' + command),
+        phases: [{
+          name: 'operação histórica',
+          command,
+          status: 'completed',
+          durationMs: Math.round(performance.now() - startedAt),
+          request: requestSummary,
+        }],
+        result: summarizeHistoricalResult(command, result),
+        technicalPaths: resolveRuntimePaths(projectRoot),
+        runtime: { node: process.version },
+        applicationVersion,
+      });
+    } catch {
+      // O logging é diagnóstico e não altera o contrato nem o resultado da operação histórica.
+    }
+    return { ok: true, result };
+  } catch (error) {
+    try {
+      await writeTechnicalLog({
+        projectRoot,
+        executionId: 'history-' + command,
+        phases: [{
+          name: 'operação histórica',
+          command,
+          status: 'blocked',
+          durationMs: Math.round(performance.now() - startedAt),
+          code: error?.code ?? 'BRIDGE_ERROR',
+          request: requestSummary,
+        }],
+        error,
+        technicalPaths: resolveRuntimePaths(projectRoot),
+        runtime: { node: process.version },
+        applicationVersion,
+      });
+    } catch {
+      // A falha ao registrar não mascara o diagnóstico funcional original.
+    }
+    return { ok: false, diagnostic: diagnostic(error) };
+  }
+}
+
 async function createPlan(request, persistent, applicationVersion) {
   const registry = createDefaultMinifierRegistry();
   const adjustments = adjustmentsFrom(request);
@@ -302,40 +381,48 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
   if (request.command === 'version') return { ok: true, ...application };
   const persistent = await loadPersistent(projectRoot);
   if (request.command === 'search-history-by-tag') {
-    try { return { ok: true, result: await searchHistoryByTag({ projectRoot, tag: request.tag ?? request.artifactId }) }; }
-    catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+    return runHistoricalOperation({
+      projectRoot,
+      applicationVersion: application.version,
+      command: request.command,
+      requestSummary: { tag: request.tag ?? request.artifactId },
+      action: () => searchHistoryByTag({ projectRoot, tag: request.tag ?? request.artifactId }),
+    });
   }
   if (request.command === 'search-history-by-path') {
-    try {
-      return {
-        ok: true,
-        result: await searchHistoryByPath({ projectRoot, filePath: request.path, order: request.order ?? 'newest-first' }),
-      };
-    } catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+    return runHistoricalOperation({
+      projectRoot,
+      applicationVersion: application.version,
+      command: request.command,
+      requestSummary: { path: request.path, order: request.order ?? 'newest-first' },
+      action: () => searchHistoryByPath({ projectRoot, filePath: request.path, order: request.order ?? 'newest-first' }),
+    });
   }
   if (request.command === 'inspect-historical-artifact') {
-    try {
-      return {
-        ok: true,
-        result: await inspectHistoricalArtifact({
-          projectRoot,
-          tag: request.tag ?? request.artifactId,
-          currentPath: request.currentPath ?? null,
-        }),
-      };
-    } catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+    return runHistoricalOperation({
+      projectRoot,
+      applicationVersion: application.version,
+      command: request.command,
+      requestSummary: { artifactId: request.tag ?? request.artifactId, currentPath: request.currentPath ?? null },
+      action: () => inspectHistoricalArtifact({
+        projectRoot,
+        tag: request.tag ?? request.artifactId,
+        currentPath: request.currentPath ?? null,
+      }),
+    });
   }
   if (request.command === 'recover-historical-original') {
-    try {
-      return {
-        ok: true,
-        result: await recoverHistoricalOriginal({
-          projectRoot,
-          tag: request.tag ?? request.artifactId,
-          destinationPath: request.destinationPath,
-        }),
-      };
-    } catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+    return runHistoricalOperation({
+      projectRoot,
+      applicationVersion: application.version,
+      command: request.command,
+      requestSummary: { artifactId: request.tag ?? request.artifactId, destinationPath: request.destinationPath },
+      action: () => recoverHistoricalOriginal({
+        projectRoot,
+        tag: request.tag ?? request.artifactId,
+        destinationPath: request.destinationPath,
+      }),
+    });
   }
   if (request.command === 'update-backup-root') return updateBackupRoot(request, persistent);
   if (request.command === 'list-backups') {
