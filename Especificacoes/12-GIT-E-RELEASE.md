@@ -25,4 +25,4 @@ Testes e validações aplicáveis ao checkpoint seguem `11-TESTES-E-QUALIDADE.md
 
 Tags poderão identificar releases ou marcos futuros. A estratégia de branches só pode ser reconsiderada se as circunstâncias do projeto mudarem materialmente.
 
-O empacotamento local segue `13-DISTRIBUICAO.md`. A publicação futura de GitHub Release é uma operação separada e não pode ser misturada à geração do pacote local.
+O empacotamento local segue `13-DISTRIBUICAO.md`. A publicação de GitHub Release é uma operação separada e não pode ser misturada à geração do pacote local.

@@ -57,7 +57,7 @@ O checksum usa SHA-256 em texto convencional: hash hexadecimal minúsculo, dois 
 
 ## Identidade de versão
 
-`package.json` é a fonte única da versão SemVer. A identidade validada mantém a invariância `package.json.version = SelfMinifier-<version> = SelfMinifier-<version>.zip = SelfMinifier-<version>.zip.sha256 = futura tag v<version> = futura versão do GitHub Release`. A futura publicação deve reutilizar exatamente o ZIP e o checksum validados localmente. Tags publicadas são imutáveis; conteúdo alterado exige nova versão. Esta tarefa não cria tag nem release.
+`package.json` é a fonte única da versão SemVer. A identidade validada mantém a invariância `package.json.version = SelfMinifier-<version> = SelfMinifier-<version>.zip = SelfMinifier-<version>.zip.sha256 = tag v<version> = versão do GitHub Release`. A publicação reutiliza exatamente o ZIP e o checksum validados localmente. Tags publicadas são imutáveis; conteúdo alterado exige nova versão. Esta tarefa não cria tag nem release.
 
 ## Exclusões da distribuição
 

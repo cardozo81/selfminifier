@@ -1,6 +1,6 @@
 # Histórico de alterações
 
-## Não lançado
+## Versões
 
 ### 0.2.0-rc.1
 
