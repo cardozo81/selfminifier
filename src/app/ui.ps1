@@ -51,6 +51,33 @@ function Format-ReductionPercent {
     return "$($text.Replace('.', ','))%"
 }
 
+function Get-ExecutionStatusLabel {
+    param([string]$Value)
+    switch ($Value) {
+        'completed' { return 'Concluída' }
+        'completed-with-skips' { return 'Concluída com itens ignorados' }
+        'rolled-back' { return 'Revertida' }
+        'recovery-required' { return 'Recuperação necessária' }
+        'cancelled' { return 'Cancelada' }
+        'blocked' { return 'Bloqueada' }
+        'falha' { return 'Falha' }
+        'falha (rollback comprovado)' { return 'Falha (rollback comprovado)' }
+        default { return $Value }
+    }
+}
+
+function Confirmar-Continuar {
+    [void](Read-Host 'Pressione Enter para continuar...')
+}
+
+function Show-Separador {
+    Show-Mensagem '────────────────────────────────────' Cyan
+}
+
+function Limpar-Tela {
+    try { Clear-Host } catch { }
+}
+
 
 function Show-Artefatos {
     param([ValidateSet('reports', 'logs')][string]$Kind)
@@ -483,14 +510,7 @@ function Invoke-EditOutputMode {
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) {
         if ($summary.code -eq 'CONFIGURATION_MISSING') {
-            Show-Mensagem "Configuração ausente: $($summary.configurationPath)" Yellow
-            Write-Host '1. Criar configuração'
-            Write-Host '0. Cancelar'
-            $escolha = (Read-Host 'Escolha').Trim()
-            if ($escolha -ne '1') { Show-Mensagem 'Criação cancelada; a configuração não foi criada.' Yellow; return }
-            $created = Invoke-SelfMinifierBridge @{ command = 'create-configuration'; confirmed = $true }
-            if (-not $created.ok) { Show-Mensagem (Get-BridgeErrorMessage $created 'A configuração não foi criada.') Red; return }
-            Show-Mensagem "Configuração criada: $($created.configurationPath)" Green
+            Invoke-CreateInitialConfiguration
             $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
         }
         if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; return }
@@ -1059,10 +1079,10 @@ function Show-ConfigurationMenu {
 
 function Show-ProjectAnalysis {
     param($Analysis)
-    Show-Mensagem "`nMINIFICAR PROJETO" Cyan
+    Show-Mensagem "`nANÁLISE CONCLUÍDA" Cyan
     Show-Mensagem '────────────────────────────────────' Cyan
     if ($Analysis.projectRoot) {
-        Show-Mensagem 'Origem:' Cyan
+        Show-Mensagem 'Projeto:' Cyan
         Show-Mensagem $Analysis.projectRoot Gray
     }
     if ($Analysis.fileTypes -contains 'css' -and $Analysis.fileTypes -contains 'javascript') { $tipoDescricao = 'CSS + JavaScript' }
@@ -1071,15 +1091,46 @@ function Show-ProjectAnalysis {
     else { $tipoDescricao = ($Analysis.fileTypes -join ', ') }
     Show-Mensagem "Tipos: $tipoDescricao" Cyan
     Show-Mensagem "Exclusões: $($Analysis.exclusions.folders) pasta(s), $($Analysis.exclusions.files) arquivo(s)" Cyan
-    Show-Mensagem "`nAnálise concluída:" Cyan
+    Show-Mensagem "`nEscopo" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
     Show-Mensagem "CSS encontrados:          $($Analysis.counts.cssFound)"
     Show-Mensagem "JavaScript encontrados:    $($Analysis.counts.javascriptFound)"
-    Show-Mensagem "Ignorados:                 $($Analysis.counts.ignored)"
-    Show-Mensagem "Já minificados:            $($Analysis.counts.alreadyMinified)"
+    Show-Mensagem "`nResultado" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
     Show-Mensagem "Arquivos candidatos:       $($Analysis.counts.eligible)"
-    Show-Mensagem "Tamanho total:             $(Format-Kilobytes $Analysis.counts.candidateBytes)"
+    Show-Mensagem "Já minificados:            $($Analysis.counts.alreadyMinified)"
+    Show-Mensagem "Ignorados:                 $($Analysis.counts.ignored)"
+    Show-Mensagem "Tamanho dos candidatos:    $(Format-Kilobytes $Analysis.counts.candidateBytes)"
+    Show-Mensagem "`nMotivos de exclusão" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
     foreach ($entry in @($Analysis.ignoredByReason)) {
         Show-Mensagem "- $($entry.label): $($entry.count)" Gray
+    }
+}
+
+function Show-ExecutionResult {
+    param($execution)
+    Show-Mensagem "`nMINIFICAÇÃO CONCLUÍDA" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem "Status: $(Get-ExecutionStatusLabel $execution.result.status)" Green
+    Show-Mensagem 'Modo de saída:' Cyan
+    Show-Mensagem (Get-ModoSaidaDescricao $execution.plan.outputMode) White
+    Show-Mensagem "`nArquivos" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem "Planejados:                  $($execution.result.counts.planned)" White
+    Show-Mensagem "Processados com sucesso:     $($execution.result.counts.createdSuccessfully)" Green
+    Show-Mensagem "Minificados:                 $($execution.result.summary.processedCount)" White
+    Show-Mensagem "Conflitos .min preservados:  $($execution.result.counts.skippedConflicts)" $(if ($execution.result.counts.skippedConflicts -gt 0) { 'Yellow' } else { 'Gray' })
+    Show-Mensagem "`nVolume" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem "Tamanho antes:               $(Format-Kilobytes $execution.result.summary.originalBytes)" White
+    Show-Mensagem "Tamanho após:                $(Format-Kilobytes $execution.result.summary.finalBytes)" White
+    Show-Mensagem "Redução:                     $(Format-Kilobytes $execution.result.summary.reductionBytes)" White
+    Show-Mensagem "Redução percentual:          $(Format-ReductionPercent $execution.result.summary.reductionPercent)" White
+    if ($execution.result.noFilesChanged) {
+        Show-Mensagem 'Nenhum arquivo foi alterado.' Yellow
+    } else {
+        Show-Mensagem 'Operação concluída com sucesso.' Green
     }
 }
 
@@ -1139,6 +1190,8 @@ function Show-CandidatePreview {
 
 function Invoke-ScanAnalysis {
     param([hashtable]$Adjustments = @{})
+    Show-Mensagem 'Analisando o projeto...' Cyan
+    Show-Mensagem 'Aguarde.' Gray
     $response = Invoke-SelfMinifierBridge @{ command = 'scan-analysis'; adjustments = $Adjustments }
     if (-not $response.ok) {
         Show-Mensagem "Erro: $(Get-BridgeErrorMessage $response 'A análise foi bloqueada por um diagnóstico indisponível.')" Red
@@ -1174,6 +1227,7 @@ function Invoke-ScanAnalysis {
         switch ($choice) {
             '1' { Show-CandidatePreview $analysis }
             '2' {
+                Show-Mensagem 'Minificação em andamento...' Cyan
                 $execution = Invoke-SelfMinifierBridge @{
                     command = 'execute'
                     adjustments = $Adjustments
@@ -1188,20 +1242,8 @@ function Invoke-ScanAnalysis {
                     }
                     return
                 }
-                Show-Mensagem "Execução concluída: $($execution.result.status)" Green
-                Show-Mensagem "Modo de saída: $(Get-ModoSaidaDescricao $execution.plan.outputMode)" Cyan
-                Show-Mensagem "Planejados: $($execution.result.counts.planned)" White
-                Show-Mensagem "Processados com sucesso: $($execution.result.counts.createdSuccessfully)" Green
-                Show-Mensagem "Conflitos .min preservados: $($execution.result.counts.skippedConflicts)" $(if ($execution.result.counts.skippedConflicts -gt 0) { 'Yellow' } else { 'Gray' })
-                Show-Mensagem "Arquivos minificados: $($execution.result.summary.processedCount)" White
-                Show-Mensagem "Tamanho antes: $(Format-Kilobytes $execution.result.summary.originalBytes)" White
-                Show-Mensagem "Tamanho após: $(Format-Kilobytes $execution.result.summary.finalBytes)" White
-                Show-Mensagem "Redução: $(Format-Kilobytes $execution.result.summary.reductionBytes) ($(Format-ReductionPercent $execution.result.summary.reductionPercent))" White
-                if ($execution.result.noFilesChanged) {
-                    Show-Mensagem 'Nenhum arquivo foi alterado.' Yellow
-                } else {
-                    Show-Mensagem 'Minificação concluída.' Green
-                }
+                Show-ExecutionResult $execution
+                Confirmar-Continuar
                 return
             }
             '0' { Show-Mensagem 'Análise cancelada; nenhum arquivo foi alterado.' Yellow; return }
@@ -1221,6 +1263,7 @@ function Invoke-MinifyProject {
         }
         $config = $summary.configuration
         $modoEfetivo = if ($ajustes.ContainsKey('outputMode')) { $ajustes.outputMode } else { $config.outputMode }
+        Limpar-Tela
         Show-Mensagem "`nMINIFICAR PROJETO" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
         Show-Mensagem "Projeto: $($config.projectRoot)" Cyan
@@ -1240,10 +1283,134 @@ function Invoke-MinifyProject {
     }
 }
 
+function Invoke-CreateInitialConfiguration {
+    while ($true) {
+        Show-Mensagem "`nCRIAR CONFIGURAÇÃO INICIAL" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem 'Informe explicitamente a pasta raiz do projeto (PastaRaiz).' Gray
+        Show-Mensagem 'O caminho deve ser absoluto no Windows e apontar para um diretório existente.' Gray
+        Show-Mensagem '0 = Cancelar' Gray
+        $entrada = (Read-Host 'PastaRaiz').Trim()
+        if ($entrada -eq '0' -or $entrada -eq '') {
+            Show-Mensagem 'Criação cancelada; a configuração não foi criada.' Yellow
+            return
+        }
+        $preview = Invoke-SelfMinifierBridge @{ command = 'create-configuration'; projectRoot = $entrada; confirmed = $false }
+        if (-not $preview.ok) {
+            Show-Mensagem "Caminho inválido: $(Get-BridgeErrorMessage $preview 'A pasta informada não pôde ser validada.')" Red
+            continue
+        }
+        $config = $preview.configuration
+        Show-Mensagem "`nResumo da configuração inicial" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem "Pasta raiz:       $($config.projectRoot)" White
+        Show-Mensagem "Tipos de arquivo: $(Get-TiposArquivoDescricao $config.fileTypes)" White
+        Show-Mensagem "Perfil:           $(Get-PerfilDescricao $config.profile)" White
+        Show-Mensagem "Modo de saída:    $(Get-ModoSaidaDescricao $config.outputMode)" White
+        Show-Mensagem 'Pastas ignoradas:' Cyan
+        foreach ($folder in @($config.ignoredFolders)) { Show-Mensagem "- $folder" White }
+        Show-Mensagem 'Arquivos ignorados:' Cyan
+        if (@($config.ignoredFiles).Count -eq 0) { Show-Mensagem 'Nenhum' Gray } else { foreach ($file in @($config.ignoredFiles)) { Show-Mensagem "- $file" White } }
+        if (-not (Confirmar-Acao 'Confirmar a criação da configuração')) {
+            Show-Mensagem 'Criação cancelada; a configuração não foi criada.' Yellow
+            return
+        }
+        $created = Invoke-SelfMinifierBridge @{ command = 'create-configuration'; projectRoot = $entrada; confirmed = $true }
+        if (-not $created.ok) {
+            Show-Mensagem "Erro: $(Get-BridgeErrorMessage $created 'A configuração não foi criada.')" Red
+            continue
+        }
+        Show-Mensagem "Configuração criada e validada: $($created.configurationPath)" Green
+        return
+    }
+}
+
+function Show-CorrectConfiguration {
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    Show-Mensagem "`nCORRIGIR CONFIGURAÇÃO" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
+    Show-Mensagem 'Arquivo:' Cyan
+    Show-Mensagem $summary.configurationPath White
+    Show-Mensagem 'Motivo da validação:' Cyan
+    Show-Mensagem (Get-BridgeErrorMessage $summary 'A validação da configuração falhou.') White
+    Show-Mensagem 'A configuração não será corrigida ou substituída automaticamente.' Yellow
+    Show-Mensagem 'Corrija o arquivo manualmente e pressione Enter para tentar novamente.' Gray
+    [void](Read-Host 'Pressione Enter para tentar novamente...')
+    $retry = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if ($retry.ok) {
+        Show-Mensagem 'Configuração válida detectada.' Green
+        return $true
+    }
+    Show-Mensagem "A configuração ainda é inválida: $(Get-BridgeErrorMessage $retry 'A validação da configuração falhou.')" Red
+    return $false
+}
+
+function Show-MissingConfigurationMenu {
+    while ($true) {
+        $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+        if ($summary.ok) { return $true }
+        Limpar-Tela
+        Show-Mensagem "`nSELFMINIFIER" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem 'CONFIGURAÇÃO NECESSÁRIA' Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem 'O SelfMinifier ainda não possui uma configuração válida.' White
+        Write-Host '1. Criar configuração inicial'
+        Write-Host '2. Backups, restauração e histórico'
+        Write-Host '0. Sair'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' { Invoke-CreateInitialConfiguration }
+            '2' { Show-RestoreMenu }
+            '0' { return $false }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
+}
+
+function Show-InvalidConfigurationMenu {
+    while ($true) {
+        $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+        if ($summary.ok) { return $true }
+        Limpar-Tela
+        Show-Mensagem "`nSELFMINIFIER" Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem 'CONFIGURAÇÃO INVÁLIDA' Cyan
+        Show-Mensagem '────────────────────────────────────' Cyan
+        Show-Mensagem 'O arquivo configuracao.ini existe, mas não pôde ser validado.' White
+        Show-Mensagem 'Motivo:' Cyan
+        Show-Mensagem (Get-BridgeErrorMessage $summary 'A validação da configuração falhou.') White
+        Show-Mensagem 'Nenhuma configuração será corrigida ou substituída automaticamente.' Yellow
+        Write-Host '1. Corrigir configuração'
+        Write-Host '2. Backups, restauração e histórico'
+        Write-Host '0. Sair'
+        $choice = (Read-Host 'Escolha').Trim()
+        switch ($choice) {
+            '1' {
+                if (Show-CorrectConfiguration) { return $true }
+            }
+            '2' { Show-RestoreMenu }
+            '0' { return $false }
+            default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
+        }
+    }
+}
+
 function Start-SelfMinifierUi {
     $identity = Invoke-SelfMinifierBridge @{ command = 'version' }
     if (-not $identity.ok) { Show-Mensagem "Não foi possível obter a versão do SelfMinifier. $($identity.diagnostic.message)" Red; return }
+    Limpar-Tela
     Write-Host "`nSELFMINIFIER v$($identity.version)" -ForegroundColor Cyan
+    $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
+    if (-not $summary.ok) {
+        $continuar = $false
+        if ($summary.code -eq 'CONFIGURATION_MISSING') {
+            $continuar = Show-MissingConfigurationMenu
+        } else {
+            $continuar = Show-InvalidConfigurationMenu
+        }
+        if (-not $continuar) { return }
+    }
     while ($true) {
         Write-Host "`nSELFMINIFIER" -ForegroundColor Cyan
         Write-Host '────────────────────────────────────' -ForegroundColor Cyan

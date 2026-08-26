@@ -31,9 +31,13 @@ SELFMINIFIER
 0. Sair
 ```
 
+Na primeira execução, ou sempre que `Configuracao\configuracao.ini` não existir, o menu operacional não é exibido. Em seu lugar aparece o menu restrito **CONFIGURAÇÃO NECESSÁRIA**, com **Criar configuração inicial**, **Backups, restauração e histórico** e **Sair**. A criação é guiada: o SelfMinifier solicita explicitamente a `PastaRaiz` (nunca infere o diretório atual), valida o caminho pelas regras de segurança existentes, mostra um resumo e só grava após confirmação explícita. Backups, restauração e histórico continuam acessíveis mesmo sem uma configuração operacional válida.
+
+Se o arquivo existir mas não puder ser validado, aparece **CONFIGURAÇÃO INVÁLIDA** com o motivo em linguagem compreensível. Nenhuma configuração é corrigida ou substituída automaticamente: o arquivo nunca é sobrescrito e o modelo `.example` nunca é copiado por cima. O menu normal só é liberado depois que a configuração é relida e validada pelo caminho normal.
+
 ## Configuração
 
-A configuração persistente é `Configuracao\configuracao.ini`; o modelo versionado é `Configuracao\configuracao.ini.example`. Se o arquivo real não existir, o menu informa o caminho e só o cria a partir do modelo após confirmação. Ele nunca sobrescreve uma configuração existente.
+A configuração persistente é `Configuracao\configuracao.ini`; o modelo versionado é `Configuracao\configuracao.ini.example`. Se o arquivo real não existir, a primeira execução oferece **Criar configuração inicial**: o assistente solicita explicitamente a `PastaRaiz`, valida-a com as mesmas regras de caminho do projeto, mostra um resumo (caminho, tipos, perfil, modo de saída e pastas ignoradas) e exige confirmação explícita cuja resposta padrão é segura (`N`). A gravação usa o serializer oficial, relê o arquivo e o valida pelo caminho normal antes de liberar o menu. Ele nunca sobrescreve uma configuração existente.
 
 O modelo `.example` é distribuído sem preferências pessoais. O INI real é do usuário: não acompanha o pacote, não é versionado e só pode ser criado ou atualizado por uma ação persistente confirmada. A interface é o meio recomendado; edição manual é uma opção avançada. Valores manuais inválidos bloqueiam a operação, sem correção ou fallback silencioso.
 
@@ -53,6 +57,8 @@ IgnorarPasta01=node_modules
 IgnorarPasta02=.git
 IgnorarArquivo01=src\config.js
 ```
+
+Ao criar pela primeira vez, o assistente usa os padrões canônicos: `Motor=esbuild`, `Perfil=Padrao`, `ModoSaida=BackupESobrescreverOriginais`, `TiposArquivo=CSS+JavaScript` e as pastas ignoradas `node_modules`, `.git` e `vendor`.
 
 `PastaRaiz` define uma única raiz de projeto, percorrida recursivamente. `TiposArquivo` aceita `CSS`, `JavaScript` ou `CSS+JavaScript`. Exclusões usam `IgnorarPastaNN` e `IgnorarArquivoNN` com caminhos relativos, sem curingas ou `..`.
 
@@ -75,11 +81,11 @@ No modo `.min`, destinos preexistentes são listados, preservados e ignorados; n
 
 ## Analisar e minificar
 
-Escolha **Minificar projeto** para ver a raiz do projeto, os tipos efetivos, o perfil e o modo de saída efetivo e, então, **Analisar projeto** ou **Ajustar somente esta execução**. A análise mostra CSS/JavaScript encontrados, ignorados, já minificados, candidatos e o tamanho total dos candidatos em KB, com os motivos de exclusão, e permite **Ver arquivos que serão minificados** ou **Iniciar minificação**. Com 1 a 10 candidatos, a prévia mostra total e lista sem controles de paginação. Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo válidos. A análise não modifica arquivos.
+Escolha **Minificar projeto** para ver a raiz do projeto, os tipos efetivos, o perfil e o modo de saída efetivo e, então, **Analisar projeto** ou **Ajustar somente esta execução**. A análise mostra o título **ANÁLISE CONCLUÍDA** com o caminho do projeto, agrupada em **Escopo** (CSS e JavaScript encontrados), **Resultado** (arquivos candidatos, já minificados, ignorados e tamanho dos candidatos em KB) e **Motivos de exclusão**, e permite **Ver arquivos que serão minificados** ou **Iniciar minificação**. Enquanto a análise está em andamento, a interface exibe **Analisando o projeto... Aguarde.**, sem inventar percentuais de progresso. Com 1 a 10 candidatos, a prévia mostra total e lista sem controles de paginação. Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo válidos. A análise não modifica arquivos.
 
 **Iniciar minificação** reutiliza a execução V2 validada, que refaz a pré-análise e valida a impressão digital imediatamente antes de escrever. Se o projeto mudou após a análise, a execução é bloqueada e o usuário deve analisar novamente.
 
-Ao concluir, a interface apresenta o resumo consolidado dos arquivos efetivamente minificados: quantidade, tamanho antes, tamanho após e redução em KB e percentual. A redução pode ser negativa quando a saída final for maior que a origem; isso não é tratado como falha e não existe limiar mínimo de redução.
+Enquanto a minificação está em andamento, a interface exibe **Minificação em andamento...**. Ao concluir, a interface apresenta **MINIFICAÇÃO CONCLUÍDA** com o status humanizado (**Concluída**), o modo de saída, o grupo **Arquivos** (planejados, processados com sucesso, minificados e conflitos `.min` preservados) e o grupo **Volume** (tamanho antes, tamanho após, redução e redução percentual). O resultado permanece visível até o usuário pressionar Enter para continuar. A redução pode ser negativa quando a saída final for maior que a origem; isso não é tratado como falha e não existe limiar mínimo de redução.
 
 Cada nova saída contém uma `SelfMinifier-Tag` ligada à identidade histórica do artefato. A Tag sozinha não comprova integridade: o SelfMinifier também compara o SHA-256 do arquivo completo. Uma saída renomeada ou copiada sem alterações continua reconhecida como já minificada. Tag conhecida com conteúdo alterado, Tag desconhecida, inválida ou repetida é reportada e não é minificada automaticamente.
 
@@ -136,7 +142,7 @@ Relatórios mostram totais, itens ignorados com motivo, resultados de restauraç
 
 ## Problemas comuns
 
-- **Configuração ausente ou inválida:** corrija `Configuracao\configuracao.ini` ou crie-o explicitamente a partir do modelo.
+- **Configuração ausente ou inválida:** se ausente, use **Criar configuração inicial** e informe explicitamente a `PastaRaiz`; se inválida, corrija `Configuracao\configuracao.ini` manualmente. Nenhuma configuração é sobrescrita ou substituída automaticamente.
 - **Origem inacessível, link ou arquivo somente leitura:** o scanner informa o motivo e bloqueia quando o escopo não pode ser comprovado.
 - **Destino `.min` preexistente:** revise a lista; o arquivo é preservado e ignorado, sem sobrescrita.
 - **Node não homologado:** instale uma linha LTS homologada; não use versões Current, EOL ou globais.

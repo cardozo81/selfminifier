@@ -8,6 +8,8 @@ O bridge coordena configuração, análise, execução, restauração, logs e re
 
 A UI consolida análise e execução em **Minificar projeto**. Cada entrada nesse fluxo cria uma tabela local de ajustes temporários; o override de `outputMode` alcança análise e execução, mas é descartado ao sair. A prévia usa lotes de 10 somente quando há 11 ou mais candidatos e expõe apenas controles de navegação válidos. A execução revalida o fingerprint apresentado antes de qualquer mutação.
 
+`Start-SelfMinifierUi` distingue configuração ausente (`CONFIGURAÇÃO NECESSÁRIA`) de inválida (`CONFIGURAÇÃO INVÁLIDA`) e só libera o menu operacional depois de reler e validar a configuração pelo caminho normal. Nos menus restritos, **Backups, restauração e histórico** permanecem acessíveis sem depender de configuração operacional. Resultados de análise e minificação permanecem visíveis até o usuário continuar; status técnicos são apresentados com rótulos humanos e o feedback de espera é factual, sem percentuais de progresso inventados.
+
 ## Configuração e domínio
 
 `src/configuration` lê UTF-8 estrito, aceita exatamente `VersaoSchema=2` e `VersaoSchema=3`, detecta chaves duplicadas e rejeita V1, versões desconhecidas e estruturas mistas. V2 conserva a raiz interna `<applicationRoot>\_source_versions`; V3 acrescenta `backupRoot`, correspondente a `PastaBackups`, como caminho externo validado ou `null` para semântica interna. `deriveEffectiveConfiguration()` aceita somente o override temporário de `outputMode`.
@@ -15,6 +17,8 @@ A UI consolida análise e execução em **Minificar projeto**. Cada entrada ness
 Edições de raiz/tipos/exclusões/perfil e de `outputMode` preservam o schema carregado. O bridge `update-backup-root` é a única transição V2→V3: valida o caminho externo, grava atomicamente, relê e comprova que campos não relacionados permaneceram iguais. Limpar a raiz mantém V3 com `backupRoot=null`; não há migração automática nem downgrade silencioso.
 
 `resolveEffectiveBackupRoot()` é a autoridade única: V2 e V3 interno resolvem para a pasta controlada pela aplicação; V3 externo resolve para `backupRoot`. O INI real permanece em `Configuracao\configuracao.ini`; o modelo V2 fica em `Configuracao\configuracao.ini.example`. Não há fallback silencioso para dados inválidos.
+
+Na primeira execução, a ausência do INI é distinta da invalidação. O bridge `create-configuration` exige `projectRoot` (`PastaRaiz`) explícito, valida-o lexicalmente por `validateV2Configuration` e como diretório físico existente por `assertPhysicalPath(..., { requireDirectory: true })`, monta os padrões canônicos (motor homologado `esbuild`, `Padrao`, `BackupESobrescreverOriginais`, `CSS+JavaScript`, pastas ignoradas `node_modules`, `.git` e `vendor`), grava com `writeV2Configuration`, relê e revalida pelo caminho normal. Um INI existente nunca é sobrescrito e o `.example` nunca é copiado por cima; falha pós-escrita fecha fechado.
 
 ## Scanner e minificação
 

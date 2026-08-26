@@ -163,7 +163,7 @@ test('UI B2 consolida Minificar projeto e remove entradas principais duplicadas'
   assert.match(source, /Nenhum arquivo será minificado nesta análise\./);
   assert.match(source, /O projeto mudou após a análise\. Analise novamente antes de minificar\./);
   assert.match(source, /1\. Ver arquivos que serão minificados/);
-  assert.match(source, /Modo de saída: \$\(Get-ModoSaidaDescricao \$execution\.plan\.outputMode\)/);
+  assert.match(source, /Get-ModoSaidaDescricao \$execution\.plan\.outputMode/);
 });
 
 test('UI B2.1 corrige prévia paginada e ciclo de vida do ajuste temporário', async () => {
@@ -185,7 +185,7 @@ test('UI B2.1 corrige prévia paginada e ciclo de vida do ajuste temporário', a
 test('UI F1 mostra candidatos e tamanho total em KB', async () => {
   const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
   assert.match(source, /Arquivos candidatos:/);
-  assert.match(source, /Tamanho total:/);
+  assert.match(source, /Tamanho dos candidatos:/);
   assert.match(source, /function Format-Kilobytes/);
   assert.match(source, /\$Analysis\.counts\.candidateBytes/);
   assert.match(source, /1KB/);
@@ -194,7 +194,7 @@ test('UI F1 mostra candidatos e tamanho total em KB', async () => {
 
 test('UI F2 mostra resumo consolidado de redução a partir do resultado', async () => {
   const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
-  assert.match(source, /Arquivos minificados:/);
+  assert.match(source, /Minificados:/);
   assert.match(source, /Tamanho antes:/);
   assert.match(source, /Tamanho após:/);
   assert.match(source, /Redução:/);
@@ -204,4 +204,46 @@ test('UI F2 mostra resumo consolidado de redução a partir do resultado', async
   assert.match(source, /\$execution\.result\.summary\.finalBytes/);
   assert.match(source, /\$execution\.result\.summary\.reductionBytes/);
   assert.match(source, /\$execution\.result\.summary\.reductionPercent/);
+});
+
+test('UI F4 apresenta primeira execução com menu restrito e criação guiada', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  assert.match(source, /CONFIGURAÇÃO NECESSÁRIA/);
+  assert.match(source, /CONFIGURAÇÃO INVÁLIDA/);
+  assert.match(source, /O SelfMinifier ainda não possui uma configuração válida\./);
+  assert.match(source, /O arquivo configuracao\.ini existe, mas não pôde ser validado\./);
+  assert.match(source, /Nenhuma configuração será corrigida ou substituída automaticamente\./);
+  assert.match(source, /1\. Criar configuração inicial/);
+  assert.match(source, /1\. Corrigir configuração/);
+  assert.match(source, /2\. Backups, restauração e histórico/);
+  assert.match(source, /function Invoke-CreateInitialConfiguration/);
+  assert.match(source, /command = 'create-configuration'; projectRoot = \$entrada/);
+  assert.match(source, /command = 'create-configuration'; projectRoot = \$entrada; confirmed = \$true/);
+  assert.match(source, /Confirmar-Acao 'Confirmar a criação da configuração'/);
+  assert.match(source, /Pasta raiz:/);
+  assert.match(source, /Tipos de arquivo:/);
+  assert.match(source, /Perfil:/);
+  assert.match(source, /Modo de saída:/);
+  assert.match(source, /Pastas ignoradas:/);
+  assert.match(source, /function Start-SelfMinifierUi/);
+  assert.match(source, /CONFIGURATION_MISSING/);
+});
+
+test('UI F4 humaniza status, separa telas e preserva resultado até continuar', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  assert.match(source, /function Get-ExecutionStatusLabel/);
+  assert.match(source, /'completed' \{ return 'Concluída' \}/);
+  assert.match(source, /function Confirmar-Continuar/);
+  assert.match(source, /Pressione Enter para continuar\.\.\./);
+  assert.match(source, /function Limpar-Tela/);
+  assert.match(source, /Clear-Host/);
+  assert.match(source, /Minificação em andamento\.\.\./);
+  assert.match(source, /Analisando o projeto\.\.\./);
+  assert.match(source, /Aguarde\./);
+  assert.match(source, /MINIFICAÇÃO CONCLUÍDA/);
+  assert.match(source, /ANÁLISE CONCLUÍDA/);
+  assert.match(source, /function Show-ExecutionResult/);
+  assert.match(source, /Status: \$\(Get-ExecutionStatusLabel/);
+  assert.match(source, /Operação concluída com sucesso\./);
+  assert.doesNotMatch(source, /%\s*\.\.\.|progresso|Progress/);
 });

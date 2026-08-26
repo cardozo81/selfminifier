@@ -130,7 +130,7 @@ windowsTest('summary para configuração V2 inválida preserva o diagnóstico ex
   }
 });
 
-windowsTest('create-configuration cria o exemplo oficial e o recarrega como V2 válida', async () => {
+windowsTest('create-configuration valida PastaRaiz explícita, usa o serializer oficial e recarrega como V2 válida', async () => {
   const root = await mkdtemp(join(tmpdir(), 'selfminifier-config-create-'));
   try {
     const configurationDirectory = join(root, 'Configuracao');
@@ -138,7 +138,21 @@ windowsTest('create-configuration cria o exemplo oficial e o recarrega como V2 v
     const example = await readFile(new URL('../Configuracao/configuracao.ini.example', import.meta.url), 'utf8');
     await writeFile(join(configurationDirectory, 'configuracao.ini.example'), example, 'utf8');
 
-    const created = await runBridgeRequest({ command: 'create-configuration', confirmed: true }, { projectRoot: root });
+    const projectRoot = join(root, 'projeto');
+    await mkdir(projectRoot, { recursive: true });
+
+    const preview = await runBridgeRequest({ command: 'create-configuration', projectRoot }, { projectRoot: root });
+    assert.equal(preview.ok, true);
+    assert.equal(preview.preview, true);
+    assert.equal(preview.configuration.schemaVersion, 2);
+    assert.equal(preview.configuration.engine, 'esbuild');
+    assert.equal(preview.configuration.profile, 'Padrao');
+    assert.equal(preview.configuration.outputMode, 'BackupESobrescreverOriginais');
+    assert.deepEqual(preview.configuration.fileTypes, ['css', 'javascript']);
+    assert.deepEqual(preview.configuration.ignoredFolders, ['node_modules', '.git', 'vendor']);
+    assert.deepEqual(preview.configuration.ignoredFiles, []);
+
+    const created = await runBridgeRequest({ command: 'create-configuration', projectRoot, confirmed: true }, { projectRoot: root });
     assert.equal(created.ok, true);
     assert.equal(created.created, true);
     const summary = await runBridgeRequest({ command: 'summary' }, { projectRoot: root });
@@ -146,6 +160,44 @@ windowsTest('create-configuration cria o exemplo oficial e o recarrega como V2 v
     assert.equal(summary.schema, 'v2');
     assert.equal(summary.configuration.schemaVersion, 2);
     assert.equal(summary.configuration.engine, 'esbuild');
+    assert.equal(summary.configuration.projectRoot, projectRoot);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('create-configuration exige PastaRaiz explícito e rejeita diretório inexistente', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-config-create-invalid-'));
+  try {
+    await mkdir(join(root, 'Configuracao'), { recursive: true });
+    const withoutRoot = await runBridgeRequest({ command: 'create-configuration', confirmed: true }, { projectRoot: root });
+    assert.equal(withoutRoot.ok, false);
+    assert.equal(withoutRoot.code, 'PROJECT_ROOT_REQUIRED');
+
+    const missingDirectory = join(root, 'nao-existe');
+    const invalid = await runBridgeRequest({ command: 'create-configuration', projectRoot: missingDirectory, confirmed: true }, { projectRoot: root });
+    assert.equal(invalid.ok, false);
+    assert.equal(invalid.diagnostic.code, 'PHYSICAL_PATH_ACCESS_FAILED');
+
+    const stillMissing = await runBridgeRequest({ command: 'summary' }, { projectRoot: root });
+    assert.equal(stillMissing.ok, false);
+    assert.equal(stillMissing.code, 'CONFIGURATION_MISSING');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('create-configuration não sobrescreve configuração existente', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-config-create-exists-'));
+  try {
+    await mkdir(join(root, 'Configuracao'), { recursive: true });
+    await writeFile(join(root, 'Configuracao', 'configuracao.ini'), '[Configuracao]\nVersaoSchema=2\n', 'utf8');
+    const projectRoot = join(root, 'projeto');
+    await mkdir(projectRoot, { recursive: true });
+    const created = await runBridgeRequest({ command: 'create-configuration', projectRoot, confirmed: true }, { projectRoot: root });
+    assert.equal(created.ok, false);
+    assert.equal(created.code, 'CONFIGURATION_EXISTS');
+    assert.equal(await readFile(join(root, 'Configuracao', 'configuracao.ini'), 'utf8'), '[Configuracao]\nVersaoSchema=2\n');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

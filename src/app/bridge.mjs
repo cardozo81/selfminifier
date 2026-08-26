@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -12,7 +12,8 @@ import {
   writeV2Configuration,
   writeV3Configuration,
 } from '../configuration/index.js';
-import { OUTPUT_MODES } from '../domain/index.js';
+import { DEFAULT_OUTPUT_MODE, OUTPUT_MODES, PROFILES, V2_DEFAULT_FILE_TYPES } from '../domain/index.js';
+import { assertPhysicalPath } from '../integrity/index.js';
 import { createDefaultMinifierRegistry } from '../minifiers/index.js';
 import { createExecutionPlan, executePlan, ExecutionError } from '../execution/index.js';
 import { listArtifacts, readArtifact, writeOperationalReports, writeTechnicalLog } from '../observability/index.mjs';
@@ -376,6 +377,77 @@ async function updateBackupRoot(request, persistent) {
   };
 }
 
+const DEFAULT_IGNORED_FOLDERS = Object.freeze(['node_modules', '.git', 'vendor']);
+
+function buildInitialConfiguration(projectRoot) {
+  const registry = createDefaultMinifierRegistry();
+  const allowedEngines = new Set(registry.list().map((item) => item.id));
+  const engineId = registry.list()[0].id;
+  return validateV2Configuration({
+    engine: engineId,
+    profile: PROFILES.PADRAO,
+    outputMode: DEFAULT_OUTPUT_MODE,
+    projectRoot,
+    fileTypes: V2_DEFAULT_FILE_TYPES,
+    ignoredFolders: [...DEFAULT_IGNORED_FOLDERS],
+    ignoredFiles: [],
+  }, { allowedEngines });
+}
+
+async function createInitialConfiguration(request, projectRoot) {
+  const filePaths = paths(projectRoot);
+  if (await exists(filePaths.configuration)) {
+    return { ok: false, code: 'CONFIGURATION_EXISTS', configurationPath: filePaths.configuration };
+  }
+  if (typeof request.projectRoot !== 'string' || request.projectRoot.trim() === '') {
+    return { ok: false, code: 'PROJECT_ROOT_REQUIRED', message: 'Informe explicitamente a pasta raiz do projeto (PastaRaiz).' };
+  }
+  let normalized;
+  try {
+    normalized = buildInitialConfiguration(request.projectRoot);
+  } catch (error) {
+    return { ok: false, diagnostic: diagnostic(error) };
+  }
+  try {
+    await assertPhysicalPath(normalized.projectRoot, { requireDirectory: true });
+  } catch (error) {
+    return { ok: false, diagnostic: diagnostic(error) };
+  }
+  if (request.confirmed !== true) {
+    return { ok: true, preview: true, configuration: normalized, configurationPath: filePaths.configuration };
+  }
+  try {
+    await writeV2Configuration(filePaths.configuration, normalized);
+  } catch (error) {
+    return { ok: false, diagnostic: diagnostic(error) };
+  }
+  const reloaded = await loadPersistent(projectRoot);
+  if (!reloaded.ok || reloaded.schema !== 'v2') {
+    return {
+      ok: false,
+      code: 'CONFIGURATION_RELOAD_FAILED',
+      message: 'A configuração foi gravada, mas a releitura e a validação normais não puderam ser confirmadas.',
+      diagnostic: reloaded.diagnostic,
+      configurationPath: filePaths.configuration,
+    };
+  }
+  if (JSON.stringify(normalized) !== JSON.stringify(reloaded.configuration)) {
+    return {
+      ok: false,
+      code: 'CONFIGURATION_RELOAD_MISMATCH',
+      message: 'A configuração gravada não corresponde aos valores normalizados esperados.',
+      configurationPath: filePaths.configuration,
+      configuration: reloaded.configuration,
+    };
+  }
+  return {
+    ok: true,
+    created: true,
+    configurationPath: filePaths.configuration,
+    configuration: reloaded.configuration,
+  };
+}
+
 export async function runBridgeRequest(request, { projectRoot = resolveApplicationRoot() } = {}) {
   const application = await loadApplicationMetadata(projectRoot);
   if (request.command === 'version') return { ok: true, ...application };
@@ -481,16 +553,7 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
     };
   }
   if (request.command === 'create-configuration') {
-    const filePaths = paths(projectRoot);
-    if (request.confirmed !== true) return { ok: false, code: 'CONFIRMATION_REQUIRED', message: 'A criação exige confirmação explícita.' };
-    if (await exists(filePaths.configuration)) return { ok: false, code: 'CONFIGURATION_EXISTS', configurationPath: filePaths.configuration };
-    try {
-      await mkdir(resolve(filePaths.configuration, '..'), { recursive: true });
-      await copyFile(filePaths.example, filePaths.configuration);
-      return { ok: true, configurationPath: filePaths.configuration, created: true };
-    } catch (error) {
-      return { ok: false, diagnostic: diagnostic(error) };
-    }
+    return createInitialConfiguration(request, projectRoot);
   }
   if (request.command === 'update-output-mode') {
     if (!Object.values(OUTPUT_MODES).includes(request.outputMode)) {
