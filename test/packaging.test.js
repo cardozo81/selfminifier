@@ -12,6 +12,12 @@ import { assemblePackage, assertSafeDistTarget, collectAllowedFiles, getPackageM
 const execFileAsync = promisify(execFile);
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
+function createChildEnvironment(overrides = {}) {
+  const env = { ...process.env, ...overrides };
+  if (typeof env.PSModulePath === 'string') env.PSModulePath = env.PSModulePath.split(';').filter((entry) => !/\\\.cache\\codex-runtimes\\/i.test(entry)).join(';');
+  return env;
+}
+
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'SelfMinifier 13C package '));
   for (const file of await collectAllowedFiles(projectRoot)) {
@@ -25,7 +31,7 @@ async function fixture() {
 
 function runProcess(file, args, { cwd, input = '', env = {}, shell = false } = {}) {
   return new Promise((resolveProcess, reject) => {
-    const child = spawn(file, args, { cwd, windowsHide: true, env: { ...process.env, ...env }, shell });
+    const child = spawn(file, args, { cwd, windowsHide: true, env: createChildEnvironment(env), shell });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
@@ -38,9 +44,9 @@ function runProcess(file, args, { cwd, input = '', env = {}, shell = false } = {
 
 test('nomes de artefato derivam da versão e allowlist contém somente runtime necessário', async () => {
   const metadata = await getPackageMetadata(projectRoot);
-  assert.equal(metadata.version, '0.2.0-rc.2');
-  assert.equal(metadata.packageName, 'SelfMinifier-0.2.0-rc.2');
-  assert.match(metadata.zipPath, /SelfMinifier-0\.2\.0-rc\.2\.zip$/);
+  assert.equal(metadata.version, '0.2.0-rc.3');
+  assert.equal(metadata.packageName, 'SelfMinifier-0.2.0-rc.3');
+  assert.match(metadata.zipPath, /SelfMinifier-0\.2\.0-rc\.3\.zip$/);
   const files = await collectAllowedFiles(projectRoot);
   for (const required of ['Executar.cmd', 'Executar.ps1', 'LEIA-ME.txt', 'src/app/ui.ps1', 'resources/runtime-policy.json', 'Configuracao/configuracao.ini.example', 'Documentacao/Gerada/Manual-Usuario/index.html']) assert.ok(files.includes(required));
   assert.equal(files.some((file) => /^(?:test|Especificacoes|_ias|node_modules|Dados|_source_versions)\//.test(file)), false);
@@ -94,7 +100,7 @@ test('pacote isolado resolve versão e inicia fora do repositório em caminho co
     await writeFile(join(cwd, 'npm.cmd'), `@echo off\r\necho %*>>"${npmLogPath}"\r\nif "%1"=="--version" echo 11.11.0\r\n`, 'utf8');
     const cmdPath = join(metadata.packageRoot, 'Executar.cmd');
     const powershell = 'C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-    const policyResult = await execFileAsync(powershell, ['-NoProfile', '-NonInteractive', '-Command', 'Get-ExecutionPolicy']);
+    const policyResult = await execFileAsync(powershell, ['-NoProfile', '-NonInteractive', '-Command', 'Get-ExecutionPolicy'], { env: createChildEnvironment() });
     const hostPolicy = policyResult.stdout.trim();
     const cmdStartup = await runProcess(`"${cmdPath}"`, [], { cwd, input: '0\r\n', shell: true });
     if (/^Restricted$/i.test(hostPolicy)) {
@@ -117,11 +123,11 @@ test('pacote isolado resolve versão e inicia fora do repositório em caminho co
     }
     const request = await runProcess(process.execPath, [join(metadata.packageRoot, 'src', 'app', 'bridge.mjs'), '--bridge'], { cwd, input: '{"command":"version"}' });
     assert.equal(request.code, 0);
-    assert.equal(JSON.parse(request.stdout).version, '0.2.0-rc.2');
+    assert.equal(JSON.parse(request.stdout).version, '0.2.0-rc.3');
     if (/^Restricted$/i.test(hostPolicy)) return;
     const startup = await runProcess(powershell, ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', join(metadata.packageRoot, 'Executar.ps1')], { cwd, input: '0\r\n' });
     assert.equal(startup.code, 0);
-    assert.equal((startup.stdout.match(/SELFMINIFIER v0\.2\.0-rc\.2/g) ?? []).length, 1);
+    assert.equal((startup.stdout.match(/SELFMINIFIER v0\.2\.0-rc\.3/g) ?? []).length, 1);
     assert.match(startup.stdout, /CONFIGURAÇÃO NECESSÁRIA/);
     assert.match(startup.stdout, /Criar configuração inicial/);
     assert.doesNotMatch(startup.stdout, /1\. Minificar projeto/);
@@ -189,8 +195,8 @@ test('ZIP contém raiz esperada e checksum SHA-256 corresponde', async () => {
 });
 
 test('limpeza fora de dist ou com nome inesperado é rejeitada', async () => {
-  assert.throws(() => assertSafeDistTarget(projectRoot, join(projectRoot, 'src'), 'SelfMinifier-0.2.0-rc.2'));
-  assert.throws(() => assertSafeDistTarget(projectRoot, join(projectRoot, 'dist', 'outro'), 'SelfMinifier-0.2.0-rc.2'));
+  assert.throws(() => assertSafeDistTarget(projectRoot, join(projectRoot, 'src'), 'SelfMinifier-0.2.0-rc.3'));
+  assert.throws(() => assertSafeDistTarget(projectRoot, join(projectRoot, 'dist', 'outro'), 'SelfMinifier-0.2.0-rc.3'));
 });
 
 test('publicar.cmd prepara dependências somente com confirmação e mantém o launcher visível', async () => {

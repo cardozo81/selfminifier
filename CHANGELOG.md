@@ -2,13 +2,16 @@
 
 ## Versões
 
+### 0.2.0-rc.3
+
+- Primeira execução e UX de console (F4): a abertura passou a distinguir configuração ausente de inválida com menus restritos (`CONFIGURAÇÃO NECESSÁRIA` e `CONFIGURAÇÃO INVÁLIDA`), criação guiada com `PastaRaiz` explícito e validado, gravação pelo serializer oficial com releitura e validação antes de liberar o menu normal, e acesso a backups/restauração/histórico sem configuração operacional. A apresentação de análise e minificação foi reorganizada em grupos, os status técnicos passaram a ser humanizados, operações concluídas permanecem visíveis até o usuário continuar e o feedback de espera é factual, sem percentuais de progresso inventados.
+
 ### 0.2.0-rc.2
 
 - Análise com volume dos candidatos (F1): a análise apresenta a quantidade de arquivos candidatos e o tamanho total dos candidatos em KB, calculados no resultado estruturado da pré-análise.
 - Resumo consolidado de redução pós-minificação (F2): após a execução, a interface e o relatório TXT apresentam a quantidade de arquivos minificados, o tamanho antes, o tamanho após e a redução em bytes e percentual, calculados uma única vez no resultado estruturado da execução e restritos aos arquivos efetivamente minificados com sucesso.
 - Estados técnicos humanizados na interface (F3): os códigos internos de integridade, disponibilidade de backup, compactação, modo de saída, perfil e estados de restauração passaram a ser apresentados com rótulos amigáveis em pt-BR na interface de primeiro nível, preservando os valores técnicos internos e usando o valor original como fallback para estados desconhecidos.
 - Validações de encoding e EOL reforçadas (Q1): o gate de qualidade agora verifica fisicamente os finais de linha CRLF dos launchers `.cmd` no working tree, rejeitando LF isolado, CR isolado e finais de linha mistos sem reescrever o arquivo; o detector de mojibake deixou de tratar o A-circunflexo isolado como corrupção, exigindo A-circunflexo seguido de caractere não ASCII para caracterizar mojibake CP1252.
-- Primeira execução e UX de console (F4): a abertura passou a distinguir configuração ausente de inválida com menus restritos (`CONFIGURAÇÃO NECESSÁRIA` e `CONFIGURAÇÃO INVÁLIDA`), criação guiada com `PastaRaiz` explícito e validado, gravação pelo serializer oficial com releitura e validação antes de liberar o menu normal, e acesso a backups/restauração/histórico sem configuração operacional. A apresentação de análise e minificação foi reorganizada em grupos, os status técnicos passaram a ser humanizados, operações concluídas permanecem visíveis até o usuário continuar e o feedback de espera é factual, sem percentuais de progresso inventados.
 
 ### 0.2.0-rc.1
 
