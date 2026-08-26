@@ -20,6 +20,14 @@ function physicalIdentity(stats) {
   return `${String(stats.dev)}:${String(stats.ino)}`;
 }
 
+function physicalIdentityOrNull(stats) {
+  try {
+    return physicalIdentity(stats);
+  } catch {
+    return null;
+  }
+}
+
 async function assertWindowsPathIsNotReparse(filePath, run = execFileAsync) {
   if (process.platform !== 'win32') return;
   const systemRoot = process.env.SystemRoot;
@@ -45,7 +53,7 @@ async function assertWindowsPathIsNotReparse(filePath, run = execFileAsync) {
   throw new IntegrityError('REPARSE_POINT_NOT_ALLOWED', `Reparse points não são permitidos: ${filePath}.`, { filePath });
 }
 
-export async function assertPhysicalPath(filePath, { allowMissing = false, requireDirectory = false } = {}) {
+export async function assertPhysicalPath(filePath, { allowMissing = false, requireDirectory = false, memo = null } = {}) {
   const normalizedPath = normalize(resolve(filePath));
   const rootPath = parse(normalizedPath).root;
   const parts = relative(rootPath, normalizedPath).split(/[\\/]+/).filter(Boolean);
@@ -68,7 +76,13 @@ export async function assertPhysicalPath(filePath, { allowMissing = false, requi
     if (stats.isSymbolicLink()) {
       throw new IntegrityError('LINK_NOT_ALLOWED', `Links simbólicos e junctions não são permitidos: ${currentPath}.`, { filePath: currentPath });
     }
-    await assertWindowsPathIsNotReparse(currentPath);
+    const memoKey = identity(currentPath);
+    const currentIdentity = physicalIdentityOrNull(stats);
+    const reparseProven = currentIdentity !== null && memo?.get(memoKey) === currentIdentity;
+    if (!reparseProven) {
+      await assertWindowsPathIsNotReparse(currentPath);
+      if (memo && currentIdentity !== null) memo.set(memoKey, currentIdentity);
+    }
     let canonicalPath;
     try {
       canonicalPath = normalize(resolve(await realpath(currentPath)));

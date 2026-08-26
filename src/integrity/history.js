@@ -107,9 +107,9 @@ export function resolveHistoricalExecutionPath(historyDirectory, executionId) {
   return recordPath;
 }
 
-async function ensureSafeHistoryDirectory(historyDirectory, { create = false } = {}) {
+async function ensureSafeHistoryDirectory(historyDirectory, { create = false, memo = null } = {}) {
   const normalizedDirectory = normalize(resolve(historyDirectory));
-  await assertPathHasNoLinks(normalizedDirectory, { allowMissing: true });
+  await assertPathHasNoLinks(normalizedDirectory, { allowMissing: true, memo });
   if (create) await mkdir(normalizedDirectory, { recursive: true });
   let stats;
   try { stats = await lstat(normalizedDirectory); } catch (cause) {
@@ -117,7 +117,7 @@ async function ensureSafeHistoryDirectory(historyDirectory, { create = false } =
     throw new IntegrityError('HISTORY_DIRECTORY_ACCESS_FAILED', `Não foi possível acessar o diretório histórico: ${normalizedDirectory}.`, { cause });
   }
   if (!stats.isDirectory() || stats.isSymbolicLink()) throw new IntegrityError('UNSAFE_HISTORY_DIRECTORY', 'Dados\\Historico deve ser um diretório físico seguro.');
-  await assertPathHasNoLinks(normalizedDirectory);
+  await assertPathHasNoLinks(normalizedDirectory, { memo });
   return normalizedDirectory;
 }
 
@@ -166,11 +166,9 @@ export async function writeHistoricalExecutionRecord(historyDirectory, record) {
   }
 }
 
-export async function readHistoricalExecutionRecord(historyDirectory, executionId) {
-  const normalizedDirectory = await ensureSafeHistoryDirectory(historyDirectory);
-  if (!normalizedDirectory) throw new IntegrityError('HISTORY_RECORD_READ_FAILED', 'O diretório histórico não existe.');
+async function readHistoricalExecutionRecordFromValidatedDirectory(normalizedDirectory, executionId, { memo = null } = {}) {
   const recordPath = resolveHistoricalExecutionPath(normalizedDirectory, executionId);
-  await assertPathHasNoLinks(recordPath);
+  await assertPathHasNoLinks(recordPath, { memo });
   const stats = await lstat(recordPath).catch((cause) => {
     throw new IntegrityError('HISTORY_RECORD_READ_FAILED', `Não foi possível acessar o registro histórico: ${recordPath}.`, { cause });
   });
@@ -180,8 +178,15 @@ export async function readHistoricalExecutionRecord(historyDirectory, executionI
   return record;
 }
 
-export async function listHistoricalExecutionRecords(historyDirectory = resolveRuntimePaths().historyDirectory) {
+export async function readHistoricalExecutionRecord(historyDirectory, executionId) {
   const normalizedDirectory = await ensureSafeHistoryDirectory(historyDirectory);
+  if (!normalizedDirectory) throw new IntegrityError('HISTORY_RECORD_READ_FAILED', 'O diretório histórico não existe.');
+  return readHistoricalExecutionRecordFromValidatedDirectory(normalizedDirectory, executionId);
+}
+
+export async function listHistoricalExecutionRecords(historyDirectory = resolveRuntimePaths().historyDirectory) {
+  const memo = new Map();
+  const normalizedDirectory = await ensureSafeHistoryDirectory(historyDirectory, { memo });
   if (!normalizedDirectory) return [];
   const entries = await readdir(normalizedDirectory, { withFileTypes: true });
   const executionIds = [];
@@ -198,7 +203,7 @@ export async function listHistoricalExecutionRecords(historyDirectory = resolveR
   const records = [];
   const artifactIds = new Set();
   for (const executionId of executionIds) {
-    const record = await readHistoricalExecutionRecord(normalizedDirectory, executionId);
+    const record = await readHistoricalExecutionRecordFromValidatedDirectory(normalizedDirectory, executionId, { memo });
     for (const artifact of record.artifacts) {
       if (artifactIds.has(artifact.artifactId)) {
         throw new IntegrityError('DUPLICATE_HISTORICAL_ARTIFACT_ID', `O artifactId ${artifact.artifactId} aparece em mais de um registro histórico.`);

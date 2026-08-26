@@ -43,8 +43,8 @@ async function requireRegularPathWithoutLinks(rootPath, sourcePath) {
   return sourceStats;
 }
 
-export async function assertPathHasNoLinks(filePath, { allowMissing = false } = {}) {
-  return assertPhysicalPath(filePath, { allowMissing });
+export async function assertPathHasNoLinks(filePath, { allowMissing = false, memo = null } = {}) {
+  return assertPhysicalPath(filePath, { allowMissing, memo });
 }
 
 export async function createValidatedSourceBackup(input, dependencies = {}) {
