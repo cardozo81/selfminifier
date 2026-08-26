@@ -53,6 +53,8 @@ test('nomes de artefato derivam da versão e allowlist contém somente runtime n
   assert.match(launcher, /set "EXITCODE=1"[\s\S]*goto :failure/i);
   assert.match(launcher, /Manual-Usuario\\index\.html/i);
   assert.doesNotMatch(launcher, /[A-Za-z]:\\(?:Users|IA-PROJETOS)\\/i);
+  assert.match(launcher, /chcp\s+65001/i);
+  assert.doesNotMatch(launcher, /pol├¡tica|execu├º├úo|n├úo/i);
   const powershellBytes = await readFile(join(projectRoot, 'Executar.ps1'));
   assert.deepEqual([...powershellBytes.subarray(0, 3)], [0xEF, 0xBB, 0xBF]);
   const readme = await readFile(join(projectRoot, 'LEIA-ME.txt'), 'utf8');

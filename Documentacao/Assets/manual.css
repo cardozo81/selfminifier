@@ -3,7 +3,7 @@ body { max-width: 920px; margin: 0 auto; padding: 2rem; background: #fff; }
 h1, h2, h3 { color: #005a9c; line-height: 1.2; }
 h1 { border-bottom: 2px solid #005a9c; padding-bottom: .5rem; }
 code, pre { font-family: Consolas, "Courier New", monospace; }
-code { background: #eef2f5; padding: .1rem .25rem; border-radius: 3px; }
+code { background: unset; padding: .1rem .25rem; border-radius: 3px; }
 pre { background: #17212b; color: #f8f8f2; padding: 1rem; overflow-x: auto; border-radius: 4px; }
 ul { padding-left: 1.5rem; }
 a { color: #005a9c; }

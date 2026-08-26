@@ -4,15 +4,16 @@ import { fileURLToPath } from 'node:url';
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const manuals = Object.freeze([
-  { name: 'Manual-Usuario', title: 'Manual do Usuário — SelfMinifier' },
-  { name: 'Manual-Tecnico', title: 'Manual Técnico — SelfMinifier' },
+  { name: 'Manual-Usuario', title: 'Manual do Usuário - SelfMinifier' },
+  { name: 'Manual-Tecnico', title: 'Manual Técnico - SelfMinifier' },
 ]);
 
 function escapeHtml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;'); }
 function inline(text) {
   return escapeHtml(text)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 }
 
 export function renderMarkdown(markdown) {

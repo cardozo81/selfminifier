@@ -1,4 +1,4 @@
-# Manual do Usuário — SelfMinifier
+# Manual do Usuário - SelfMinifier
 
 ## Finalidade e segurança
 

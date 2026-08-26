@@ -1,5 +1,6 @@
 @echo off
 setlocal
+chcp 65001 >nul
 set "SCRIPT=%~dp0Executar.ps1"
 set "MANUAL=%~dp0Documentacao\Gerada\Manual-Usuario\index.html"
 if not exist "%SCRIPT%" (

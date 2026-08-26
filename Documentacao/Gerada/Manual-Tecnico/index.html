@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Manual Técnico — SelfMinifier</title>
+<title>Manual Técnico - SelfMinifier</title>
 <style>
 :root { color-scheme: light; font-family: "Segoe UI", Arial, sans-serif; line-height: 1.55; color: #17212b; background: #f6f8fa; }
 body { max-width: 920px; margin: 0 auto; padding: 2rem; background: #fff; }
 h1, h2, h3 { color: #005a9c; line-height: 1.2; }
 h1 { border-bottom: 2px solid #005a9c; padding-bottom: .5rem; }
 code, pre { font-family: Consolas, "Courier New", monospace; }
-code { background: #eef2f5; padding: .1rem .25rem; border-radius: 3px; }
+code { background: unset; padding: .1rem .25rem; border-radius: 3px; }
 pre { background: #17212b; color: #f8f8f2; padding: 1rem; overflow-x: auto; border-radius: 4px; }
 ul { padding-left: 1.5rem; }
 a { color: #005a9c; }
@@ -18,11 +18,11 @@ a { color: #005a9c; }
 </style>
 </head>
 <body>
-<h1>Manual Técnico — SelfMinifier</h1>
+<h1>Manual Técnico - SelfMinifier</h1>
 <h2>Arquitetura implementada</h2>
 <p>O fluxo de dependências é <code>PowerShell → Node CLI → núcleo</code>. <code>Executar.ps1</code> executa o bootstrap e carrega <code>src/app/ui.ps1</code>; a interface chama <code>src/app/bridge.mjs</code> por JSON. A camada PowerShell apresenta escopo e confirmações, mas não aplica regras de scanner, minificação, integridade ou transação.</p>
 <p>O bridge coordena configuração, análise, execução, restauração, logs e relatórios. Diagnósticos estruturados são retornados sem stack traces para a interface; detalhes técnicos seguem para logs.</p>
-<p>A UI consolida análise e execução em **Minificar projeto**. Cada entrada nesse fluxo cria uma tabela local de ajustes temporários; o override de <code>outputMode</code> alcança análise e execução, mas é descartado ao sair. A prévia usa lotes de 10 somente quando há 11 ou mais candidatos e expõe apenas controles de navegação válidos. A execução revalida o fingerprint apresentado antes de qualquer mutação.</p>
+<p>A UI consolida análise e execução em <strong>Minificar projeto</strong>. Cada entrada nesse fluxo cria uma tabela local de ajustes temporários; o override de <code>outputMode</code> alcança análise e execução, mas é descartado ao sair. A prévia usa lotes de 10 somente quando há 11 ou mais candidatos e expõe apenas controles de navegação válidos. A execução revalida o fingerprint apresentado antes de qualquer mutação.</p>
 <h2>Configuração e domínio</h2>
 <p><code>src/configuration</code> lê UTF-8 estrito, aceita exatamente <code>VersaoSchema=2</code> e <code>VersaoSchema=3</code>, detecta chaves duplicadas e rejeita V1, versões desconhecidas e estruturas mistas. V2 conserva a raiz interna <code>&lt;applicationRoot&gt;\_source_versions</code>; V3 acrescenta <code>backupRoot</code>, correspondente a <code>PastaBackups</code>, como caminho externo validado ou <code>null</code> para semântica interna. <code>deriveEffectiveConfiguration()</code> aceita somente o override temporário de <code>outputMode</code>.</p>
 <p>Edições de raiz/tipos/exclusões/perfil e de <code>outputMode</code> preservam o schema carregado. O bridge <code>update-backup-root</code> é a única transição V2→V3: valida o caminho externo, grava atomicamente, relê e comprova que campos não relacionados permaneceram iguais. Limpar a raiz mantém V3 com <code>backupRoot=null</code>; não há migração automática nem downgrade silencioso.</p>
@@ -40,7 +40,7 @@ a { color: #005a9c; }
 <p>A inspeção separa fatos persistidos de observações atuais. Arquivo atual deliberadamente informado passa por prova física, inspeção da Tag e SHA-256 dos bytes completos. A disponibilidade do backup usa <code>backupRoot</code> e <code>backupRelativePath</code> históricos, cruza manifesto e histórico, lê v1 raw ou v2 GZIP pelas primitivas existentes e não consulta <code>PastaBackups</code> atual como fallback.</p>
 <p><code>recoverHistoricalOriginal</code> exige <code>inputHash === backup.originalHash</code>, payload íntegro, pai físico seguro e destino absoluto inexistente. A criação exclusiva reutiliza <code>createNewFileExact</code> e confirma o hash final. Origem e saída históricas são destinos proibidos; nenhum estado, journal ou arquivo atual é modificado. <code>backup.available=false</code> bloqueia com <code>HISTORICAL_BACKUP_UNAVAILABLE</code>.</p>
 <p>O bridge expõe <code>search-history-by-tag</code>, <code>search-history-by-path</code>, <code>inspect-historical-artifact</code> e <code>recover-historical-original</code>. Cada chamada registra no logger técnico existente comando, duração, status, código de bloqueio e metadados compactos; conteúdo de arquivos não é registrado. Falha de logging não altera o contrato funcional nem mascara o diagnóstico original.</p>
-<p><code>src/app/ui.ps1</code> apresenta essas operações no submenu do item principal **Backups e restauração**, sem renumerar o menu. As opções de restauração normal continuam chamando <code>plan-restore</code>/<code>execute-restore</code>; pesquisa por Tag e por caminho conduz a uma inspeção que separa o registro persistido das observações atuais. A recuperação só aparece quando <code>recoveryCapability=true</code>, exige destino explícito inexistente e confirmação numérica, e chama <code>recover-historical-original</code> como exportação separada. Cancelar ou voltar não dispara operação.</p>
+<p><code>src/app/ui.ps1</code> apresenta essas operações no submenu do item principal <strong>Backups e restauração</strong>, sem renumerar o menu. As opções de restauração normal continuam chamando <code>plan-restore</code>/<code>execute-restore</code>; pesquisa por Tag e por caminho conduz a uma inspeção que separa o registro persistido das observações atuais. A recuperação só aparece quando <code>recoveryCapability=true</code>, exige destino explícito inexistente e confirmação numérica, e chama <code>recover-historical-original</code> como exportação separada. Cancelar ou voltar não dispara operação.</p>
 <h2>Restauração manual</h2>
 <p><code>src/restore/index.js</code> combina diretórios internos legados e registros históricos. Quando há histórico, ele define a pasta esperada; uma raiz externa indisponível permanece listada como <code>unavailable</code> e bloqueia sem substituição. O plano cruza histórico, manifesto, <code>artifactId</code>, hash, caminho original, mapeamento de origem e estado; a execução revalida raiz física e payload antes da mutação.</p>
 <p>A restauração <code>.min</code> lê somente a última execução concluída e remove apenas operações <code>create-output</code>. Operações <code>replace-output</code> são registradas como não aplicáveis. Saídas ausentes, alteradas, recusadas, restauradas ou excluídas permanecem rastreadas. O progresso manual é persistido em <code>Dados\Restauracao\restauracao-em-andamento.bkp</code>; um estado incompleto ou <code>recovery-required</code> bloqueia nova mutação.</p>
@@ -61,6 +61,9 @@ a { color: #005a9c; }
 <p>A confirmação da UI carrega a impressão digital SHA-256 do plano mostrado. O bridge refaz a pré-análise imediatamente antes de executar e bloqueia se escopo, hashes, destinos, conflitos ou demais condições confirmáveis divergirem.</p>
 <p>O risco de execução é calculado deterministicamente por modo e perfil antes da confirmação. Destinos <code>.min</code> preexistentes são preservados e ignorados, portanto não elevam o risco V2; escopo de arquivos é metadado separado. Não existe autorização substituta para risco indeterminado.</p>
 <p>Use <code>npm.cmd</code> no PowerShell para evitar bloqueio de <code>npm.ps1</code> pela política de execução.</p>
+<h2>Plataforma suportada</h2>
+<p>A plataforma suportada e testada nesta RC é Windows. A validação usou Windows 11 Pro x64 (arquitetura AMD64/x64), Node.js v24.17.0 e Windows PowerShell 5.1. O produto e os testes exercitam Windows PowerShell 5.1; PowerShell 7/Core não é assumido equivalente automaticamente e não foi validado como substituto. A prova de reparse point no Windows usa <code>fsutil.exe</code>. A instalação autorizada de Node pode usar <code>winget</code>.</p>
+<p>A política de Node exige major mínima 24 e aceita as linhas 24.x e 25.x, com 24 LTS preferida. Não há, nesta RC, validação ou suporte declarado para: versão mínima do Windows, RAM mínima, CPU mínima, espaço em disco mínimo, ARM64, Linux ou macOS. Esses pontos não foram validados e não devem ser assumidos como suportados.</p>
 <h2>UTF-8, qualidade e desenvolvimento</h2>
 <p>Texto humano e artefatos documentais usam UTF-8. <code>scripts/quality/check-encoding.mjs</code> verifica arquivos textuais e sequências de mojibake conhecidas. O projeto usa <code>node:test</code> com fixtures temporárias para configuração, scanner, execução, integridade, observabilidade e restauração.</p>
 <p>O desenvolvimento ocorre diretamente em <code>main</code>, com commits validados e allowlist explícita de arquivos ao preparar um checkpoint. Não use <code>git add .</code>, force-push, fallback silencioso ou exclusão por curingas.</p>
@@ -69,5 +72,12 @@ a { color: #005a9c; }
 <h2>Empacotamento local</h2>
 <p><code>publicar.cmd</code> delega para <code>scripts\release\publicar.ps1</code>. O pipeline valida ambiente, versão <code>package.json</code>, package/lock, dependências, UTF-8, testes e documentação antes de montar uma allowlist em <code>dist\SelfMinifier-&lt;version&gt;</code>. Em seguida valida o conteúdo, cria um ZIP com uma única raiz versionada e grava o SHA-256 correspondente.</p>
 <p>O pacote inclui launcher, manifestos npm, <code>src</code>, <code>resources</code>, modelo de configuração, HTML offline e <code>node_modules</code> de runtime gerado de forma limpa. Exclui testes, especificações, <code>_ias</code>, scripts de desenvolvimento, dados locais, configuração pessoal, backups, <code>node_modules</code> do checkout e <code>dist</code> anterior. O <code>Executar.cmd</code> empacotado é validado em CRLF e respeita a Execution Policy, bloqueando sob <code>Restricted</code> sem bypass. O empacotamento não publica GitHub Release.</p>
+<h2>Dívida futura (não implementada)</h2>
+<p>Os itens a seguir são registrados como planejamento futuro e não estão implementados nesta RC.</p>
+<ul>
+<li>Linux e macOS: prioridade futura Linux, depois macOS se viável. A arquitetura desejada é um núcleo SelfMinifier compartilhado com adaptador por plataforma. Não há implementação nem suporte parcial declarado nesta RC.</li>
+<li>Retenção e limpeza: estudo futuro sobre metadados históricos, backups, logs, relatórios e gestão de espaço. A prioridade de preservação é metadados de proveniência sobre payloads grandes de backup. Não há limpeza automática nesta RC.</li>
+<li>Arquivamento/remoção histórica: se dados históricos ou payload de backup forem arquivados, compactados ou removidos, a pesquisa por SelfMinifier-Tag não deve transformar silenciosamente um artefato conhecido em UNKNOWN. Uma solução futura deve reportar, quando aplicável: artefato existiu, artifactId/SelfMinifier-Tag, execução original, ação de retenção, timestamp da ação, status atual, local do arquivo/ZIP, disponibilidade de recuperação e perda explícita do payload quando removido. Arquiteturas futuras possíveis: (A) preservar o JSON histórico e remover somente o payload grande; (B) arquivar registros históricos completos e deixar catálogo/tombstone; (C) deixar tombstone reduzido em <code>Dados\Historico</code>; (D) catálogo de retenção explícito. Nada de índice persistente, tombstone, formato de arquivo ou fluxo de limpeza é implementado agora.</li>
+</ul>
 </body>
 </html>

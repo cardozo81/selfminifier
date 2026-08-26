@@ -1,4 +1,4 @@
-# Manual Técnico — SelfMinifier
+# Manual Técnico - SelfMinifier
 
 ## Arquitetura implementada
 
@@ -75,6 +75,12 @@ O risco de execução é calculado deterministicamente por modo e perfil antes d
 
 Use `npm.cmd` no PowerShell para evitar bloqueio de `npm.ps1` pela política de execução.
 
+## Plataforma suportada
+
+A plataforma suportada e testada nesta RC é Windows. A validação usou Windows 11 Pro x64 (arquitetura AMD64/x64), Node.js v24.17.0 e Windows PowerShell 5.1. O produto e os testes exercitam Windows PowerShell 5.1; PowerShell 7/Core não é assumido equivalente automaticamente e não foi validado como substituto. A prova de reparse point no Windows usa `fsutil.exe`. A instalação autorizada de Node pode usar `winget`.
+
+A política de Node exige major mínima 24 e aceita as linhas 24.x e 25.x, com 24 LTS preferida. Não há, nesta RC, validação ou suporte declarado para: versão mínima do Windows, RAM mínima, CPU mínima, espaço em disco mínimo, ARM64, Linux ou macOS. Esses pontos não foram validados e não devem ser assumidos como suportados.
+
 ## UTF-8, qualidade e desenvolvimento
 
 Texto humano e artefatos documentais usam UTF-8. `scripts/quality/check-encoding.mjs` verifica arquivos textuais e sequências de mojibake conhecidas. O projeto usa `node:test` com fixtures temporárias para configuração, scanner, execução, integridade, observabilidade e restauração.
@@ -90,3 +96,11 @@ As fontes autoritativas ficam em `Documentacao\Fonte`. Execute `npm.cmd run buil
 `publicar.cmd` delega para `scripts\release\publicar.ps1`. O pipeline valida ambiente, versão `package.json`, package/lock, dependências, UTF-8, testes e documentação antes de montar uma allowlist em `dist\SelfMinifier-<version>`. Em seguida valida o conteúdo, cria um ZIP com uma única raiz versionada e grava o SHA-256 correspondente.
 
 O pacote inclui launcher, manifestos npm, `src`, `resources`, modelo de configuração, HTML offline e `node_modules` de runtime gerado de forma limpa. Exclui testes, especificações, `_ias`, scripts de desenvolvimento, dados locais, configuração pessoal, backups, `node_modules` do checkout e `dist` anterior. O `Executar.cmd` empacotado é validado em CRLF e respeita a Execution Policy, bloqueando sob `Restricted` sem bypass. O empacotamento não publica GitHub Release.
+
+## Dívida futura (não implementada)
+
+Os itens a seguir são registrados como planejamento futuro e não estão implementados nesta RC.
+
+- Linux e macOS: prioridade futura Linux, depois macOS se viável. A arquitetura desejada é um núcleo SelfMinifier compartilhado com adaptador por plataforma. Não há implementação nem suporte parcial declarado nesta RC.
+- Retenção e limpeza: estudo futuro sobre metadados históricos, backups, logs, relatórios e gestão de espaço. A prioridade de preservação é metadados de proveniência sobre payloads grandes de backup. Não há limpeza automática nesta RC.
+- Arquivamento/remoção histórica: se dados históricos ou payload de backup forem arquivados, compactados ou removidos, a pesquisa por SelfMinifier-Tag não deve transformar silenciosamente um artefato conhecido em UNKNOWN. Uma solução futura deve reportar, quando aplicável: artefato existiu, artifactId/SelfMinifier-Tag, execução original, ação de retenção, timestamp da ação, status atual, local do arquivo/ZIP, disponibilidade de recuperação e perda explícita do payload quando removido. Arquiteturas futuras possíveis: (A) preservar o JSON histórico e remover somente o payload grande; (B) arquivar registros históricos completos e deixar catálogo/tombstone; (C) deixar tombstone reduzido em `Dados\Historico`; (D) catálogo de retenção explícito. Nada de índice persistente, tombstone, formato de arquivo ou fluxo de limpeza é implementado agora.

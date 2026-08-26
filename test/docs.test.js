@@ -38,3 +38,17 @@ test('build falha quando uma fonte obrigatória está ausente', async () => {
     await assert.rejects(buildDocumentation({ projectRoot: root }), /ENOENT/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('build representa ênfase **negrito** como strong e não deixa delimitadores visíveis', async () => {
+  const root = await fixture();
+  try {
+    await writeFile(join(root, 'Documentacao', 'Fonte', 'Manual-Usuario', 'README.md'), '# Usuário\n\nTexto **negrito** com `código`.\n\n- **Item em negrito:** detalhe\n', 'utf8');
+    await writeFile(join(root, 'Documentacao', 'Fonte', 'Manual-Tecnico', 'README.md'), '# Técnico\n\n**Destaque** sem delimitador.\n', 'utf8');
+    const outputs = await buildDocumentation({ projectRoot: root });
+    for (const output of outputs) {
+      const html = await readFile(output, 'utf8');
+      assert.match(html, /<strong>(negrito|Destaque)<\/strong>/);
+      assert.doesNotMatch(html, /\*\*/);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
