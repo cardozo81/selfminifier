@@ -43,7 +43,7 @@ test('nomes de artefato derivam da versão e allowlist contém somente runtime n
   assert.match(metadata.zipPath, /SelfMinifier-0\.2\.0\.zip$/);
   const files = await collectAllowedFiles(projectRoot);
   for (const required of ['Executar.cmd', 'Executar.ps1', 'LEIA-ME.txt', 'src/app/ui.ps1', 'resources/runtime-policy.json', 'Configuracao/configuracao.ini.example', 'Documentacao/Gerada/Manual-Usuario/index.html']) assert.ok(files.includes(required));
-  assert.equal(files.some((file) => /^(?:test|Especificacoes|_ias|node_modules|Dados)\//.test(file)), false);
+  assert.equal(files.some((file) => /^(?:test|Especificacoes|_ias|node_modules|Dados|_source_versions)\//.test(file)), false);
   assert.equal(files.includes('Configuracao/configuracao.ini'), false);
   const launcher = await readFile(join(projectRoot, 'Executar.cmd'), 'utf8');
   assert.match(launcher, /%~dp0Executar\.ps1/i);
@@ -192,6 +192,9 @@ test('publicar.cmd prepara dependências somente com confirmação e mantém o l
   assert.doesNotMatch(launcher, /ExecutionPolicy\s+Bypass/i);
   assert.match(launcher, /powershell\.exe\s+-NoProfile\s+-File/i);
   assert.match(launcher, /pause/i);
+  assert.match(launcher, /chcp\s+65001/i);
+  assert.match(launcher, /política de execução/);
+  assert.doesNotMatch(launcher, /pol├¡tica|execu├º├úo/);
   assert.match(await readFile(join(projectRoot, 'scripts', 'release', 'publicar.ps1'), 'utf8'), /npm ci/);
   assert.match(await readFile(join(projectRoot, 'scripts', 'release', 'publicar.ps1'), 'utf8'), /\(s\/N\)/);
 });

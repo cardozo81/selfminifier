@@ -4,7 +4,7 @@ import { TextDecoder } from 'node:util';
 import { pathToFileURL } from 'node:url';
 
 const ROOT = process.cwd();
-const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', 'dist']);
+const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', 'Dados', '_source_versions']);
 const TEXT_EXTENSIONS = new Set([
   '.cmd',
   '.css',
