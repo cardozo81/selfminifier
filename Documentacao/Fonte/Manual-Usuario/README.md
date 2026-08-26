@@ -101,6 +101,18 @@ No modo `.min`, a opção restaura somente a última execução concluída remov
 
 Uma restauração interrompida ou ambígua entra em `recovery-required`. Nesse estado, não force nova minificação ou restauração: preserve os arquivos, consulte os logs e corrija o estado somente por um procedimento comprovado.
 
+## Pesquisa e recuperação histórica
+
+O backend permite pesquisar uma `SelfMinifier-Tag` pelo marcador completo ou pelo `artifactId`, consultar todas as minificações historicamente associadas a um caminho e exibir os metadados registrados: execução, data, versão do SelfMinifier, motor, perfil, modo, caminhos, tamanhos, hashes e referência de backup. A pesquisa não depende da localização atual do arquivo e não considera caminhos como identidade.
+
+Quando um arquivo atual é indicado deliberadamente, sua integridade é observada separadamente: `MATCH` confirma Tag e SHA-256 completos; alterações, Tag divergente, ausente ou inválida e arquivo indisponível são reportados sem inferência. Cópias ou arquivos renomeados com a mesma Tag e os mesmos bytes continuam íntegros.
+
+A disponibilidade da origem histórica usa somente a raiz registrada na execução. Manifestos legados v1 raw e manifestos v2 GZIP são validados, e ausência, corrupção ou raiz indisponível bloqueiam sem procurar na pasta de backups configurada atualmente.
+
+Recuperar a origem histórica cria uma exportação em um caminho absoluto escolhido explicitamente. O destino deve ter pasta física segura e ainda não existir; o SelfMinifier nunca exporta automaticamente sobre a origem ou saída atual. Os bytes exportados devem corresponder ao SHA-256 original. Essa operação é diferente de **Backups e restauração manual**, que repõe arquivos no lugar original. Históricos do modo `.min` continuam pesquisáveis, mas não oferecem recuperação quando registram `backup.available=false`.
+
+A interface final para essas operações ainda não foi implementada; nesta fase os contratos estão disponíveis no backend/bridge para a futura experiência B3-UX.
+
 ## Relatórios e logs
 
 Após análise, execução ou restauração, o SelfMinifier pode gerar relatórios operacionais UTF-8 em `Dados\Relatorios` (TXT e CSV) e logs técnicos UTF-8 em `Dados\Logs`. O menu permite listar e visualizar esses arquivos em modo somente leitura.

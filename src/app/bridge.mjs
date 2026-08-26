@@ -17,6 +17,12 @@ import { createDefaultMinifierRegistry } from '../minifiers/index.js';
 import { createExecutionPlan, executePlan, ExecutionError } from '../execution/index.js';
 import { listArtifacts, readArtifact, writeOperationalReports, writeTechnicalLog } from '../observability/index.mjs';
 import { createBackupRestorePlan, createLastMinRestorePlan, executeRestorePlan, listKnownBackups } from '../restore/index.js';
+import {
+  inspectHistoricalArtifact,
+  recoverHistoricalOriginal,
+  searchHistoryByPath,
+  searchHistoryByTag,
+} from '../history/index.js';
 import { resolveApplicationPaths, resolveApplicationRoot, resolveRuntimePaths } from '../runtime/paths.js';
 import { buildAnalysis } from '../scanner/index.js';
 import { loadApplicationMetadata } from '../runtime/version.js';
@@ -295,6 +301,42 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
   const application = await loadApplicationMetadata(projectRoot);
   if (request.command === 'version') return { ok: true, ...application };
   const persistent = await loadPersistent(projectRoot);
+  if (request.command === 'search-history-by-tag') {
+    try { return { ok: true, result: await searchHistoryByTag({ projectRoot, tag: request.tag ?? request.artifactId }) }; }
+    catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+  }
+  if (request.command === 'search-history-by-path') {
+    try {
+      return {
+        ok: true,
+        result: await searchHistoryByPath({ projectRoot, filePath: request.path, order: request.order ?? 'newest-first' }),
+      };
+    } catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+  }
+  if (request.command === 'inspect-historical-artifact') {
+    try {
+      return {
+        ok: true,
+        result: await inspectHistoricalArtifact({
+          projectRoot,
+          tag: request.tag ?? request.artifactId,
+          currentPath: request.currentPath ?? null,
+        }),
+      };
+    } catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+  }
+  if (request.command === 'recover-historical-original') {
+    try {
+      return {
+        ok: true,
+        result: await recoverHistoricalOriginal({
+          projectRoot,
+          tag: request.tag ?? request.artifactId,
+          destinationPath: request.destinationPath,
+        }),
+      };
+    } catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+  }
   if (request.command === 'update-backup-root') return updateBackupRoot(request, persistent);
   if (request.command === 'list-backups') {
     try { return { ok: true, backups: await listKnownBackups(projectRoot) }; }

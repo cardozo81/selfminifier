@@ -90,7 +90,7 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `src/app/bridge.mjs` | Bridge JSON para resumo, pré-análise, impressão digital do plano confirmado, execução e criação segura da configuração | Configuração, scanner e execução |
+| `src/app/bridge.mjs` | Bridge JSON para configuração, análise, execução, pesquisa/inspeção histórica, exportação segura e restauração | Configuração, scanner, execução, histórico e restauração |
 | `src/app/ui.ps1` | Menu PowerShell consolidado, fluxo **Minificar projeto**, prévia de candidatos, ajustes temporários por fluxo e confirmações numéricas | `src/app/bridge.mjs` |
 | `Executar.ps1` | Bootstrap validado e abertura do menu interativo | `src/bootstrap/cli.mjs`, `src/app/ui.ps1` |
 
@@ -102,6 +102,13 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `test/observability.test.js` | Testes focados de logs, relatórios, CSV, falhas, recuperação e leitura read-only | `src/observability/index.mjs`, bridge |
 | `test/ui.test.js` | Validação textual dos menus, configuração e fluxo principal PowerShell | `src/app/ui.ps1` |
 | `test/ui-workflow.test.js` | Validação executável da paginação da prévia e do ciclo de vida do ajuste temporário B2/B2.1 | `src/app/ui.ps1`, Windows PowerShell |
+
+## Pesquisa e recuperação histórica
+
+| Arquivo | Responsabilidade | Dependências relevantes |
+| --- | --- | --- |
+| `src/history/index.js` | Busca sequencial por Tag/caminho, integridade atual, disponibilidade histórica v1/v2 e exportação exclusiva da origem | Histórico, manifesto, GZIP, segurança física e filesystem exato |
+| `test/b3-a5.test.js` | Cardinalidade, independência de caminho, integridade, disponibilidade, exportação raw/GZIP e regressões A4/restore | Bridge, histórico, execução e restauração |
 
 ## Restauração manual
 

@@ -47,6 +47,17 @@ Uma Tag conhecida só comprova artefato já minificado quando o SHA-256 do arqui
 
 No protocolo write-ahead, caminho e SHA-256 esperado do histórico entram no journal antes da criação exclusiva do registro. Estado e manifesto obrigatórios são comprovados primeiro; o histórico é então gravado e comprovado; somente depois o journal recebe `completed`. Falha anterior à conclusão remove o histórico apenas pelo caminho e hash exatos, e qualquer divergência permanece `recovery-required`. Colisão de `executionId` bloqueia sem sobrescrever o registro existente.
 
+## Pesquisa histórica e recuperação da origem
+
+A pesquisa por `SelfMinifier-Tag` normaliza somente a apresentação do marcador e usa o `artifactId` exato para varrer sequencialmente os registros imutáveis de `Dados\Historico`. Ausência produz `TAG_NOT_FOUND`; mais de um registro autoritativo para a mesma identidade produz `HISTORY_ARTIFACT_ID_CONFLICT` e bloqueia sem selecionar o mais recente.
+
+A consulta por caminho compara `sourcePath` e `outputPath` históricos e retorna todas as ocorrências em ordem determinística explicitada. Caminho é metadado: execuções distintas no mesmo caminho continuam sendo artefatos independentes, cada uma com seu próprio `artifactId`. A pesquisa permanece disponível quando o arquivo atual foi renomeado, movido ou excluído.
+
+A integridade atual é uma observação opcional, separada do fato histórico. Quando um caminho físico é fornecido, a aplicação prova arquivo regular seguro, inspeciona a Tag exata e compara o SHA-256 dos bytes completos com o `outputHash` histórico. Os estados são `MATCH`, `CONTENT_CHANGED`, `TAG_MISMATCH`, `TAG_MISSING`, `TAG_INVALID` e `FILE_UNAVAILABLE`.
+
+A disponibilidade do backup é observada exclusivamente na raiz gravada pelo histórico, sem fallback para `PastaBackups` atual. Histórico, manifesto, caminho relativo, identidade do artefato, hashes e compressão devem concordar. Manifestos v1 leem payload raw; manifestos v2 leem GZIP e comprovam o SHA-256 descompactado. Ausência, raiz indisponível, manifesto inválido, payload ausente, formato não suportado e divergência de hash permanecem estados distintos.
+
+Recuperação histórica é exportação, não restauração. `recoverHistoricalOriginal` exige destino absoluto explícito fora dos caminhos históricos de origem e saída, pai físico seguro e alvo inexistente. A criação é exclusiva, grava os bytes originais exatos e confirma o SHA-256 exportado contra `inputHash` e `backup.originalHash`; contradição bloqueia. O arquivo atual nunca é substituído. Artefato `.min` com `backup.available=false` continua pesquisável, mas retorna `HISTORICAL_BACKUP_UNAVAILABLE` para recuperação.
 ## `BackupESobrescreverOriginais`
 
 O backup guarda somente a fonte não minificada imediatamente antes de sua sobrescrita. Uma versão minificada nunca pode ser usada como backup de fonte.

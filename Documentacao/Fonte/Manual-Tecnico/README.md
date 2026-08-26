@@ -32,6 +32,16 @@ Edições de raiz/tipos/exclusões/perfil e de `outputMode` preservam o schema c
 
 O executor aloca o `artifactId` somente na fase segura de execução, insere a Tag na saída minificada e calcula `outputHash` sobre os bytes finais completos, sem retirar ou normalizar a Tag. `expectedOutputHash`, `minifiedHash`, `outputHash` e `minifiedSha256` recebem o mesmo valor onde aplicáveis. O histórico também conserva os hashes, a raiz efetiva e o caminho relativo do backup, com `compression: gzip` para novos backups e `compression: none` para legados raw. O manifesto continua em `formatVersion: 2` por representar GZIP; estado, journal, journal de restauração e histórico permanecem em `formatVersion: 1`.
 
+## Pesquisa e recuperação histórica
+
+`src/history/index.js` implementa os casos de uso read-only `searchHistoryByTag`, `searchHistoryByPath`, `inspectHistoricalArtifact` e a mutação separada `recoverHistoricalOriginal`. A autoridade continua sendo a varredura sequencial de `Dados\Historico\<executionId>.json`; não existe índice persistente. A busca por caminho ordena explicitamente por data, execução e `artifactId`, sem fabricar revisão ou continuidade de identidade.
+
+A inspeção separa fatos persistidos de observações atuais. Arquivo atual deliberadamente informado passa por prova física, inspeção da Tag e SHA-256 dos bytes completos. A disponibilidade do backup usa `backupRoot` e `backupRelativePath` históricos, cruza manifesto e histórico, lê v1 raw ou v2 GZIP pelas primitivas existentes e não consulta `PastaBackups` atual como fallback.
+
+`recoverHistoricalOriginal` exige `inputHash === backup.originalHash`, payload íntegro, pai físico seguro e destino absoluto inexistente. A criação exclusiva reutiliza `createNewFileExact` e confirma o hash final. Origem e saída históricas são destinos proibidos; nenhum estado, journal ou arquivo atual é modificado. `backup.available=false` bloqueia com `HISTORICAL_BACKUP_UNAVAILABLE`.
+
+O bridge expõe `search-history-by-tag`, `search-history-by-path`, `inspect-historical-artifact` e `recover-historical-original`. A UI PowerShell final permanece fora desta fase.
+
 ## Restauração manual
 
 `src/restore/index.js` combina diretórios internos legados e registros históricos. Quando há histórico, ele define a pasta esperada; uma raiz externa indisponível permanece listada como `unavailable` e bloqueia sem substituição. O plano cruza histórico, manifesto, `artifactId`, hash, caminho original, mapeamento de origem e estado; a execução revalida raiz física e payload antes da mutação.
