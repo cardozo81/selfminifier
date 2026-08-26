@@ -88,30 +88,51 @@ windowsTest('histórico por caminho mostra múltiplos artefatos em ordem determi
   assert.ok(result.calls.some((call) => call.startsWith('inspect-historical-artifact|111111111111111111111111')));
 });
 
-windowsTest('todos os estados de integridade atual têm mensagens distintas e factuais', () => {
-  const expected = new Map([
+windowsTest('todos os estados de integridade atual têm rótulos humanos distintos e detalhes factuais', () => {
+  const labels = new Map([
+    ['MATCH', 'Corresponde ao histórico'],
+    ['CONTENT_CHANGED', 'Conteúdo alterado'],
+    ['TAG_MISMATCH', 'Tag diferente da histórica'],
+    ['TAG_MISSING', 'Tag histórica ausente'],
+    ['TAG_INVALID', 'Tag inválida'],
+    ['FILE_UNAVAILABLE', 'Arquivo atual indisponível'],
+    ['NOT_INSPECTED', 'Ainda não inspecionado'],
+  ]);
+  const details = new Map([
     ['MATCH', 'corresponde exatamente ao artefato histórico'],
     ['CONTENT_CHANGED', 'não corresponde ao hash histórico'],
     ['TAG_MISMATCH', 'contém outra SelfMinifier-Tag'],
     ['TAG_MISSING', 'não contém a SelfMinifier-Tag histórica esperada'],
     ['TAG_INVALID', 'marcador reservado inválido ou inconsistente'],
     ['FILE_UNAVAILABLE', 'artefato histórico existe, mas o arquivo atual não está disponível'],
+    ['NOT_INSPECTED', 'ainda não foi verificada'],
   ]);
-  const messages = new Set();
-  for (const [state, fragment] of expected) {
+  const captured = new Set();
+  for (const [state, label] of labels) {
     const output = outputText(runScenario('integrity', state));
-    assert.match(output, new RegExp(fragment));
+    assert.match(output, new RegExp(label));
+    assert.match(output, new RegExp(details.get(state)));
     if (state === 'CONTENT_CHANGED') {
       assert.match(output, /não determina sua causa/);
       assert.doesNotMatch(output, /malicioso|ataque/i);
     }
-    messages.add(output.match(new RegExp('Integridade atual \\[' + state + '\\]: ([^\\n]+)'))?.[1]);
+    captured.add(output.match(/Integridade atual: ([^\n]+)/)?.[1]);
   }
-  assert.equal(messages.size, expected.size);
+  assert.equal(captured.size, labels.size);
 });
 
-windowsTest('todos os estados de backup são distintos e somente AVAILABLE habilita recuperação', () => {
-  const expected = new Map([
+windowsTest('todos os estados de backup têm rótulos humanos distintos e somente AVAILABLE habilita recuperação', () => {
+  const labels = new Map([
+    ['AVAILABLE', 'Disponível'],
+    ['NOT_AVAILABLE', 'Não disponível'],
+    ['ROOT_UNAVAILABLE', 'Local do backup indisponível'],
+    ['PAYLOAD_MISSING', 'Conteúdo do backup ausente'],
+    ['MANIFEST_MISSING_OR_INVALID', 'Metadados do backup inválidos'],
+    ['HASH_MISMATCH', 'Integridade do backup divergente'],
+    ['UNSUPPORTED_FORMAT', 'Formato não suportado'],
+    ['NOT_INSPECTED', 'Ainda não inspecionado'],
+  ]);
+  const details = new Map([
     ['AVAILABLE', 'disponível e validável'],
     ['NOT_AVAILABLE', 'não possui backup histórico'],
     ['ROOT_UNAVAILABLE', 'local histórico do backup não está acessível'],
@@ -119,12 +140,17 @@ windowsTest('todos os estados de backup são distintos e somente AVAILABLE habil
     ['MANIFEST_MISSING_OR_INVALID', 'metadados de recuperação estão ausentes ou inválidos'],
     ['HASH_MISMATCH', 'não corresponde à prova de integridade histórica'],
     ['UNSUPPORTED_FORMAT', 'formato desse backup histórico não é suportado'],
+    ['NOT_INSPECTED', 'ainda não foi verificada'],
   ]);
-  for (const [state, fragment] of expected) {
+  const captured = new Set();
+  for (const [state, label] of labels) {
     const output = outputText(runScenario('backup-state', state));
-    assert.match(output, new RegExp(fragment));
+    assert.match(output, new RegExp(label));
+    assert.match(output, new RegExp(details.get(state)));
     assert.equal(output.includes('RECOVERY_OPTION_VISIBLE'), state === 'AVAILABLE');
+    captured.add(output.match(/Backup histórico: ([^\n]+)/)?.[1]);
   }
+  assert.equal(captured.size, labels.size);
 });
 
 windowsTest('.min sem backup continua inspecionável e não oferece recuperação falsa', () => {
@@ -165,7 +191,7 @@ windowsTest('restauração normal permanece alcançável e usa a transação exi
   const result = runScenario('normal-restore');
   assert.ok(result.calls.some((call) => call.startsWith('plan-restore|')));
   assert.ok(result.calls.some((call) => call.startsWith('execute-restore|')));
-  assert.match(outputText(result), /Restauração: completed/);
+  assert.match(outputText(result), /Restauração: concluída/);
 });
 
 test('Configuração V2/V3 e apresentação de proveniência A4 permanecem conectadas sem redesenho', async () => {

@@ -193,3 +193,41 @@ windowsTest('formatadores F2 apresentam KB e percentual em pt-BR', () => {
   assert.ok(output.includes('-0,50%'), output);
   assert.ok(output.includes('0,00%'), output);
 });
+
+const LABEL_HARNESS = `
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+. (Join-Path (Get-Location).Path 'src\\app\\ui.ps1')
+$lines = @()
+$lines += Get-CurrentIntegrityLabel 'MATCH'
+$lines += Get-CurrentIntegrityLabel 'NOT_INSPECTED'
+$lines += Get-CurrentIntegrityLabel 'FUTURE_STATE'
+$lines += Get-HistoricalBackupLabel 'AVAILABLE'
+$lines += Get-HistoricalBackupLabel 'NOT_AVAILABLE'
+$lines += Get-CompressionLabel 'gzip'
+$lines += Get-CompressionLabel 'none'
+$lines += Get-CompressionLabel 'zip'
+$lines += Get-RestoreClassificationLabel 'unchanged-minified'
+$lines += Get-RestoreItemStatusLabel 'restored'
+$lines += Get-RestoreResultStatusLabel 'completed-with-skips'
+$lines += Get-RestoreIgnoreReasonLabel 'PREEXISTING_MIN_NOT_RESTORED'
+$lines += Get-BackupStatusLabel 'unavailable'
+$lines -join '|'
+`;
+
+windowsTest('F3 mapeia estados técnicos para rótulos PT-BR com fallback seguro', () => {
+  const output = runPowerShell(LABEL_HARNESS);
+  assert.ok(output.includes('Corresponde ao histórico'), output);
+  assert.ok(output.includes('Ainda não inspecionado'), output);
+  assert.ok(output.includes('FUTURE_STATE'), output);
+  assert.ok(output.includes('Disponível'), output);
+  assert.ok(output.includes('Não disponível'), output);
+  assert.ok(output.includes('GZIP (compactado)'), output);
+  assert.ok(output.includes('Nenhum'), output);
+  assert.ok(output.includes('zip'), output);
+  assert.ok(output.includes('Minificado inalterado'), output);
+  assert.ok(output.includes('restaurado'), output);
+  assert.ok(output.includes('concluída com itens ignorados'), output);
+  assert.ok(output.includes('saída .min preexistente não será restaurada'), output);
+  assert.ok(output.includes('indisponível'), output);
+});

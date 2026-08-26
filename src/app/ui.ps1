@@ -74,8 +74,8 @@ function Invoke-RestoreFlow {
     $response = Invoke-SelfMinifierBridge $request
     if (-not $response.ok) { Show-Mensagem "Restauração bloqueada: $($response.diagnostic.message)" Red; return }
     Show-Mensagem "`nPlano de restauração: $($response.plan.sourceExecutionId)" Cyan
-    foreach ($item in $response.plan.items) { Show-Mensagem "- $($item.classification): $($item.destinationPath)" $(if ($item.requiresChangedConfirmation) { 'Yellow' } else { 'White' }) }
-    foreach ($item in $response.plan.ignored) { Show-Mensagem "- não será alterado: $($item.normalizedPath) ($($item.reason))" Gray }
+    foreach ($item in $response.plan.items) { Show-Mensagem "- $(Get-RestoreClassificationLabel $item.classification): $($item.destinationPath)" $(if ($item.requiresChangedConfirmation) { 'Yellow' } else { 'White' }) }
+    foreach ($item in $response.plan.ignored) { Show-Mensagem "- não será alterado: $($item.normalizedPath) ($(Get-RestoreIgnoreReasonLabel $item.reason))" Gray }
     if (-not (Confirmar-Acao 'Confirmar a restauração do escopo exibido')) { Show-Mensagem 'Restauração cancelada; nenhum arquivo foi alterado.' Yellow; return }
     $confirmChanged = $false
     if (($response.plan.items | Where-Object { $_.requiresChangedConfirmation }).Count -gt 0) {
@@ -85,8 +85,8 @@ function Invoke-RestoreFlow {
     if ($BackupDirectory) { $execute.backupDirectory = $BackupDirectory }
     $result = Invoke-SelfMinifierBridge $execute
     if (-not $result.ok) { Show-Mensagem "Falha de restauração: $($result.diagnostic.message)" Red; return }
-    foreach ($item in $result.result.items) { Show-Mensagem "- $($item.status): $($item.path)" $(if ($item.status -in @('restored', 'deleted-min', 'already-absent')) { 'Green' } else { 'Yellow' }) }
-    Show-Mensagem "Restauração: $($result.result.status)" $(if ($result.result.status -eq 'completed') { 'Green' } else { 'Yellow' })
+    foreach ($item in $result.result.items) { Show-Mensagem "- $(Get-RestoreItemStatusLabel $item.status): $($item.path)" $(if ($item.status -in @('restored', 'deleted-min', 'already-absent')) { 'Green' } else { 'Yellow' }) }
+    Show-Mensagem "Restauração: $(Get-RestoreResultStatusLabel $result.result.status)" $(if ($result.result.status -eq 'completed') { 'Green' } else { 'Yellow' })
 }
 
 function Get-HistoryErrorMessage {
@@ -141,17 +141,111 @@ function Get-HistoricalBackupPresentation {
     }
 }
 
+function Get-CurrentIntegrityLabel {
+    param([string]$State)
+    switch ($State) {
+        'MATCH' { return 'Corresponde ao histórico' }
+        'CONTENT_CHANGED' { return 'Conteúdo alterado' }
+        'TAG_MISMATCH' { return 'Tag diferente da histórica' }
+        'TAG_MISSING' { return 'Tag histórica ausente' }
+        'TAG_INVALID' { return 'Tag inválida' }
+        'FILE_UNAVAILABLE' { return 'Arquivo atual indisponível' }
+        'NOT_INSPECTED' { return 'Ainda não inspecionado' }
+        default { return $State }
+    }
+}
+
+function Get-HistoricalBackupLabel {
+    param([string]$State)
+    switch ($State) {
+        'AVAILABLE' { return 'Disponível' }
+        'NOT_AVAILABLE' { return 'Não disponível' }
+        'ROOT_UNAVAILABLE' { return 'Local do backup indisponível' }
+        'PAYLOAD_MISSING' { return 'Conteúdo do backup ausente' }
+        'MANIFEST_MISSING_OR_INVALID' { return 'Metadados do backup inválidos' }
+        'HASH_MISMATCH' { return 'Integridade do backup divergente' }
+        'UNSUPPORTED_FORMAT' { return 'Formato não suportado' }
+        'NOT_INSPECTED' { return 'Ainda não inspecionado' }
+        default { return $State }
+    }
+}
+
+function Get-CompressionLabel {
+    param([string]$Value)
+    switch ($Value) {
+        'gzip' { return 'GZIP (compactado)' }
+        'none' { return 'Nenhum' }
+        default { return $Value }
+    }
+}
+
+function Get-RestoreClassificationLabel {
+    param([string]$Value)
+    switch ($Value) {
+        'missing-current' { return 'Arquivo atual ausente' }
+        'unchanged-minified' { return 'Minificado inalterado' }
+        'changed-after-minification' { return 'Alterado após a minificação' }
+        'already-absent' { return 'Saída já ausente' }
+        'eligible-delete' { return 'Elegível para remoção' }
+        'changed-after-creation' { return 'Alterado após a criação' }
+        default { return $Value }
+    }
+}
+
+function Get-RestoreItemStatusLabel {
+    param([string]$Value)
+    switch ($Value) {
+        'restored' { return 'restaurado' }
+        'deleted-min' { return 'saída .min removida' }
+        'already-absent' { return 'já estava ausente' }
+        'skipped-by-user' { return 'ignorado pelo usuário' }
+        default { return $Value }
+    }
+}
+
+function Get-RestoreResultStatusLabel {
+    param([string]$Value)
+    switch ($Value) {
+        'completed' { return 'concluída' }
+        'completed-with-skips' { return 'concluída com itens ignorados' }
+        'rolled-back' { return 'revertida' }
+        'recovery-required' { return 'recuperação necessária' }
+        'cancelled' { return 'cancelada' }
+        default { return $Value }
+    }
+}
+
+function Get-RestoreIgnoreReasonLabel {
+    param([string]$Value)
+    switch ($Value) {
+        'PREEXISTING_MIN_NOT_RESTORED' { return 'saída .min preexistente não será restaurada' }
+        default { return $Value }
+    }
+}
+
+function Get-BackupStatusLabel {
+    param([string]$Value)
+    switch ($Value) {
+        'valid' { return 'válido' }
+        'invalid' { return 'inválido' }
+        'unavailable' { return 'indisponível' }
+        default { return $Value }
+    }
+}
+
 function Show-CurrentIntegrityObservation {
     param($Observation)
     $state = if ($Observation -and $Observation.state) { $Observation.state } else { 'NOT_INSPECTED' }
-    Show-Mensagem "Integridade atual [$state]: $(Get-CurrentIntegrityPresentation $state)" $(if ($state -eq 'MATCH') { 'Green' } elseif ($state -eq 'NOT_INSPECTED' -or $state -eq 'FILE_UNAVAILABLE') { 'Yellow' } else { 'Red' })
+    Show-Mensagem "Integridade atual: $(Get-CurrentIntegrityLabel $state)" $(if ($state -eq 'MATCH') { 'Green' } elseif ($state -eq 'NOT_INSPECTED' -or $state -eq 'FILE_UNAVAILABLE') { 'Yellow' } else { 'Red' })
+    Show-Mensagem (Get-CurrentIntegrityPresentation $state) Gray
     if ($Observation -and $Observation.path) { Write-Host "Arquivo inspecionado: $($Observation.path)" }
 }
 
 function Show-HistoricalBackupObservation {
     param($Observation)
     $state = if ($Observation -and $Observation.state) { $Observation.state } else { 'NOT_INSPECTED' }
-    Show-Mensagem "Backup histórico [$state]: $(Get-HistoricalBackupPresentation $state)" $(if ($state -eq 'AVAILABLE') { 'Green' } elseif ($state -eq 'NOT_INSPECTED' -or $state -eq 'NOT_AVAILABLE') { 'Yellow' } else { 'Red' })
+    Show-Mensagem "Backup histórico: $(Get-HistoricalBackupLabel $state)" $(if ($state -eq 'AVAILABLE') { 'Green' } elseif ($state -eq 'NOT_INSPECTED' -or $state -eq 'NOT_AVAILABLE') { 'Yellow' } else { 'Red' })
+    Show-Mensagem (Get-HistoricalBackupPresentation $state) Gray
 }
 
 function Show-HistoricalArtifactSummary {
@@ -165,13 +259,13 @@ function Show-HistoricalArtifactSummary {
     Write-Host "Versão do SelfMinifier: $($historical.meminifyVersion)"
     Write-Host "Origem histórica: $($historical.sourcePath)"
     Write-Host "Saída histórica: $($historical.outputPath)"
-    Write-Host "Modo de saída: $($historical.outputMode)"
+    Write-Host "Modo de saída: $(Get-ModoSaidaDescricao $historical.outputMode)"
     if ($historical.engine) { Write-Host "Engine: $($historical.engine) $($historical.engineVersion)" }
-    if ($historical.profile) { Write-Host "Perfil: $($historical.profile)" }
+    if ($historical.profile) { Write-Host "Perfil: $(Get-PerfilDescricao $historical.profile)" }
     Write-Host 'Detalhes técnicos:'
     Write-Host "  SHA-256 da origem: $($historical.inputHash)"
     Write-Host "  SHA-256 da saída final: $($historical.outputHash)"
-    if ($historical.backup -and $historical.backup.compression) { Write-Host "  Tipo de backup: $($historical.backup.compression)" }
+    if ($historical.backup -and $historical.backup.compression) { Write-Host "  Tipo de backup: $(Get-CompressionLabel $historical.backup.compression)" }
     if ($historical.backup -and $historical.backup.backupRoot) { Write-Host "  Local histórico do backup: $($historical.backup.backupRoot)" }
     Write-Host ''
     Show-Mensagem 'ESTADO VERIFICADO AGORA' Cyan
@@ -286,7 +380,7 @@ function Invoke-KnownBackupRestoreSelection {
     for ($index = 0; $index -lt $known.Count; $index++) {
         $item = $known[$index]
         $shownPath = if ($item.expectedPath) { $item.expectedPath } else { $item.directory }
-        Write-Host "$($index + 1). $($item.executionId) [$($item.status)] - $shownPath"
+        Write-Host "$($index + 1). $($item.executionId) [$(Get-BackupStatusLabel $item.status)] - $shownPath"
     }
     $selected = (Read-Host 'Número; Enter cancela').Trim()
     $number = 0
@@ -917,7 +1011,7 @@ function Show-CurrentConfiguration {
     Show-Mensagem $config.projectRoot White
     Show-Mensagem "Tipos de arquivo (TiposArquivo): $(Get-TiposArquivoDescricao $config.fileTypes)" Cyan
     Show-Mensagem "Motor (Motor): $($config.engine)" Cyan
-    Show-Mensagem "Perfil (Perfil): $($config.profile)" Cyan
+    Show-Mensagem "Perfil (Perfil): $(Get-PerfilDescricao $config.profile)" Cyan
     Show-Mensagem 'Comportamento de saída (ModoSaida):' Cyan
     Show-Mensagem (Get-ModoSaidaDescricao $config.outputMode) White
     Show-Mensagem 'Armazenamento de backups:' Cyan
