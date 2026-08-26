@@ -169,3 +169,27 @@ windowsTest('fluxo mantém análise, fingerprint e ajuste temporário até a exe
   assert.equal(result.executeMode, 'BackupESobrescreverOriginais');
   assert.equal(result.executeFingerprint, 'fingerprint-fixo');
 });
+
+const FORMAT_HARNESS = `
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+. (Join-Path (Get-Location).Path 'src\\app\\ui.ps1')
+$lines = @()
+$lines += Format-Kilobytes 0
+$lines += Format-Kilobytes 760422
+$lines += Format-Kilobytes (-1200)
+$lines += Format-ReductionPercent 31.15
+$lines += Format-ReductionPercent (-0.5)
+$lines += Format-ReductionPercent 0
+$lines -join '|'
+`;
+
+windowsTest('formatadores F2 apresentam KB e percentual em pt-BR', () => {
+  const output = runPowerShell(FORMAT_HARNESS);
+  assert.ok(output.includes('0 KB'), output);
+  assert.ok(output.includes('742,6 KB'), output);
+  assert.ok(output.includes('-1,2 KB'), output);
+  assert.ok(output.includes('31,15%'), output);
+  assert.ok(output.includes('-0,50%'), output);
+  assert.ok(output.includes('0,00%'), output);
+});

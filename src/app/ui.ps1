@@ -39,10 +39,16 @@ function Confirmar-Acao {
 
 function Format-Kilobytes {
     param([long]$Bytes)
-    if ($Bytes -le 0) { return '0 KB' }
+    if ($Bytes -eq 0) { return '0 KB' }
     $kb = [math]::Round($Bytes / 1KB, 1)
     $text = $kb.ToString('0.0', [System.Globalization.CultureInfo]::InvariantCulture)
     return "$($text.Replace('.', ',')) KB"
+}
+
+function Format-ReductionPercent {
+    param([double]$Value)
+    $text = $Value.ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture)
+    return "$($text.Replace('.', ','))%"
 }
 
 
@@ -1093,6 +1099,10 @@ function Invoke-ScanAnalysis {
                 Show-Mensagem "Planejados: $($execution.result.counts.planned)" White
                 Show-Mensagem "Processados com sucesso: $($execution.result.counts.createdSuccessfully)" Green
                 Show-Mensagem "Conflitos .min preservados: $($execution.result.counts.skippedConflicts)" $(if ($execution.result.counts.skippedConflicts -gt 0) { 'Yellow' } else { 'Gray' })
+                Show-Mensagem "Arquivos minificados: $($execution.result.summary.processedCount)" White
+                Show-Mensagem "Tamanho antes: $(Format-Kilobytes $execution.result.summary.originalBytes)" White
+                Show-Mensagem "Tamanho após: $(Format-Kilobytes $execution.result.summary.finalBytes)" White
+                Show-Mensagem "Redução: $(Format-Kilobytes $execution.result.summary.reductionBytes) ($(Format-ReductionPercent $execution.result.summary.reductionPercent))" White
                 if ($execution.result.noFilesChanged) {
                     Show-Mensagem 'Nenhum arquivo foi alterado.' Yellow
                 } else {

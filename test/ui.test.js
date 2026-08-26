@@ -191,3 +191,17 @@ test('UI F1 mostra candidatos e tamanho total em KB', async () => {
   assert.match(source, /1KB/);
   assert.doesNotMatch(source, /Arquivos elegíveis/);
 });
+
+test('UI F2 mostra resumo consolidado de redução a partir do resultado', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  assert.match(source, /Arquivos minificados:/);
+  assert.match(source, /Tamanho antes:/);
+  assert.match(source, /Tamanho após:/);
+  assert.match(source, /Redução:/);
+  assert.match(source, /function Format-ReductionPercent/);
+  assert.match(source, /\$execution\.result\.summary\.processedCount/);
+  assert.match(source, /\$execution\.result\.summary\.originalBytes/);
+  assert.match(source, /\$execution\.result\.summary\.finalBytes/);
+  assert.match(source, /\$execution\.result\.summary\.reductionBytes/);
+  assert.match(source, /\$execution\.result\.summary\.reductionPercent/);
+});

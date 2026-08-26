@@ -89,3 +89,24 @@ test('listagem e leitura são read-only e diretórios ausentes são criados apen
     assert.deepEqual(await readdir(root), []);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('relatório TXT usa o resumo autoritativo de redução', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-report-summary-'));
+  try {
+    const result = await writeOperationalReports({
+      projectRoot: root,
+      plan: plan(root),
+      result: {
+        items: [{ id: 'item-001', status: 'confirmed' }],
+        summary: { processedCount: 1, originalBytes: 1000, finalBytes: 700, reductionBytes: 300, reductionPercent: 30 },
+      },
+      resultStatus: 'completed',
+    });
+    const text = await readFile(result.txtPath, 'utf8');
+    assert.match(text, /Minificados: 1/);
+    assert.match(text, /Tamanho original \(bytes\): 1000/);
+    assert.match(text, /Tamanho final \(bytes\): 700/);
+    assert.match(text, /Redução \(bytes\): 300/);
+    assert.match(text, /Redução \(%\): 30\.00/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

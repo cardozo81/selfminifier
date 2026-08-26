@@ -1,5 +1,9 @@
 # Histórico de alterações
 
+## Não lançado
+
+- Resumo consolidado de redução pós-minificação (F2): após a execução, a interface e o relatório TXT apresentam a quantidade de arquivos minificados, o tamanho antes, o tamanho após e a redução em bytes e percentual, calculados uma única vez no resultado estruturado da execução e restritos aos arquivos efetivamente minificados com sucesso.
+
 ## Versões
 
 ### 0.2.0-rc.1

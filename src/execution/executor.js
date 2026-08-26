@@ -326,6 +326,13 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
         skippedConflicts: plan.conflicts.length,
         failed: 0,
       },
+      summary: {
+        processedCount: 0,
+        originalBytes: 0,
+        finalBytes: 0,
+        reductionBytes: 0,
+        reductionPercent: 0,
+      },
       noFilesChanged: true,
       journalRecorded: false,
       manifestPath: null,
@@ -342,6 +349,10 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
   await persistJournal(journalPath, journal);
   journal.status = 'prepared';
   await persistJournal(journalPath, journal);
+
+  let summaryProcessedCount = 0;
+  let summaryOriginalBytes = 0;
+  let summaryFinalBytes = 0;
 
   try {
     journal.status = 'running';
@@ -401,6 +412,10 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       if (!output.exists || output.hash !== outputHash) throw new ExecutionError('OUTPUT_HASH_MISMATCH', `A saída mudou antes da confirmação: ${item.destinationPath}.`);
       journalItem.status = 'confirmed';
       await persistJournal(journalPath, journal);
+
+      summaryProcessedCount += 1;
+      summaryOriginalBytes += item.sourceSize;
+      summaryFinalBytes += outputSize;
 
       const updated = upsertStateRecord(workingState, plan, item, journalItem.artifactId, outputHash, outputSize);
       workingState.records = updated.records;
@@ -470,6 +485,14 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
 
     journal.status = 'completed';
     await persistJournal(journalPath, journal);
+    const reductionBytes = summaryOriginalBytes - summaryFinalBytes;
+    const summary = {
+      processedCount: summaryProcessedCount,
+      originalBytes: summaryOriginalBytes,
+      finalBytes: summaryFinalBytes,
+      reductionBytes,
+      reductionPercent: summaryOriginalBytes > 0 ? (reductionBytes / summaryOriginalBytes) * 100 : 0,
+    };
     return {
       status: 'completed',
       executionId: plan.executionId,
@@ -482,6 +505,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
         skippedConflicts: plan.conflictPolicy === 'skip-existing' ? plan.conflicts.length : 0,
         failed: 0,
       },
+      summary,
       noFilesChanged: journal.items.length === 0,
       journalRecorded: true,
       manifestPath,

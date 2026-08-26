@@ -69,13 +69,15 @@ function rowsFrom({ plan, result = null, status = null, durationMs = null, minif
   return rows;
 }
 
-function reportText({ plan, rows, resultStatus, durationMs, applicationVersion }) {
+function reportText({ plan, rows, resultStatus, durationMs, applicationVersion, summary = null }) {
   const minified = rows.filter((row) => row.status === 'minificado');
   const ignored = rows.filter((row) => row.status === 'ignorado');
   const errors = (plan.diagnostics?.errors?.length ?? 0) + (plan.diagnostics?.blockers?.length ?? 0);
-  const original = rows.reduce((sum, row) => sum + (Number.isFinite(row.tamanhoOriginal) ? row.tamanhoOriginal : 0), 0);
-  const final = rows.reduce((sum, row) => sum + (Number.isFinite(row.tamanhoFinal) ? row.tamanhoFinal : 0), 0);
-  const red = reduction(original, final);
+  const hasSummary = summary !== null;
+  const original = hasSummary ? summary.originalBytes : rows.reduce((sum, row) => sum + (Number.isFinite(row.tamanhoOriginal) ? row.tamanhoOriginal : 0), 0);
+  const final = hasSummary ? summary.finalBytes : rows.reduce((sum, row) => sum + (Number.isFinite(row.tamanhoFinal) ? row.tamanhoFinal : 0), 0);
+  const processedCount = hasSummary ? summary.processedCount : minified.length;
+  const red = hasSummary ? { bytes: summary.reductionBytes, percentage: summary.reductionPercent } : reduction(original, final);
   const lines = [
     'Relatório operacional do SelfMinifier',
     `Versão do SelfMinifier: ${applicationVersion ?? ''}`,
@@ -83,7 +85,7 @@ function reportText({ plan, rows, resultStatus, durationMs, applicationVersion }
     `ID da execução: ${plan.executionId}`,
     `Arquivos encontrados: ${rows.length}`,
     `Elegíveis: ${plan.items?.length ?? 0}`,
-    `Minificados: ${minified.length}`,
+    `Minificados: ${processedCount}`,
     `Ignorados: ${ignored.length}`,
     `Erros/bloqueios: ${errors}`,
     `JavaScript: ${rows.filter((row) => row.tipo === 'javascript').length}`,
@@ -128,7 +130,7 @@ export async function writeOperationalReports({ projectRoot, plan, result = null
   const txtPath = await uniquePath(directory, 'execucao', 'txt', fileStamp);
   const csvPath = await uniquePath(directory, 'execucao', 'csv', fileStamp);
   await import('node:fs/promises').then(({ writeFile }) => Promise.all([
-    writeFile(txtPath, reportText({ plan, rows, resultStatus, durationMs, applicationVersion }), 'utf8'),
+    writeFile(txtPath, reportText({ plan, rows, resultStatus, durationMs, applicationVersion, summary: result?.summary ?? null }), 'utf8'),
     writeFile(csvPath, reportCsv(rows), 'utf8'),
   ]));
   return { txtPath, csvPath, rows };

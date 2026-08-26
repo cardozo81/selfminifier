@@ -133,6 +133,13 @@ windowsTest('V2 executa somente candidatos planejados e preserva .min preexisten
       skippedConflicts: 1,
       failed: 0,
     });
+    assert.equal(executed.result.summary.processedCount, 1);
+    const appOriginalBytes = (await lstat(app)).size;
+    const appFinalBytes = (await lstat(appMin)).size;
+    assert.equal(executed.result.summary.originalBytes, appOriginalBytes);
+    assert.equal(executed.result.summary.finalBytes, appFinalBytes);
+    assert.equal(executed.result.summary.reductionBytes, appOriginalBytes - appFinalBytes);
+    assert.equal(executed.result.summary.reductionPercent, ((appOriginalBytes - appFinalBytes) / appOriginalBytes) * 100);
     assert.equal(await exists(appMin), true);
     assert.equal(await readFile(cssMin, 'utf8'), '/* saída preexistente */\n');
 
@@ -148,6 +155,61 @@ windowsTest('V2 executa somente candidatos planejados e preserva .min preexisten
     assert.equal(state.records[0].outputPath, appMin);
   } finally {
     await chmod(readonly, 0o666).catch(() => {});
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('F2 resumo agrega somente candidatos minificados com sucesso', async () => {
+  const { root, projectRoot } = await bridgeFixture({ fileTypes: 'JavaScript' });
+  try {
+    const a = join(projectRoot, 'a.js');
+    const b = join(projectRoot, 'b.js');
+    await writeFile(a, 'const primeiro = 1;\n', 'utf8');
+    await writeFile(b, 'const segundo = 2;\n', 'utf8');
+    const analyzed = await runBridgeRequest({ command: 'scan-analysis' }, { projectRoot: root });
+    assert.equal(analyzed.ok, true);
+    assert.equal(analyzed.analysis.execution.items.length, 2);
+    const executed = await runBridgeRequest({
+      command: 'execute',
+      confirmed: true,
+      confirmationFingerprint: analyzed.analysis.execution.confirmationFingerprint,
+    }, { projectRoot: root });
+    assert.equal(executed.ok, true);
+    assert.equal(executed.result.status, 'completed');
+    const originalBytes = (await lstat(a)).size + (await lstat(b)).size;
+    const finalBytes = (await lstat(join(projectRoot, 'a.min.js'))).size + (await lstat(join(projectRoot, 'b.min.js'))).size;
+    assert.equal(executed.result.summary.processedCount, 2);
+    assert.equal(executed.result.summary.originalBytes, originalBytes);
+    assert.equal(executed.result.summary.finalBytes, finalBytes);
+    assert.equal(executed.result.summary.reductionBytes, originalBytes - finalBytes);
+    assert.equal(executed.result.summary.reductionPercent, ((originalBytes - finalBytes) / originalBytes) * 100);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+windowsTest('F2 resumo retorna zeros quando nenhum arquivo é minificado', async () => {
+  const { root, projectRoot } = await bridgeFixture({ fileTypes: 'JavaScript', ignoredFiles: ['app.js'] });
+  try {
+    await writeFile(join(projectRoot, 'app.js'), 'const app = 1;\n', 'utf8');
+    const analyzed = await runBridgeRequest({ command: 'scan-analysis' }, { projectRoot: root });
+    assert.equal(analyzed.ok, true);
+    assert.equal(analyzed.analysis.execution.items.length, 0);
+    const executed = await runBridgeRequest({
+      command: 'execute',
+      confirmed: true,
+      confirmationFingerprint: analyzed.analysis.execution.confirmationFingerprint,
+    }, { projectRoot: root });
+    assert.equal(executed.ok, true);
+    assert.equal(executed.result.status, 'completed');
+    assert.deepEqual(executed.result.summary, {
+      processedCount: 0,
+      originalBytes: 0,
+      finalBytes: 0,
+      reductionBytes: 0,
+      reductionPercent: 0,
+    });
+  } finally {
     await rm(root, { recursive: true, force: true });
   }
 });

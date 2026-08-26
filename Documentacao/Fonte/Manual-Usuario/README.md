@@ -79,6 +79,8 @@ Escolha **Minificar projeto** para ver a raiz do projeto, os tipos efetivos, o p
 
 **Iniciar minificação** reutiliza a execução V2 validada, que refaz a pré-análise e valida a impressão digital imediatamente antes de escrever. Se o projeto mudou após a análise, a execução é bloqueada e o usuário deve analisar novamente.
 
+Ao concluir, a interface apresenta o resumo consolidado dos arquivos efetivamente minificados: quantidade, tamanho antes, tamanho após e redução em KB e percentual. A redução pode ser negativa quando a saída final for maior que a origem; isso não é tratado como falha e não existe limiar mínimo de redução.
+
 Cada nova saída contém uma `SelfMinifier-Tag` ligada à identidade histórica do artefato. A Tag sozinha não comprova integridade: o SelfMinifier também compara o SHA-256 do arquivo completo. Uma saída renomeada ou copiada sem alterações continua reconhecida como já minificada. Tag conhecida com conteúdo alterado, Tag desconhecida, inválida ou repetida é reportada e não é minificada automaticamente.
 
 Se não houver arquivos a minificar ou se houver bloqueios, a interface explica o resultado e não oferece minificação; nenhum arquivo é alterado.
