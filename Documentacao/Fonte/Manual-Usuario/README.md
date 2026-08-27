@@ -101,7 +101,7 @@ Se um destino `.min` já existir, ele é listado, preservado e ignorado. A execu
 
 ## Backups e restauração manual
 
-No modo de sobrescrita, a restauração combina backups internos legados com a proveniência persistida em `Dados\Historico`. A raiz registrada na execução é a autoridade, mesmo depois de a configuração atual mudar. Se uma raiz externa histórica estiver indisponível, a execução continua visível com o caminho esperado e a restauração é bloqueada; nunca há fallback para a raiz atual ou para `_source_versions`. Manifesto, histórico, cópia, hashes, caminhos, identidade física e estado técnico são validados antes de formar um plano.
+No modo de sobrescrita, a restauração combina backups internos legados com a proveniência persistida em `Dados\Historico`. A lista inicial mostra candidatos descobertos como **aguarda validação após seleção**: ela não declara que o backup está íntegro ou restaurável. Ao selecionar um candidato, o SelfMinifier valida manifesto, histórico, cópia, hashes, caminhos, identidade física e estado técnico antes de formar um plano. A raiz registrada na execução é a autoridade, mesmo depois de a configuração atual mudar; nunca há fallback para a raiz atual ou para `_source_versions`.
 
 Se o arquivo atual ainda corresponde ao hash minificado registrado, basta a confirmação normal. Se foi alterado ou está ausente, há uma confirmação adicional; recusá-la preserva esse item. O arquivo minificado atual não recebe backup durante a restauração.
 

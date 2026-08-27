@@ -221,7 +221,7 @@ test('mudança da configuração não muda a raiz histórica usada por descobert
     await runBridgeRequest({ command: 'update-backup-root', backupRoot: paths.externalB, confirmed: true }, { projectRoot: paths.root });
 
     const item = (await listKnownBackups(paths.root)).find((candidate) => candidate.executionId === executionId);
-    assert.equal(item.status, 'valid');
+    assert.equal(item.status, 'unverified');
     assert.equal(item.directory, join(paths.externalA, executionId));
     const plan = await createBackupRestorePlan({ projectRoot: paths.root, backupDirectory: item.directory });
     assert.equal(plan.backupRoot, normalize(paths.externalA));
@@ -238,8 +238,8 @@ test('raiz histórica externa indisponível permanece visível e bloqueia sem fa
     await rm(paths.externalA, { recursive: true, force: true });
 
     const item = (await listKnownBackups(paths.root)).find((candidate) => candidate.executionId === executionId);
-    assert.equal(item.status, 'unavailable');
-    assert.equal(item.expectedPath, join(paths.externalA, executionId));
+    assert.equal(item.status, 'unverified');
+    assert.equal(item.directory, join(paths.externalA, executionId));
     await assert.rejects(
       createBackupRestorePlan({ projectRoot: paths.root, backupDirectory: join(paths.externalA, executionId) }),
       (error) => error.code === 'HISTORICAL_BACKUP_ROOT_UNAVAILABLE',
@@ -254,7 +254,7 @@ test('backup interno V2 legado permanece descobrível e restaurável', async () 
     const executionId = 'b3-a2-legacy-internal';
     await analyzeAndExecute(paths.root, executionId);
     const item = (await listKnownBackups(paths.root)).find((candidate) => candidate.executionId === executionId);
-    assert.equal(item.status, 'valid');
+    assert.equal(item.status, 'unverified');
     assert.equal(item.directory, join(paths.root, '_source_versions', executionId));
     const plan = await createBackupRestorePlan({ projectRoot: paths.root, backupDirectory: item.directory });
     assert.equal(plan.backupRoot, join(paths.root, '_source_versions'));

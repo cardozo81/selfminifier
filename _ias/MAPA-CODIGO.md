@@ -114,8 +114,8 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `src/restore/index.js` | Planos imutáveis e execução segura de restauração por backup ou última execução `.min` | Manifesto, estado, journal, SHA-256 e filesystem transacional |
-| `test/restore.test.js` | Testes temporários de integridade, confirmações, `.min`, falha parcial e cancelamento | Bridge e núcleo de restauração |
+| `src/restore/index.js` | Contexto histórico efêmero para descoberta leve, planos imutáveis e execução segura de restauração por backup ou última execução `.min` | Histórico, manifesto, estado, journal, SHA-256 e filesystem transacional |
+| `test/restore.test.js` | Testes de listagem leve, integridade, confirmações, `.min`, falha parcial e cancelamento | Bridge e núcleo de restauração |
 | `src/runtime/paths.js` | Inclui o caminho técnico do journal de restauração manual | Node.js `path` |
 
 ## Documentação offline

@@ -88,33 +88,18 @@ DT-ME — Engine compatibility
 
 Nenhum desses pontos deve ser preenchido com valor inventado; pertencem à futura fase de definição de requisitos.
 
-## Dívida técnica de desempenho — listagem de backups (DT-BL)
+## Dívida técnica de desempenho — listagem de backups (DT-BL) — implementada
 
-A listagem de backups conhecidos é correta e fail-closed, mas possui custo de desempenho diagnosticado pelo H1-P1. Trata-se de dívida arquitetural de desempenho/UX, não de defeito de integridade, e não bloqueia o `0.2.0` estável.
+O diagnóstico H1-P1 encontrou validação profunda antes da seleção: aproximadamente 5 s para um backup com dois arquivos e 19 s para três backups, varreduras históricas de estilo O(N²) e provas físicas/reparse repetidas por candidato.
 
-### Estado atual
+O DT-BL foi implementado sem alterar proveniência, formato ou autoridade: a listagem cria uma fotografia histórica validada, imutável e somente em memória por operação. Ela descobre candidatos e deriva sua autoridade do snapshot; não chama o planejador de restauração, não abre manifesto/estado/payload, não calcula SHA de payload ou destino, não descompacta GZIP e não classifica o arquivo atual. Itens apenas descobertos retornam como `unverified`; uma proveniência histórica estruturalmente inválida continua bloqueada.
 
-- O comportamento atual é correto e fail-closed.
-- Listar backups conhecidos executa hoje validação profunda do plano de restauração antes da seleção do backup.
-- O H1-P1 mediu aproximadamente 5 s para um backup válido com dois arquivos minúsculos e aproximadamente 19 s para três backups, no ambiente medido.
-- Varreduras históricas repetidas criam escalonamento de estilo O(N²) na travessia do histórico.
-- Provas físicas repetidas de caminho/reparse point via `fsutil.exe` são o custo dominante medido.
+A validação profunda começa em `createBackupRestorePlan` após a seleção e continua obrigatória antes da restauração: autoridade e raiz históricas, manifesto, mapeamentos, links/reparse, payload raw/GZIP, SHA-256, estado e classificação do destino. A execução ainda revalida o gate de segurança, identidade física, journal write-ahead, destino e payload imediatamente antes da mutação.
 
-### Direção futura
+### Evidência quantitativa local
 
-- Separar a descoberta/listagem leve de backups da validação profunda de restauração.
-- A validação profunda permanece obrigatória após a seleção do backup e antes de restauração ou mutação.
-- Nenhuma garantia de SHA-256, GZIP, manifesto, autoridade histórica, estado, caminho/link/reparse point ou fail-closed pode ser enfraquecida.
-- Opcionalmente, compartilhar ou reutilizar varreduras históricas para eliminar trabalho repetido.
-- Sem fallback automático nem autoridade de backup inferida.
+No mesmo ambiente Windows e com fixture temporária equivalente de dois arquivos por backup, `listKnownBackups` mediu 805,744 ms para um backup e 893,883 ms para três backups. O plano profundo isolado para um backup/dois arquivos mediu 3.347,717 ms, demonstrando que a prova foi adiada para a seleção, não removida.
 
-A decisão final de implementação permanece aberta; nenhuma API ou schema final é definido nesta fase.
+Estruturalmente, a listagem faz uma leitura completa de `Dados\Historico` por contexto/operação; `findHistoricalBackupAuthority` consulta esse snapshot uma vez por candidato, sem nova varredura; `createBackupRestorePlan` é chamado zero vezes na listagem. As únicas provas físicas remanescentes na lista são as necessárias para validar o histórico e descobrir a raiz interna; não há provas de manifesto, payload ou destino por candidato. A contagem de processos `fsutil.exe` não é exposta como métrica pela aplicação e não foi artificialmente instrumentada.
 
-### Decisões em aberto (não decididas)
-
-- contrato exato dos metadados da listagem leve;
-- ponto exato em que a validação profunda começa;
-- estratégia de cache/memoização;
-- apresentação de status inválido/indisponível durante a listagem leve;
-- se a otimização entra em `0.2.1` ou em uma release de feature posterior;
-- limiares de aceitação de desempenho.
+Não foi criado índice persistente, fallback para configuração atual, token de bridge ou nova fonte de verdade. Não há SLA ou limiar de desempenho inventado.

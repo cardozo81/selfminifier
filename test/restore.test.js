@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runBridgeRequest } from '../src/app/bridge.mjs';
 import { readTechnicalState } from '../src/integrity/state.js';
-import { createBackupRestorePlan, createLastMinRestorePlan, executeRestorePlan, listKnownBackups } from '../src/restore/index.js';
+import { createBackupRestoreContext, createBackupRestorePlan, createLastMinRestorePlan, executeRestorePlan, listKnownBackups } from '../src/restore/index.js';
 
 async function executionFixture(mode, names = ['entrada.js'], executionId = 'exec-restore') {
   const root = await mkdtemp(join(tmpdir(), 'selfminifier-restore-'));
@@ -21,22 +21,40 @@ async function executionFixture(mode, names = ['entrada.js'], executionId = 'exe
   return { root, sourceDirectory, executionId };
 }
 
-test('lista backup válido, rejeita manifesto corrompido e hash inválido', async () => {
+test('listagem leve não valida manifesto, estado, payload ou SHA; plano selecionado valida profundamente', async () => {
   const valid = await executionFixture('BackupESobrescreverOriginais');
   try {
     const listed = await listKnownBackups(valid.root);
     assert.equal(listed.length, 1);
-    assert.equal(listed[0].status, 'valid');
+    assert.equal(listed[0].status, 'unverified');
     const manifestPath = join(valid.root, '_source_versions', valid.executionId, 'manifest.json');
     const originalManifest = await readFile(manifestPath, 'utf8');
     await writeFile(manifestPath, '{ inválido', 'utf8');
-    assert.equal((await listKnownBackups(valid.root))[0].status, 'invalid');
+    assert.equal((await listKnownBackups(valid.root))[0].status, 'unverified');
     await writeFile(manifestPath, originalManifest, 'utf8');
+    const statePath = join(valid.root, 'Dados', 'estado.json');
+    const originalState = await readFile(statePath, 'utf8');
+    await writeFile(statePath, '{ inválido', 'utf8');
     const manifest = JSON.parse(originalManifest);
     const backupPath = join(valid.root, '_source_versions', manifest.files[0].backupRelativePath);
     await writeFile(backupPath, 'adulterado', 'utf8');
+    assert.equal((await listKnownBackups(valid.root))[0].status, 'unverified');
+    await writeFile(statePath, originalState, 'utf8');
     await assert.rejects(createBackupRestorePlan({ projectRoot: valid.root, backupDirectory: join(valid.root, '_source_versions', valid.executionId) }), (error) => error.code === 'BACKUP_HASH_MISMATCH');
   } finally { await rm(valid.root, { recursive: true, force: true }); }
+});
+
+test('contexto histórico é reutilizável na operação sem nova leitura dos registros', async () => {
+  const fixture = await executionFixture('BackupESobrescreverOriginais');
+  try {
+    const context = await createBackupRestoreContext(fixture.root);
+    await rm(join(fixture.root, 'Dados', 'Historico', `${fixture.executionId}.json`));
+    await rm(join(fixture.root, '_source_versions', fixture.executionId), { recursive: true, force: true });
+    const listed = await listKnownBackups(fixture.root, { context });
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].status, 'unverified');
+    assert.equal(listed[0].directory, join(fixture.root, '_source_versions', fixture.executionId));
+  } finally { await rm(fixture.root, { recursive: true, force: true }); }
 });
 
 test('restaura fonte normal e mantém estado consistente', async () => {

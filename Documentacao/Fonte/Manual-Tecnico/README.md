@@ -50,7 +50,7 @@ O bridge expõe `search-history-by-tag`, `search-history-by-path`, `inspect-hist
 
 ## Restauração manual
 
-`src/restore/index.js` combina diretórios internos legados e registros históricos. Quando há histórico, ele define a pasta esperada; uma raiz externa indisponível permanece listada como `unavailable` e bloqueia sem substituição. O plano cruza histórico, manifesto, `artifactId`, hash, caminho original, mapeamento de origem e estado; a execução revalida raiz física e payload antes da mutação.
+`src/restore/index.js` combina diretórios internos legados e registros históricos. `listKnownBackups` cria um contexto histórico efêmero, validado e imutável por operação, deriva a autoridade do snapshot e devolve candidatos `unverified` sem montar planos ou abrir manifesto, estado e payload. Uma raiz externa indisponível continua sendo bloqueada somente no plano profundo, sem substituição. `createBackupRestorePlan` cruza histórico, manifesto, `artifactId`, hash, caminho original, mapeamento de origem e estado; a execução revalida raiz física e payload antes da mutação.
 
 A restauração `.min` lê somente a última execução concluída e remove apenas operações `create-output`. Operações `replace-output` são registradas como não aplicáveis. Saídas ausentes, alteradas, recusadas, restauradas ou excluídas permanecem rastreadas. O progresso manual é persistido em `Dados\Restauracao\restauracao-em-andamento.bkp`; um estado incompleto ou `recovery-required` bloqueia nova mutação.
 

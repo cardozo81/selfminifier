@@ -24,6 +24,7 @@ export class RestoreError extends Error {
 }
 
 function fail(code, message, details = {}) { throw new RestoreError(code, message, details); }
+const BACKUP_RESTORE_CONTEXT = Symbol('backup-restore-context');
 function identity(value) { return process.platform === 'win32' ? value.toLowerCase() : value; }
 function isInside(rootPath, candidatePath) {
   const value = relative(rootPath, candidatePath);
@@ -57,10 +58,26 @@ async function safetyGate(runtimePaths) {
   }
 }
 
-async function findHistoricalBackupAuthority(projectRoot, executionId) {
+export async function createBackupRestoreContext(projectRoot = process.cwd()) {
+  const normalizedProjectRoot = normalize(resolve(projectRoot));
+  const runtimePaths = resolveRuntimePaths(normalizedProjectRoot);
+  const records = await listHistoricalExecutionRecords(runtimePaths.historyDirectory);
+  return Object.freeze({ [BACKUP_RESTORE_CONTEXT]: true, projectRoot: normalizedProjectRoot, runtimePaths, records: Object.freeze(records) });
+}
+
+function contextMatchesProject(context, projectRoot) {
+  return context?.[BACKUP_RESTORE_CONTEXT] === true
+    && identity(context.projectRoot) === identity(normalize(resolve(projectRoot)))
+    && Array.isArray(context.records)
+    && typeof context.runtimePaths?.historyDirectory === 'string';
+}
+
+async function findHistoricalBackupAuthority(projectRoot, executionId, context = null) {
   const runtimePaths = resolveRuntimePaths(projectRoot);
-  const record = (await listHistoricalExecutionRecords(runtimePaths.historyDirectory))
-    .find((candidate) => candidate.executionId === executionId);
+  const records = contextMatchesProject(context, projectRoot)
+    ? context.records
+    : await listHistoricalExecutionRecords(runtimePaths.historyDirectory);
+  const record = records.find((candidate) => candidate.executionId === executionId);
   if (!record) return null;
   if (record.outputMode !== OUTPUT_MODES.BACKUP_OVERWRITE || record.artifacts.length === 0) {
     return { record, backupRoot: null, directory: null, artifacts: new Map() };
@@ -97,7 +114,10 @@ async function proveHistoricalBackupRoot(projectRoot, authority) {
   }
 }
 
-export async function listKnownBackups(projectRoot = process.cwd()) {
+export async function listKnownBackups(projectRoot = process.cwd(), { context = null } = {}) {
+  const operationContext = contextMatchesProject(context, projectRoot)
+    ? context
+    : await createBackupRestoreContext(projectRoot);
   const internalRoot = normalize(resolve(projectRoot, '_source_versions'));
   const candidates = new Map();
   try {
@@ -110,10 +130,10 @@ export async function listKnownBackups(projectRoot = process.cwd()) {
     if (error?.code !== 'PHYSICAL_PATH_ACCESS_FAILED' || error?.details?.cause?.code !== 'ENOENT') throw error;
   }
 
-  for (const record of await listHistoricalExecutionRecords(resolveRuntimePaths(projectRoot).historyDirectory)) {
+  for (const record of operationContext.records) {
     if (record.outputMode !== OUTPUT_MODES.BACKUP_OVERWRITE || record.artifacts.length === 0) continue;
     try {
-      const authority = await findHistoricalBackupAuthority(projectRoot, record.executionId);
+      const authority = await findHistoricalBackupAuthority(projectRoot, record.executionId, operationContext);
       candidates.set(record.executionId, {
         executionId: record.executionId,
         directory: authority.directory,
@@ -134,33 +154,29 @@ export async function listKnownBackups(projectRoot = process.cwd()) {
   const known = [];
   for (const candidate of [...candidates.values()].sort((a, b) => a.executionId.localeCompare(b.executionId))) {
     if (candidate.authorityError) {
-      known.push({ ...candidate, files: 0, status: 'invalid', diagnostic: { code: candidate.authorityError.code, message: candidate.authorityError.message } });
+      known.push({ ...candidate, files: null, status: 'invalid', diagnostic: { code: candidate.authorityError.code, message: candidate.authorityError.message } });
       continue;
     }
-    try {
-      const plan = await createBackupRestorePlan({ projectRoot, backupDirectory: candidate.directory, skipGate: true });
-      known.push({ executionId: plan.sourceExecutionId, directory: candidate.directory, files: plan.items.length, status: 'valid', authority: candidate.authority });
-    } catch (error) {
-      known.push({
-        executionId: candidate.executionId,
-        directory: candidate.directory,
-        expectedPath: error?.details?.expectedPath ?? candidate.directory,
-        files: 0,
-        status: error?.code === 'HISTORICAL_BACKUP_ROOT_UNAVAILABLE' ? 'unavailable' : 'invalid',
-        authority: candidate.authority,
-        diagnostic: { code: error.code, message: error.message },
-      });
-    }
+    known.push({
+      executionId: candidate.executionId,
+      directory: candidate.directory,
+      files: null,
+      status: 'unverified',
+      authority: candidate.authority,
+    });
   }
   return known;
 }
 
-export async function createBackupRestorePlan({ projectRoot = process.cwd(), backupDirectory, skipGate = false }) {
+export async function createBackupRestorePlan({ projectRoot = process.cwd(), backupDirectory, skipGate = false, context = null }) {
   const runtimePaths = resolveRuntimePaths(projectRoot);
   if (typeof backupDirectory !== 'string' || backupDirectory === '') fail('BACKUP_DIRECTORY_REQUIRED', 'A pasta exata da execução de backup é obrigatória.');
   const requestedDirectory = normalize(resolve(backupDirectory));
   const executionId = basename(requestedDirectory);
-  const authority = await findHistoricalBackupAuthority(projectRoot, executionId);
+  const operationContext = contextMatchesProject(context, projectRoot)
+    ? context
+    : await createBackupRestoreContext(projectRoot);
+  const authority = await findHistoricalBackupAuthority(projectRoot, executionId, operationContext);
   let directory;
   let backupRoot;
   let backupRootProof;

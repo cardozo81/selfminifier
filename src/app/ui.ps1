@@ -254,6 +254,7 @@ function Get-BackupStatusLabel {
     param([string]$Value)
     switch ($Value) {
         'valid' { return 'válido' }
+        'unverified' { return 'aguarda validação após seleção' }
         'invalid' { return 'inválido' }
         'unavailable' { return 'indisponível' }
         default { return $Value }
@@ -413,9 +414,9 @@ function Invoke-KnownBackupRestoreSelection {
     $number = 0
     if (-not $selected -or -not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $known.Count) { Show-Mensagem 'Seleção cancelada ou inválida; nenhum arquivo foi alterado.' Yellow; return }
     $chosen = $known[$number - 1]
-    if ($chosen.status -ne 'valid') {
+    if ($chosen.status -eq 'invalid') {
         Show-Mensagem "Restauração indisponível: $($chosen.diagnostic.message)" Red
-        Show-Mensagem "Local histórico esperado: $($chosen.expectedPath)" Yellow
+        Show-Mensagem "Local histórico esperado: $(if ($chosen.expectedPath) { $chosen.expectedPath } else { $chosen.directory })" Yellow
         return
     }
     Invoke-RestoreFlow backup $chosen.directory
