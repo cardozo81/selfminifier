@@ -67,7 +67,7 @@ function Invoke-SelfMinifierBridge {
 switch ($Scenario) {
     'create-confirmed' { Add-Inputs @('C:\\Projeto', 's'); Invoke-CreateInitialConfiguration }
     'create-cancelled' { Add-Inputs @('C:\\Projeto', 'n'); Invoke-CreateInitialConfiguration }
-    'create-retry' { Add-Inputs @('INVALIDO', 'C:\\Projeto', 's'); Invoke-CreateInitialConfiguration }
+    'create-retry' { Add-Inputs @('INVALIDO', '', 'C:\\Projeto', 's'); Invoke-CreateInitialConfiguration }
     default { throw "Cenário desconhecido: $Scenario" }
 }
 [ordered]@{ output = @($script:captured); calls = @($script:bridgeCalls) } | ConvertTo-Json -Depth 8 -Compress

@@ -146,7 +146,7 @@ test('pacote isolado resolve versão e inicia fora do repositório em caminho co
     assert.equal(summary.configurationPath, join(metadata.packageRoot, 'Configuracao', 'configuracao.ini'));
     const restartedSummary = JSON.parse((await requestBridge({ command: 'summary' })).stdout);
     assert.equal(restartedSummary.ok, true);
-    const persistentUi = await runProcess(powershell, ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', join(metadata.packageRoot, 'Executar.ps1')], { cwd, input: '2\r\n5\r\n1\r\n2\r\n1\r\n0\r\n0\r\n0\r\n' });
+    const persistentUi = await runProcess(powershell, ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', join(metadata.packageRoot, 'Executar.ps1')], { cwd, input: '2\r\n5\r\n1\r\n2\r\n1\r\n\r\n0\r\n0\r\n0\r\n' });
     assert.equal(persistentUi.code, 0);
     assert.match(persistentUi.stdout, /Preservar os arquivos originais e criar arquivos \.min/);
     assert.match(await readFile(join(metadata.packageRoot, 'Configuracao', 'configuracao.ini'), 'utf8'), /ModoSaida=PreservarOriginaisECriarMinificados/);

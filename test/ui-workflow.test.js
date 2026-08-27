@@ -143,7 +143,7 @@ function Write-Host { param([object]$Object, [ConsoleColor]$ForegroundColor = [C
 $script:queue = [System.Collections.Generic.Queue[string]]::new()
 function Read-Host { param([string]$Prompt) if ($script:queue.Count -gt 0) { return $script:queue.Dequeue() } return '0' }
 
-foreach ($value in @('2','2','1','1','0','2','0')) { $script:queue.Enqueue($value) }
+foreach ($value in @('2','2','','1','1','0','2','0')) { $script:queue.Enqueue($value) }
 Invoke-MinifyProject
 
 foreach ($value in @('1','0','0')) { $script:queue.Enqueue($value) }
