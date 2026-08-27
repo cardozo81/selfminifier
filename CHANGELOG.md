@@ -2,6 +2,15 @@
 
 ## Versões
 
+### 0.2.2
+
+- Cabeçalho persistente com versão da aplicação visível em telas interativas completas.
+- Ciclo de vida de tela que substitui a tela anterior em vez de acumular saída no terminal; mensagens e resultados materiais permanecem visíveis até o reconhecimento do usuário.
+- Terminologia de projeto padronizada para `Pasta raiz do projeto` na interface; a chave persistente de configuração permanece `PastaRaiz`.
+- Seleção de backups com identificadores efêmeros de exibição `[B1]`, `[B2]`, etc., válidos apenas na interface e que não substituem a identidade persistente do backup.
+- Listagem de backups em tela dedicada; seleção por ID no estilo `B1`; entrada numérica pura no estilo de menu não é aceita como ID de backup; Enter cancela.
+- Validação profunda de restauração permanece após seleção válida.
+
 ### 0.2.0
 
 - Consolidação estável da linha 0.2.0: minificação JavaScript/CSS pelo esbuild homologado, configuração e primeira execução seguras, análise quantitativa, resumo de redução, estados humanizados, backup/restauração e recuperação histórica com integridade fail-closed, incluindo proveniência SelfMinifier-Tag, backup GZIP e validações de encoding/CRLF.
