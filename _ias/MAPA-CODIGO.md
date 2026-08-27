@@ -153,4 +153,4 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | `test/execution.test.js` | Testes focados de pré-análise, write-ahead, conflitos, execução, rollback e interrupção | `node:test`, módulos de execução |
 | `test/runtime.test.js` | Testes focados de política Node, package/lock, dependências e bootstrap sem instalação real | `node:test`, módulos runtime |
 
-Retenção automática ainda não existe e não é representada como placeholder neste mapa. O GitHub Release `0.2.0-rc.1` já foi publicado como PRERELEASE; a publicação é uma operação externa e não é representada como placeholder neste mapa.
+Retenção automática ainda não existe e não é representada como placeholder neste mapa. Os GitHub Releases `0.2.0-rc.1`, `0.2.0-rc.2` e `0.2.0-rc.3` já foram publicados como PRERELEASE; a publicação é uma operação externa e não é representada como placeholder neste mapa.

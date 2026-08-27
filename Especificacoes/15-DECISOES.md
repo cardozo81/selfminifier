@@ -30,7 +30,7 @@ Os detalhes normativos de cada decisão pertencem aos documentos temáticos indi
 
 ## Identidade de versão
 
-- A política segue SemVer; a versão pré-1.0 atual é `0.2.0-rc.3`, derivada exclusivamente de `package.json`, formando pasta, ZIP e checksum; as tags `v0.2.0-rc.1` e `v0.2.0-rc.2` e os GitHub Releases `0.2.0-rc.1` e `0.2.0-rc.2` já foram publicados como PRERELEASE.
+- A política segue SemVer; a versão pré-1.0 atual é `0.2.0-rc.3`, derivada exclusivamente de `package.json`, formando pasta, ZIP e checksum; as tags `v0.2.0-rc.1`, `v0.2.0-rc.2` e `v0.2.0-rc.3` e os GitHub Releases `0.2.0-rc.1`, `0.2.0-rc.2` e `0.2.0-rc.3` já foram publicados como PRERELEASE.
 - Tags são imutáveis; uma publicação futura reutiliza exatamente os artefatos validados, e a distribuição gerada permanece fora do Git.
 
 ## Raiz de instalação e caminhos persistentes
@@ -87,3 +87,34 @@ DT-ME — Engine compatibility
 - **DT-ME:** quais motores adicionais serão suportados; se Terser, SWC, Lightning CSS ou outro candidato será homologado; número total de motores; seleção global versus seleção por tipo de arquivo; schema final de configuração; representação `MotorJavaScript`/`MotorCSS` ou equivalente; estratégia de migração da configuração existente; motor padrão por tipo; política de fallback; limiares de benchmark; detalhes da política de deprecação/remoção de motores; versões exatas de futuras dependências.
 
 Nenhum desses pontos deve ser preenchido com valor inventado; pertencem à futura fase de definição de requisitos.
+
+## Dívida técnica de desempenho — listagem de backups (DT-BL)
+
+A listagem de backups conhecidos é correta e fail-closed, mas possui custo de desempenho diagnosticado pelo H1-P1. Trata-se de dívida arquitetural de desempenho/UX, não de defeito de integridade, e não bloqueia o `0.2.0` estável.
+
+### Estado atual
+
+- O comportamento atual é correto e fail-closed.
+- Listar backups conhecidos executa hoje validação profunda do plano de restauração antes da seleção do backup.
+- O H1-P1 mediu aproximadamente 5 s para um backup válido com dois arquivos minúsculos e aproximadamente 19 s para três backups, no ambiente medido.
+- Varreduras históricas repetidas criam escalonamento de estilo O(N²) na travessia do histórico.
+- Provas físicas repetidas de caminho/reparse point via `fsutil.exe` são o custo dominante medido.
+
+### Direção futura
+
+- Separar a descoberta/listagem leve de backups da validação profunda de restauração.
+- A validação profunda permanece obrigatória após a seleção do backup e antes de restauração ou mutação.
+- Nenhuma garantia de SHA-256, GZIP, manifesto, autoridade histórica, estado, caminho/link/reparse point ou fail-closed pode ser enfraquecida.
+- Opcionalmente, compartilhar ou reutilizar varreduras históricas para eliminar trabalho repetido.
+- Sem fallback automático nem autoridade de backup inferida.
+
+A decisão final de implementação permanece aberta; nenhuma API ou schema final é definido nesta fase.
+
+### Decisões em aberto (não decididas)
+
+- contrato exato dos metadados da listagem leve;
+- ponto exato em que a validação profunda começa;
+- estratégia de cache/memoização;
+- apresentação de status inválido/indisponível durante a listagem leve;
+- se a otimização entra em `0.2.1` ou em uma release de feature posterior;
+- limiares de aceitação de desempenho.

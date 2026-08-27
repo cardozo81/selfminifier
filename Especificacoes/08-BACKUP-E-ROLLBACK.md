@@ -101,6 +101,8 @@ O manifesto deve mapear os identificadores às raízes originais e registrar, no
 
 O modo de sobrescrita deve permitir listar backups conhecidos e selecionar manualmente uma pasta de backup. Antes da restauração, devem ser validados manifesto, arquivos, hashes, destino e integridade.
 
+A listagem atual executa validação profunda antes da seleção; o custo de desempenho diagnosticado e a direção futura de separação entre listagem leve e validação profunda estão registrados como dívida técnica em `15-DECISOES.md` (DT-BL). O comportamento permanece correto e fail-closed e não bloqueia o `0.2.0` estável.
+
 A restauração repõe a fonte não minificada no caminho original. O arquivo atualmente minificado não deve receber backup antes dessa restauração.
 
 Se o arquivo atual mudou depois da minificação, isto é:
