@@ -2,6 +2,10 @@
 
 ## Versões
 
+### 0.2.0
+
+- Consolidação estável da linha 0.2.0: minificação JavaScript/CSS pelo esbuild homologado, configuração e primeira execução seguras, análise quantitativa, resumo de redução, estados humanizados, backup/restauração e recuperação histórica com integridade fail-closed, incluindo proveniência SelfMinifier-Tag, backup GZIP e validações de encoding/CRLF.
+
 ### 0.2.0-rc.3
 
 - Primeira execução e UX de console (F4): a abertura passou a distinguir configuração ausente de inválida com menus restritos (`CONFIGURAÇÃO NECESSÁRIA` e `CONFIGURAÇÃO INVÁLIDA`), criação guiada com `PastaRaiz` explícito e validado, gravação pelo serializer oficial com releitura e validação antes de liberar o menu normal, e acesso a backups/restauração/histórico sem configuração operacional. A apresentação de análise e minificação foi reorganizada em grupos, os status técnicos passaram a ser humanizados, operações concluídas permanecem visíveis até o usuário continuar e o feedback de espera é factual, sem percentuais de progresso inventados.
