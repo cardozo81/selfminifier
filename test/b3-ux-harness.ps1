@@ -9,6 +9,7 @@ $ErrorActionPreference = 'Stop'
 $script:captured = [System.Collections.Generic.List[string]]::new()
 $script:bridgeCalls = [System.Collections.Generic.List[string]]::new()
 $script:queue = [System.Collections.Generic.Queue[string]]::new()
+$script:lastBackupDirectory = $null
 
 function Show-Mensagem {
     param([string]$Text, [ConsoleColor]$Color = [ConsoleColor]::White)
@@ -17,6 +18,8 @@ function Show-Mensagem {
 function Write-Host {
     param([object]$Object, [ConsoleColor]$ForegroundColor = [ConsoleColor]::White)
     $script:captured.Add([string]$Object)
+}
+function Limpar-Tela {
 }
 function Read-Host {
     param([string]$Prompt)
@@ -121,7 +124,17 @@ function Invoke-SelfMinifierBridge {
                 }
             }
         }
+        'list-backups' {
+            return [pscustomobject]@{
+                ok = $true
+                backups = @(
+                    [pscustomobject]@{ executionId = 'exec-aaa'; directory = 'C:\Backups\exec-aaa'; status = 'unverified'; authority = 'history' },
+                    [pscustomobject]@{ executionId = 'exec-bbb'; directory = 'C:\Backups\exec-bbb'; status = 'unverified'; authority = 'history' }
+                )
+            }
+        }
         'plan-restore' {
+            $script:lastBackupDirectory = $Request.backupDirectory
             return [pscustomobject]@{
                 ok = $true
                 plan = [pscustomobject]@{
@@ -182,6 +195,38 @@ switch ($Scenario) {
         Add-Inputs @('2', '', '0')
         Invoke-HistoricalArtifactFlow '7F31A2C82A884E91B04F22D7'
     }
+    'backup-select' {
+        Add-Inputs @('B1', 's')
+        Invoke-KnownBackupRestoreSelection
+    }
+    'backup-select-case' {
+        Add-Inputs @('b2', 's')
+        Invoke-KnownBackupRestoreSelection
+    }
+    'backup-select-whitespace' {
+        Add-Inputs @('  B1  ', 's')
+        Invoke-KnownBackupRestoreSelection
+    }
+    'backup-cancel' {
+        Add-Inputs @('')
+        Invoke-KnownBackupRestoreSelection
+    }
+    'backup-invalid-bare' {
+        Add-Inputs @('1')
+        Invoke-KnownBackupRestoreSelection
+    }
+    'backup-invalid-b0' {
+        Add-Inputs @('B0')
+        Invoke-KnownBackupRestoreSelection
+    }
+    'backup-invalid-malformed' {
+        Add-Inputs @('XYZ')
+        Invoke-KnownBackupRestoreSelection
+    }
+    'backup-invalid-outofrange' {
+        Add-Inputs @('B9')
+        Invoke-KnownBackupRestoreSelection
+    }
     'normal-restore' {
         Add-Inputs @('3', 's', '0')
         Show-RestoreMenu
@@ -197,4 +242,5 @@ switch ($Scenario) {
 [ordered]@{
     output = @($script:captured)
     calls = @($script:bridgeCalls)
+    lastBackupDirectory = $script:lastBackupDirectory
 } | ConvertTo-Json -Depth 10 -Compress

@@ -194,6 +194,37 @@ windowsTest('restauração normal permanece alcançável e usa a transação exi
   assert.match(outputText(result), /Restauração: concluída/);
 });
 
+windowsTest('seleção de backup usa [Bn] e chega ao plano de restauração existente', () => {
+  const selected = runScenario('backup-select');
+  const output = outputText(selected);
+  assert.match(output, /SELFMINIFIER/);
+  assert.match(output, /BACKUPS CONHECIDOS/);
+  assert.match(output, /\[B1\]/);
+  assert.match(output, /\[B2\]/);
+  assert.match(output, /Digite o ID do backup a restaurar/);
+  assert.equal(selected.lastBackupDirectory, 'C:\\Backups\\exec-aaa');
+  assert.ok(selected.calls.some((call) => call.startsWith('plan-restore|')));
+  assert.ok(selected.calls.some((call) => call.startsWith('execute-restore|')));
+
+  assert.equal(runScenario('backup-select-case').lastBackupDirectory, 'C:\\Backups\\exec-bbb');
+  assert.equal(runScenario('backup-select-whitespace').lastBackupDirectory, 'C:\\Backups\\exec-aaa');
+});
+
+windowsTest('seleção de backup rejeita cancelamento e IDs inválidos sem plano de restauração', () => {
+  const scenarios = ['backup-cancel', 'backup-invalid-bare', 'backup-invalid-b0', 'backup-invalid-malformed', 'backup-invalid-outofrange'];
+  for (const scenario of scenarios) {
+    const result = runScenario(scenario);
+    assert.ok(!result.calls.some((call) => call.startsWith('plan-restore|')), scenario);
+    assert.equal(result.lastBackupDirectory, null, scenario);
+    const output = outputText(result);
+    if (scenario === 'backup-cancel') {
+      assert.match(output, /Seleção cancelada; nenhum arquivo foi alterado/);
+    } else {
+      assert.match(output, /ID inválido|ID fora da lista/);
+    }
+  }
+});
+
 test('Configuração V2/V3 e apresentação de proveniência A4 permanecem conectadas sem redesenho', async () => {
   const source = await readFile(uiPath, 'utf8');
   assert.match(source, /function Show-ConfigurationMenu/);

@@ -74,6 +74,17 @@ function Show-Separador {
     Show-Mensagem '────────────────────────────────────' Cyan
 }
 
+function Show-AppHeader {
+    $title = if ($script:AppVersion) { "SELFMINIFIER v$($script:AppVersion)" } else { 'SELFMINIFIER' }
+    Show-Mensagem "`n$title" Cyan
+    Show-Separador
+}
+
+function Show-AppScreen {
+    Limpar-Tela
+    Show-AppHeader
+}
+
 function Limpar-Tela {
     try { Clear-Host } catch { }
 }
@@ -81,10 +92,12 @@ function Limpar-Tela {
 
 function Show-Artefatos {
     param([ValidateSet('reports', 'logs')][string]$Kind)
+    Show-AppScreen
     $response = Invoke-SelfMinifierBridge @{ command = 'list-artifacts'; kind = $Kind }
-    if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; return }
-    if ($response.names.Count -eq 0) { Show-Mensagem $(if ($Kind -eq 'reports') { 'Nenhum relatório operacional disponível.' } else { 'Nenhum log técnico disponível.' }) Yellow; return }
-    Show-Mensagem $(if ($Kind -eq 'reports') { 'Relatórios operacionais:' } else { 'Logs técnicos:' }) Cyan
+    if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; Confirmar-Continuar; return }
+    if ($response.names.Count -eq 0) { Show-Mensagem $(if ($Kind -eq 'reports') { 'Nenhum relatório operacional disponível.' } else { 'Nenhum log técnico disponível.' }) Yellow; Confirmar-Continuar; return }
+    Show-Mensagem "`n$(if ($Kind -eq 'reports') { 'Relatórios operacionais:' } else { 'Logs técnicos:' })" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
     for ($index = 0; $index -lt $response.names.Count; $index++) { Write-Host "$($index + 1). $($response.names[$index])" }
     $selected = (Read-Host 'Número para visualizar; Enter cancela').Trim()
     if (-not $selected) { Show-Mensagem 'Visualização cancelada.' Yellow; return }
@@ -92,6 +105,7 @@ function Show-Artefatos {
     if (-not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $response.names.Count) { Show-Mensagem 'Seleção inválida; nenhum arquivo foi alterado.' Yellow; return }
     $content = Invoke-SelfMinifierBridge @{ command = 'read-artifact'; kind = $Kind; name = $response.names[$number - 1] }
     if ($content.ok) { Show-Mensagem "`n$($content.content)" White } else { Show-Mensagem "Erro: $($content.diagnostic.message)" Red }
+    Confirmar-Continuar
 }
 
 function Invoke-RestoreFlow {
@@ -99,7 +113,7 @@ function Invoke-RestoreFlow {
     $request = @{ command = 'plan-restore'; kind = $Kind }
     if ($BackupDirectory) { $request.backupDirectory = $BackupDirectory }
     $response = Invoke-SelfMinifierBridge $request
-    if (-not $response.ok) { Show-Mensagem "Restauração bloqueada: $($response.diagnostic.message)" Red; return }
+    if (-not $response.ok) { Show-Mensagem "Restauração bloqueada: $($response.diagnostic.message)" Red; Confirmar-Continuar; return }
     Show-Mensagem "`nPlano de restauração: $($response.plan.sourceExecutionId)" Cyan
     foreach ($item in $response.plan.items) { Show-Mensagem "- $(Get-RestoreClassificationLabel $item.classification): $($item.destinationPath)" $(if ($item.requiresChangedConfirmation) { 'Yellow' } else { 'White' }) }
     foreach ($item in $response.plan.ignored) { Show-Mensagem "- não será alterado: $($item.normalizedPath) ($(Get-RestoreIgnoreReasonLabel $item.reason))" Gray }
@@ -111,9 +125,10 @@ function Invoke-RestoreFlow {
     $execute = @{ command = 'execute-restore'; kind = $Kind; confirmed = $true; confirmChanged = $confirmChanged }
     if ($BackupDirectory) { $execute.backupDirectory = $BackupDirectory }
     $result = Invoke-SelfMinifierBridge $execute
-    if (-not $result.ok) { Show-Mensagem "Falha de restauração: $($result.diagnostic.message)" Red; return }
+    if (-not $result.ok) { Show-Mensagem "Falha de restauração: $($result.diagnostic.message)" Red; Confirmar-Continuar; return }
     foreach ($item in $result.result.items) { Show-Mensagem "- $(Get-RestoreItemStatusLabel $item.status): $($item.path)" $(if ($item.status -in @('restored', 'deleted-min', 'already-absent')) { 'Green' } else { 'Yellow' }) }
     Show-Mensagem "Restauração: $(Get-RestoreResultStatusLabel $result.result.status)" $(if ($result.result.status -eq 'completed') { 'Green' } else { 'Yellow' })
+    Confirmar-Continuar
 }
 
 function Get-HistoryErrorMessage {
@@ -307,13 +322,14 @@ function Show-HistoricalArtifactSummary {
 
 function Invoke-HistoricalRecoveryExport {
     param($Inspection)
+    Show-AppScreen
     $historical = $Inspection.historical
     if (-not $Inspection.observations.recoveryCapability) {
         Show-Mensagem 'A recuperação histórica não está disponível nas condições verificadas acima.' Red
+        Confirmar-Continuar
         return
     }
-    Write-Host ''
-    Show-Mensagem 'RECUPERAR ORIGINAL HISTÓRICO PARA OUTRO ARQUIVO' Cyan
+    Show-Mensagem "`nRECUPERAR ORIGINAL HISTÓRICO PARA OUTRO ARQUIVO" Cyan
     Write-Host 'Esta operação exporta bytes históricos comprovados para um destino separado.'
     Write-Host 'Ela NÃO executa a restauração normal e NÃO altera a origem ou a saída atual.'
     $destination = (Read-Host 'Informe o caminho completo e explícito do novo arquivo; Enter cancela').Trim()
@@ -324,13 +340,14 @@ function Invoke-HistoricalRecoveryExport {
     $confirmation = (Read-Host 'Escolha').Trim()
     if ($confirmation -ne '1') { Show-Mensagem 'Exportação histórica cancelada; nenhum arquivo foi criado.' Yellow; return }
     $response = Invoke-SelfMinifierBridge @{ command = 'recover-historical-original'; artifactId = $historical.artifactId; destinationPath = $destination }
-    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A exportação histórica foi bloqueada.') Red; return }
+    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A exportação histórica foi bloqueada.') Red; Confirmar-Continuar; return }
     Show-Mensagem 'Original histórico exportado com sucesso.' Green
     Write-Host "Destino exato: $($response.result.destinationPath)"
     Write-Host "SelfMinifier-Tag do artefato: $($response.result.artifactId)"
     Write-Host "Execução histórica: $($response.result.executionId)"
     Write-Host "SHA-256 exportado: $($response.result.exportedHash)"
     Show-Mensagem 'Os arquivos atuais de origem e saída não foram modificados por esta recuperação histórica.' Green
+    Confirmar-Continuar
 }
 
 function Invoke-HistoricalArtifactFlow {
@@ -338,9 +355,10 @@ function Invoke-HistoricalArtifactFlow {
     $request = @{ command = 'inspect-historical-artifact'; artifactId = $ArtifactId }
     if ($CurrentPath) { $request.currentPath = $CurrentPath }
     $response = Invoke-SelfMinifierBridge $request
-    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'Não foi possível inspecionar o artefato histórico.') Red; return }
+    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'Não foi possível inspecionar o artefato histórico.') Red; Confirmar-Continuar; return }
     $inspection = $response.result
     while ($true) {
+        Show-AppScreen
         Show-HistoricalArtifactSummary $inspection
         Write-Host ''
         Write-Host '1. Verificar a integridade de um arquivo atual selecionado'
@@ -366,26 +384,27 @@ function Invoke-HistoricalArtifactFlow {
 }
 
 function Invoke-SearchHistoricalTag {
-    Write-Host ''
-    Show-Mensagem 'PESQUISAR SELFMINIFIER-TAG' Cyan
+    Show-AppScreen
+    Show-Mensagem "`nPESQUISAR SELFMINIFIER-TAG" Cyan
     $tag = (Read-Host 'Informe a Tag de 24 caracteres ou o marcador exato; Enter cancela').Trim()
     if (-not $tag) { Show-Mensagem 'Pesquisa cancelada.' Yellow; return }
     $response = Invoke-SelfMinifierBridge @{ command = 'search-history-by-tag'; tag = $tag }
-    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A pesquisa histórica foi bloqueada.') Red; return }
+    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A pesquisa histórica foi bloqueada.') Red; Confirmar-Continuar; return }
     Show-Mensagem 'Histórico autoritativo encontrado para a SelfMinifier-Tag.' Green
+    Confirmar-Continuar
     Invoke-HistoricalArtifactFlow $response.result.artifactId
 }
 
 function Invoke-SearchHistoryByPath {
-    Write-Host ''
-    Show-Mensagem 'CONSULTAR HISTÓRICO POR ARQUIVO OU CAMINHO' Cyan
+    Show-AppScreen
+    Show-Mensagem "`nCONSULTAR HISTÓRICO POR ARQUIVO OU CAMINHO" Cyan
     Write-Host 'Cada ocorrência é um artefato histórico independente; a lista não representa uma cadeia de revisões.'
     $historyPath = (Read-Host 'Informe o caminho completo; Enter cancela').Trim()
     if (-not $historyPath) { Show-Mensagem 'Consulta cancelada.' Yellow; return }
     $response = Invoke-SelfMinifierBridge @{ command = 'search-history-by-path'; path = $historyPath }
-    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A consulta por caminho foi bloqueada.') Red; return }
+    if (-not $response.ok) { Show-Mensagem (Get-HistoryErrorMessage $response 'A consulta por caminho foi bloqueada.') Red; Confirmar-Continuar; return }
     $records = @($response.result.records)
-    if ($records.Count -eq 0) { Show-Mensagem 'Nenhuma ocorrência histórica foi encontrada para esse caminho.' Yellow; return }
+    if ($records.Count -eq 0) { Show-Mensagem 'Nenhuma ocorrência histórica foi encontrada para esse caminho.' Yellow; Confirmar-Continuar; return }
     Show-Mensagem "Ocorrências históricas em ordem mais recente primeiro: $($records.Count)" Cyan
     for ($index = 0; $index -lt $records.Count; $index++) {
         $record = $records[$index]
@@ -401,22 +420,29 @@ function Invoke-SearchHistoryByPath {
 }
 
 function Invoke-KnownBackupRestoreSelection {
+    Show-AppScreen
     $response = Invoke-SelfMinifierBridge @{ command = 'list-backups' }
-    if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; return }
+    if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; Confirmar-Continuar; return }
     $known = @($response.backups)
-    if ($known.Count -eq 0) { Show-Mensagem 'Nenhum backup conhecido.' Yellow; return }
+    if ($known.Count -eq 0) { Show-Mensagem 'Nenhum backup conhecido.' Yellow; Confirmar-Continuar; return }
+    Show-Mensagem "`nBACKUPS CONHECIDOS" Cyan
+    Show-Mensagem '────────────────────────────────────' Cyan
     for ($index = 0; $index -lt $known.Count; $index++) {
         $item = $known[$index]
         $shownPath = if ($item.expectedPath) { $item.expectedPath } else { $item.directory }
-        Write-Host "$($index + 1). $($item.executionId) [$(Get-BackupStatusLabel $item.status)] - $shownPath"
+        $backupId = 'B' + ($index + 1)
+        Write-Host "[$backupId] $($item.executionId) [$(Get-BackupStatusLabel $item.status)] - $shownPath"
     }
-    $selected = (Read-Host 'Número; Enter cancela').Trim()
-    $number = 0
-    if (-not $selected -or -not [int]::TryParse($selected, [ref]$number) -or $number -lt 1 -or $number -gt $known.Count) { Show-Mensagem 'Seleção cancelada ou inválida; nenhum arquivo foi alterado.' Yellow; return }
+    $selected = (Read-Host 'Digite o ID do backup a restaurar (ex.: B1) ou pressione Enter para cancelar').Trim()
+    if (-not $selected) { Show-Mensagem 'Seleção cancelada; nenhum arquivo foi alterado.' Yellow; Confirmar-Continuar; return }
+    if ($selected -notmatch '^B([1-9][0-9]*)$') { Show-Mensagem 'ID inválido; use o formato B1, B2... Nenhum arquivo foi alterado.' Yellow; Confirmar-Continuar; return }
+    $number = [int]$Matches[1]
+    if ($number -gt $known.Count) { Show-Mensagem "ID fora da lista; escolha um ID exibido (B1 a B$($known.Count)). Nenhum arquivo foi alterado." Yellow; Confirmar-Continuar; return }
     $chosen = $known[$number - 1]
     if ($chosen.status -eq 'invalid') {
         Show-Mensagem "Restauração indisponível: $($chosen.diagnostic.message)" Red
         Show-Mensagem "Local histórico esperado: $(if ($chosen.expectedPath) { $chosen.expectedPath } else { $chosen.directory })" Yellow
+        Confirmar-Continuar
         return
     }
     Invoke-RestoreFlow backup $chosen.directory
@@ -424,8 +450,8 @@ function Invoke-KnownBackupRestoreSelection {
 
 function Show-RestoreMenu {
     while ($true) {
-        Write-Host ''
-        Show-Mensagem 'BACKUPS, RESTAURAÇÃO E HISTÓRICO' Cyan
+        Show-AppScreen
+        Show-Mensagem "`nBACKUPS, RESTAURAÇÃO E HISTÓRICO" Cyan
         Show-Mensagem 'RESTAURAÇÃO NORMAL: pode repor arquivos gerenciados nos caminhos atuais.' Yellow
         Write-Host '1. Listar backups conhecidos e restaurar normalmente'
         Write-Host '2. Informar pasta de backup para restauração normal'
@@ -488,8 +514,9 @@ function Get-BridgeErrorMessage {
 function Invoke-TemporaryAdjustment {
     param([hashtable]$Adjustments)
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
-    if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; return }
+    if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; Confirmar-Continuar; return }
     while ($true) {
+        Show-AppScreen
         Write-Host "`nModo de saída somente para esta execução:"
         Write-Host "Atual persistente: $(Get-ModoSaidaDescricao $summary.configuration.outputMode)"
         Write-Host '1. Manter a configuração persistente atual'
@@ -498,9 +525,9 @@ function Invoke-TemporaryAdjustment {
         Write-Host '0. Cancelar'
         $choice = (Read-Host 'Escolha').Trim()
         switch ($choice) {
-            '1' { [void]$Adjustments.Remove('outputMode'); Show-Mensagem 'Modo temporário definido para a configuração persistente.' Green; return }
-            '2' { $Adjustments.outputMode = 'BackupESobrescreverOriginais'; Show-Mensagem 'Modo temporário: criar backup e sobrescrever os arquivos originais.' Green; return }
-            '3' { $Adjustments.outputMode = 'PreservarOriginaisECriarMinificados'; Show-Mensagem 'Modo temporário: preservar os arquivos originais e criar arquivos .min.' Green; return }
+            '1' { [void]$Adjustments.Remove('outputMode'); Show-Mensagem 'Modo temporário definido para a configuração persistente.' Green; Confirmar-Continuar; return }
+            '2' { $Adjustments.outputMode = 'BackupESobrescreverOriginais'; Show-Mensagem 'Modo temporário: criar backup e sobrescrever os arquivos originais.' Green; Confirmar-Continuar; return }
+            '3' { $Adjustments.outputMode = 'PreservarOriginaisECriarMinificados'; Show-Mensagem 'Modo temporário: preservar os arquivos originais e criar arquivos .min.' Green; Confirmar-Continuar; return }
             '0' { Show-Mensagem 'Ajustes temporários cancelados; nenhuma alteração foi aplicada.' Yellow; return }
             default { Show-Mensagem 'Escolha inválida; nenhum ajuste foi aplicado. Escolha uma opção numerada.' Yellow }
         }
@@ -514,10 +541,11 @@ function Invoke-EditOutputMode {
             Invoke-CreateInitialConfiguration
             $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
         }
-        if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; return }
+        if (-not $summary.ok -or -not $summary.configuration) { Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red; Confirmar-Continuar; return }
     }
     $current = $summary.configuration.outputMode
     while ($true) {
+        Show-AppScreen
         Write-Host "`nModo de saída atual: $(Get-ModoSaidaDescricao $current)"
         Write-Host '1. Criar backup e sobrescrever os arquivos originais (padrão)'
         Write-Host '2. Preservar os arquivos originais e criar arquivos .min'
@@ -530,7 +558,7 @@ function Invoke-EditOutputMode {
             default { $null }
         }
         if ($null -eq $newMode) { Show-Mensagem 'Escolha inválida; a configuração não foi modificada.' Yellow; continue }
-        if ($newMode -eq $current) { Show-Mensagem 'O modo escolhido já está configurado; nenhuma alteração foi necessária.' Green; return }
+        if ($newMode -eq $current) { Show-Mensagem 'O modo escolhido já está configurado; nenhuma alteração foi necessária.' Green; Confirmar-Continuar; return }
         Show-Mensagem "`nModo atual: $(Get-ModoSaidaDescricao $current)" Cyan
         Show-Mensagem "Novo modo: $(Get-ModoSaidaDescricao $newMode)" Cyan
         Write-Host '1. Salvar alteração'
@@ -538,16 +566,19 @@ function Invoke-EditOutputMode {
         $confirmacao = (Read-Host 'Escolha').Trim()
         if ($confirmacao -ne '1') { Show-Mensagem 'Alteração cancelada; a configuração não foi modificada.' Yellow; return }
         $saved = Invoke-SelfMinifierBridge @{ command = 'update-output-mode'; outputMode = $newMode; confirmed = $true }
-        if (-not $saved.ok) { Show-Mensagem (Get-BridgeErrorMessage $saved 'A configuração não foi salva.') Red; return }
+        if (-not $saved.ok) { Show-Mensagem (Get-BridgeErrorMessage $saved 'A configuração não foi salva.') Red; Confirmar-Continuar; return }
         Show-Mensagem "Configuração persistente salva: $(Get-ModoSaidaDescricao $newMode)" Green
+        Confirmar-Continuar
         return
     }
 }
 
 function Invoke-EditBackupRoot {
+    Show-AppScreen
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) {
         Show-Mensagem (Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração persistente.') Red
+        Confirmar-Continuar
         return
     }
     $config = $summary.configuration
@@ -591,14 +622,17 @@ function Invoke-EditBackupRoot {
         $message = Get-BridgeErrorMessage $saved 'A pasta de backups não foi alterada.'
         if ($saved.changed) { $message = "$message A configuração pode ter sido alterada." }
         Show-Mensagem "Erro: $message" Red
+        Confirmar-Continuar
         return
     }
     $mode = if ($saved.backupStorageMode -eq 'external') { 'externa' } else { 'interna' }
     Show-Mensagem "Armazenamento de backups salvo como $mode em Configuração V3." Green
+    Confirmar-Continuar
 }
 
 function Invoke-PersistentConfiguration {
     while ($true) {
+        Show-AppScreen
         Show-Mensagem "`nCOMPORTAMENTO" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
         Write-Host '1. Modo de saída'
@@ -615,28 +649,32 @@ function Invoke-PersistentConfiguration {
 }
 
 function Invoke-EditProjectRoot {
+    Show-AppScreen
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) {
         Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+        Confirmar-Continuar
         return
     }
     $current = $summary.configuration.projectRoot
-    Show-Mensagem "`nORIGEM DO PROJETO" Cyan
+    Show-Mensagem "`nPASTA RAIZ DO PROJETO" Cyan
     Show-Mensagem '────────────────────────────────────' Cyan
-    Show-Mensagem 'Origem atual:' Cyan
+    Show-Mensagem 'Pasta raiz atual:' Cyan
     Show-Mensagem $current White
-    $entrada = (Read-Host "`nInforme a nova pasta do projeto. 0 = Cancelar").Trim()
+    $entrada = (Read-Host "`nInforme a nova pasta raiz do projeto. 0 = Cancelar").Trim()
     if ($entrada -eq '0' -or $entrada -eq '') {
         Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow
+        Confirmar-Continuar
         return
     }
     if ($entrada -eq $current) {
-        Show-Mensagem 'A nova origem é igual à atual; nenhuma alteração foi necessária.' Green
+        Show-Mensagem 'A nova pasta raiz é igual à atual; nenhuma alteração foi necessária.' Green
+        Confirmar-Continuar
         return
     }
-    Show-Mensagem "`nOrigem atual:" Cyan
+    Show-Mensagem "`nPasta raiz atual:" Cyan
     Show-Mensagem $current White
-    Show-Mensagem 'Nova origem:' Cyan
+    Show-Mensagem 'Nova pasta raiz:' Cyan
     Show-Mensagem $entrada White
     Write-Host '1. Salvar alteração'
     Write-Host '0. Cancelar'
@@ -645,12 +683,14 @@ function Invoke-EditProjectRoot {
         '1' {
             $saved = Invoke-SelfMinifierBridge @{ command = 'update-configuration-v2'; projectRoot = $entrada; confirmed = $true }
             if (-not $saved.ok) {
-                $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar a nova origem do projeto.'
+                $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar a nova pasta raiz do projeto.'
                 if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
                 Show-Mensagem "Erro: $mensagem" Red
+                Confirmar-Continuar
                 return
             }
-            Show-Mensagem "Origem do projeto salva: $($saved.configuration.projectRoot)" Green
+            Show-Mensagem "Pasta raiz do projeto salva: $($saved.configuration.projectRoot)" Green
+            Confirmar-Continuar
         }
         '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
         default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
@@ -658,9 +698,11 @@ function Invoke-EditProjectRoot {
 }
 
 function Invoke-EditFileTypes {
+    Show-AppScreen
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) {
         Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+        Confirmar-Continuar
         return
     }
     $current = Get-TiposArquivoValor $summary.configuration.fileTypes
@@ -680,7 +722,7 @@ function Invoke-EditFileTypes {
         default { $null }
     }
     if ($null -eq $novoValor) { Show-Mensagem 'Escolha inválida; nenhuma configuração foi alterada.' Yellow; return }
-    if ($novoValor -eq $current) { Show-Mensagem 'Os tipos selecionados já estão configurados; nenhuma alteração foi necessária.' Green; return }
+    if ($novoValor -eq $current) { Show-Mensagem 'Os tipos selecionados já estão configurados; nenhuma alteração foi necessária.' Green; Confirmar-Continuar; return }
     $novoDescricao = if ($novoValor -eq 'CSS+JavaScript') { 'CSS + JavaScript' } else { $novoValor }
     Show-Mensagem "`nTipos atuais: $(Get-TiposArquivoDescricao $summary.configuration.fileTypes)" Cyan
     Show-Mensagem "Novos tipos: $novoDescricao" Cyan
@@ -694,9 +736,11 @@ function Invoke-EditFileTypes {
                 $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar os tipos de arquivo.'
                 if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
                 Show-Mensagem "Erro: $mensagem" Red
+                Confirmar-Continuar
                 return
             }
             Show-Mensagem "Tipos de arquivo salvos: $(Get-TiposArquivoDescricao $saved.configuration.fileTypes)" Green
+            Confirmar-Continuar
         }
         '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
         default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
@@ -714,9 +758,11 @@ function Get-PerfilDescricao {
 }
 
 function Invoke-EditProfile {
+    Show-AppScreen
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) {
         Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
+        Confirmar-Continuar
         return
     }
     $current = $summary.configuration.profile
@@ -736,7 +782,7 @@ function Invoke-EditProfile {
         default { $null }
     }
     if ($null -eq $novoPerfil) { Show-Mensagem 'Escolha inválida; nenhuma configuração foi alterada.' Yellow; return }
-    if ($novoPerfil -eq $current) { Show-Mensagem 'O perfil selecionado já está configurado; nenhuma alteração foi necessária.' Green; return }
+    if ($novoPerfil -eq $current) { Show-Mensagem 'O perfil selecionado já está configurado; nenhuma alteração foi necessária.' Green; Confirmar-Continuar; return }
     Show-Mensagem "`nPerfil atual: $(Get-PerfilDescricao $current)" Cyan
     Show-Mensagem "Novo perfil: $(Get-PerfilDescricao $novoPerfil)" Cyan
     Write-Host '1. Salvar alteração'
@@ -749,9 +795,11 @@ function Invoke-EditProfile {
                 $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar o perfil de minificação.'
                 if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
                 Show-Mensagem "Erro: $mensagem" Red
+                Confirmar-Continuar
                 return
             }
             Show-Mensagem "Perfil de minificação salvo: $(Get-PerfilDescricao $saved.configuration.profile)" Green
+            Confirmar-Continuar
         }
         '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
         default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
@@ -800,6 +848,7 @@ function Get-ExclusionInfo {
 }
 
 function Show-IgnoredFoldersList {
+    Show-AppScreen
     $summary = Get-V2Summary
     if (-not $summary) { return }
     $folders = @($summary.configuration.ignoredFolders)
@@ -810,9 +859,11 @@ function Show-IgnoredFoldersList {
     } else {
         foreach ($folder in $folders) { Show-Mensagem "- $folder" White }
     }
+    Confirmar-Continuar
 }
 
 function Show-IgnoredFilesList {
+    Show-AppScreen
     $summary = Get-V2Summary
     if (-not $summary) { return }
     $files = @($summary.configuration.ignoredFiles)
@@ -823,9 +874,11 @@ function Show-IgnoredFilesList {
     } else {
         foreach ($file in $files) { Show-Mensagem "- $file" White }
     }
+    Confirmar-Continuar
 }
 
 function Show-CurrentExclusions {
+    Show-AppScreen
     $summary = Get-V2Summary
     if (-not $summary) { return }
     Show-Mensagem "`nEXCLUSÕES ATUAIS" Cyan
@@ -844,17 +897,19 @@ function Show-CurrentExclusions {
     } else {
         foreach ($file in $files) { Show-Mensagem "- $file" White }
     }
+    Confirmar-Continuar
 }
 
 function Add-ExclusionEntry {
     param([ValidateSet('folder', 'file')][string]$Kind)
+    Show-AppScreen
     $summary = Get-V2Summary
     if (-not $summary) { return }
     $info = Get-ExclusionInfo $Kind
     $current = @($summary.configuration.($info.Field))
     Show-Mensagem "`n$($info.TituloAdd)" Cyan
     Show-Mensagem '────────────────────────────────────' Cyan
-    Show-Mensagem 'Origem do projeto:' Cyan
+    Show-Mensagem 'Pasta raiz do projeto:' Cyan
     Show-Mensagem $summary.configuration.projectRoot White
     Show-Mensagem $info.Prompt Gray
     Show-Mensagem "Exemplo: $($info.Exemplo)" Gray
@@ -878,15 +933,18 @@ function Add-ExclusionEntry {
             if (-not $saved.ok) {
                 if ($saved.diagnostic.code -eq 'DUPLICATE_IGNORED_FOLDER' -or $saved.diagnostic.code -eq 'DUPLICATE_IGNORED_FILE') {
                     Show-Mensagem "O valor já está configurado. $(Get-BridgeErrorMessage $saved 'Valor duplicado.')" Yellow
+                Confirmar-Continuar
                 } else {
                     $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar a exclusão.'
                     if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
                     Show-Mensagem "Erro: $mensagem" Red
                 }
+                Confirmar-Continuar
                 return
             }
             $persistido = @($saved.configuration.($info.Field))
             Show-Mensagem "$($info.SucessoAdd): $($persistido[-1])" Green
+            Confirmar-Continuar
         }
         '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
         default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
@@ -895,12 +953,14 @@ function Add-ExclusionEntry {
 
 function Remove-ExclusionEntry {
     param([ValidateSet('folder', 'file')][string]$Kind)
+    Show-AppScreen
     $summary = Get-V2Summary
     if (-not $summary) { return }
     $info = Get-ExclusionInfo $Kind
     $current = @($summary.configuration.($info.Field))
     if ($current.Count -eq 0) {
         Show-Mensagem $info.VazioRemove Yellow
+        Confirmar-Continuar
         return
     }
     Show-Mensagem "`n$($info.TituloRemove)" Cyan
@@ -935,9 +995,11 @@ function Remove-ExclusionEntry {
                 $mensagem = Get-BridgeErrorMessage $saved 'Não foi possível salvar a exclusão.'
                 if ($saved.changed) { $mensagem = "$mensagem A configuração pode ter sido alterada." }
                 Show-Mensagem "Erro: $mensagem" Red
+                Confirmar-Continuar
                 return
             }
             Show-Mensagem "$($info.SucessoRemove): $remover" Green
+            Confirmar-Continuar
         }
         '0' { Show-Mensagem 'Nenhuma configuração foi alterada.' Yellow }
         default { Show-Mensagem 'Opção inválida; nenhuma configuração foi alterada.' Yellow }
@@ -946,6 +1008,7 @@ function Remove-ExclusionEntry {
 
 function Invoke-EditIgnoredFolders {
     while ($true) {
+        Show-AppScreen
         Show-Mensagem "`nPASTAS IGNORADAS" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
         Write-Host '1. Adicionar pasta'
@@ -965,6 +1028,7 @@ function Invoke-EditIgnoredFolders {
 
 function Invoke-EditIgnoredFiles {
     while ($true) {
+        Show-AppScreen
         Show-Mensagem "`nARQUIVOS IGNORADOS" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
         Write-Host '1. Adicionar arquivo'
@@ -984,6 +1048,7 @@ function Invoke-EditIgnoredFiles {
 
 function Invoke-EditExclusions {
     while ($true) {
+        Show-AppScreen
         $summary = Get-V2Summary
         if (-not $summary) { return }
         $folders = @($summary.configuration.ignoredFolders)
@@ -1008,6 +1073,7 @@ function Invoke-EditExclusions {
 }
 
 function Show-CurrentConfiguration {
+    Show-AppScreen
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok -or -not $summary.configuration) {
         if ($summary.code -eq 'CONFIGURATION_MISSING') {
@@ -1015,6 +1081,7 @@ function Show-CurrentConfiguration {
         } else {
             Show-Mensagem "Erro: $(Get-BridgeErrorMessage $summary 'Não foi possível carregar a configuração atual.')" Red
         }
+        Confirmar-Continuar
         return
     }
     $config = $summary.configuration
@@ -1028,7 +1095,7 @@ function Show-CurrentConfiguration {
         'V3 — backups externos'
     }
     Show-Mensagem "Schema: $schemaDescription (VersaoSchema=$($config.schemaVersion))" Gray
-    Show-Mensagem 'Origem do projeto (PastaRaiz):' Cyan
+    Show-Mensagem 'Pasta raiz do projeto:' Cyan
     Show-Mensagem $config.projectRoot White
     Show-Mensagem "Tipos de arquivo (TiposArquivo): $(Get-TiposArquivoDescricao $config.fileTypes)" Cyan
     Show-Mensagem "Motor (Motor): $($config.engine)" Cyan
@@ -1051,13 +1118,15 @@ function Show-CurrentConfiguration {
     } else {
         foreach ($file in @($config.ignoredFiles)) { Show-Mensagem "- $file" White }
     }
+    Confirmar-Continuar
 }
 
 function Show-ConfigurationMenu {
     while ($true) {
+        Show-AppScreen
         Show-Mensagem "`nCONFIGURAÇÕES" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
-        Write-Host '1. Origem do projeto'
+        Write-Host '1. Pasta raiz do projeto'
         Write-Host '2. Tipos de arquivo'
         Write-Host '3. Exclusões'
         Write-Host '4. Perfil de minificação'
@@ -1147,13 +1216,16 @@ function Show-CandidatePreview {
     }
     $total = @($candidates).Count
     if ($total -eq 0) {
+        Show-AppScreen
         Show-Mensagem 'Nenhum arquivo elegível para minificação.' Yellow
+        Confirmar-Continuar
         return
     }
     $pageSize = 10
     $totalPages = [math]::Ceiling($total / $pageSize)
     $page = 1
     while ($true) {
+        Show-AppScreen
         $start = ($page - 1) * $pageSize
         $pageItems = @($candidates | Select-Object -Skip $start -First $pageSize)
         Show-Mensagem "`nARQUIVOS QUE SERÃO MINIFICADOS" Cyan
@@ -1191,21 +1263,20 @@ function Show-CandidatePreview {
 
 function Invoke-ScanAnalysis {
     param([hashtable]$Adjustments = @{})
+    Show-AppScreen
     Show-Mensagem 'Analisando o projeto...' Cyan
     Show-Mensagem 'Aguarde.' Gray
     $response = Invoke-SelfMinifierBridge @{ command = 'scan-analysis'; adjustments = $Adjustments }
     if (-not $response.ok) {
+        Show-AppScreen
         Show-Mensagem "Erro: $(Get-BridgeErrorMessage $response 'A análise foi bloqueada por um diagnóstico indisponível.')" Red
+        Confirmar-Continuar
         return
     }
     $analysis = $response.analysis
-    Show-ProjectAnalysis $analysis
-    if (@($analysis.execution.conflicts).Count -gt 0) {
-        Show-Mensagem 'Conflitos de destino .min (serão ignorados e preservados):' Yellow
-        foreach ($conflict in @($analysis.execution.conflicts)) { Show-Mensagem "- $($conflict.destinationPath)" Yellow }
-    }
     $blockers = @($analysis.execution.diagnostics.blockers)
     if ($blockers.Count -gt 0 -or $analysis.execution.status -eq 'blocked') {
+        Show-AppScreen
         Show-Mensagem 'A minificação está bloqueada:' Red
         foreach ($blocker in $blockers) {
             if ($blocker.message) { Show-Mensagem "- $($blocker.message)" Red }
@@ -1213,14 +1284,23 @@ function Invoke-ScanAnalysis {
             else { Show-Mensagem "- $($blocker.code)" Red }
         }
         Show-Mensagem 'Nenhum arquivo foi alterado.' Yellow
+        Confirmar-Continuar
         return
     }
     if (@($analysis.execution.items).Count -eq 0) {
+        Show-AppScreen
         Show-Mensagem 'Nenhum arquivo será minificado nesta análise.' Yellow
         Show-Mensagem 'Nenhum arquivo foi alterado.' Yellow
+        Confirmar-Continuar
         return
     }
     while ($true) {
+        Show-AppScreen
+        Show-ProjectAnalysis $analysis
+        if (@($analysis.execution.conflicts).Count -gt 0) {
+            Show-Mensagem 'Conflitos de destino .min (serão ignorados e preservados):' Yellow
+            foreach ($conflict in @($analysis.execution.conflicts)) { Show-Mensagem "- $($conflict.destinationPath)" Yellow }
+        }
         Write-Host "`n1. Ver arquivos que serão minificados"
         Write-Host '2. Iniciar minificação'
         Write-Host '0. Cancelar'
@@ -1241,6 +1321,7 @@ function Invoke-ScanAnalysis {
                     } else {
                         Show-Mensagem "Minificação bloqueada: $(Get-BridgeErrorMessage $execution 'A execução falhou sem diagnóstico disponível.')" Red
                     }
+                    Confirmar-Continuar
                     return
                 }
                 Show-ExecutionResult $execution
@@ -1264,7 +1345,7 @@ function Invoke-MinifyProject {
         }
         $config = $summary.configuration
         $modoEfetivo = if ($ajustes.ContainsKey('outputMode')) { $ajustes.outputMode } else { $config.outputMode }
-        Limpar-Tela
+        Show-AppScreen
         Show-Mensagem "`nMINIFICAR PROJETO" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
         Show-Mensagem "Projeto: $($config.projectRoot)" Cyan
@@ -1286,12 +1367,13 @@ function Invoke-MinifyProject {
 
 function Invoke-CreateInitialConfiguration {
     while ($true) {
+        Show-AppScreen
         Show-Mensagem "`nCRIAR CONFIGURAÇÃO INICIAL" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
-        Show-Mensagem 'Informe explicitamente a pasta raiz do projeto (PastaRaiz).' Gray
+        Show-Mensagem 'Informe a pasta raiz do projeto: a pasta onde estão os arquivos do projeto que serão analisados e minificados.' Gray
         Show-Mensagem 'O caminho deve ser absoluto no Windows e apontar para um diretório existente.' Gray
         Show-Mensagem '0 = Cancelar' Gray
-        $entrada = (Read-Host 'PastaRaiz').Trim()
+        $entrada = (Read-Host 'Pasta raiz do projeto (caminho completo)').Trim()
         if ($entrada -eq '0' -or $entrada -eq '') {
             Show-Mensagem 'Criação cancelada; a configuração não foi criada.' Yellow
             return
@@ -1299,6 +1381,7 @@ function Invoke-CreateInitialConfiguration {
         $preview = Invoke-SelfMinifierBridge @{ command = 'create-configuration'; projectRoot = $entrada; confirmed = $false }
         if (-not $preview.ok) {
             Show-Mensagem "Caminho inválido: $(Get-BridgeErrorMessage $preview 'A pasta informada não pôde ser validada.')" Red
+            Confirmar-Continuar
             continue
         }
         $config = $preview.configuration
@@ -1319,14 +1402,17 @@ function Invoke-CreateInitialConfiguration {
         $created = Invoke-SelfMinifierBridge @{ command = 'create-configuration'; projectRoot = $entrada; confirmed = $true }
         if (-not $created.ok) {
             Show-Mensagem "Erro: $(Get-BridgeErrorMessage $created 'A configuração não foi criada.')" Red
+            Confirmar-Continuar
             continue
         }
         Show-Mensagem "Configuração criada e validada: $($created.configurationPath)" Green
+        Confirmar-Continuar
         return
     }
 }
 
 function Show-CorrectConfiguration {
+    Show-AppScreen
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     Show-Mensagem "`nCORRIGIR CONFIGURAÇÃO" Cyan
     Show-Mensagem '────────────────────────────────────' Cyan
@@ -1340,9 +1426,11 @@ function Show-CorrectConfiguration {
     $retry = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if ($retry.ok) {
         Show-Mensagem 'Configuração válida detectada.' Green
+        Confirmar-Continuar
         return $true
     }
     Show-Mensagem "A configuração ainda é inválida: $(Get-BridgeErrorMessage $retry 'A validação da configuração falhou.')" Red
+    Confirmar-Continuar
     return $false
 }
 
@@ -1350,10 +1438,8 @@ function Show-MissingConfigurationMenu {
     while ($true) {
         $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
         if ($summary.ok) { return $true }
-        Limpar-Tela
-        Show-Mensagem "`nSELFMINIFIER" Cyan
-        Show-Mensagem '────────────────────────────────────' Cyan
-        Show-Mensagem 'CONFIGURAÇÃO NECESSÁRIA' Cyan
+        Show-AppScreen
+        Show-Mensagem "`nCONFIGURAÇÃO NECESSÁRIA" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
         Show-Mensagem 'O SelfMinifier ainda não possui uma configuração válida.' White
         Write-Host '1. Criar configuração inicial'
@@ -1373,10 +1459,8 @@ function Show-InvalidConfigurationMenu {
     while ($true) {
         $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
         if ($summary.ok) { return $true }
-        Limpar-Tela
-        Show-Mensagem "`nSELFMINIFIER" Cyan
-        Show-Mensagem '────────────────────────────────────' Cyan
-        Show-Mensagem 'CONFIGURAÇÃO INVÁLIDA' Cyan
+        Show-AppScreen
+        Show-Mensagem "`nCONFIGURAÇÃO INVÁLIDA" Cyan
         Show-Mensagem '────────────────────────────────────' Cyan
         Show-Mensagem 'O arquivo configuracao.ini existe, mas não pôde ser validado.' White
         Show-Mensagem 'Motivo:' Cyan
@@ -1400,8 +1484,7 @@ function Show-InvalidConfigurationMenu {
 function Start-SelfMinifierUi {
     $identity = Invoke-SelfMinifierBridge @{ command = 'version' }
     if (-not $identity.ok) { Show-Mensagem "Não foi possível obter a versão do SelfMinifier. $($identity.diagnostic.message)" Red; return }
-    Limpar-Tela
-    Write-Host "`nSELFMINIFIER v$($identity.version)" -ForegroundColor Cyan
+    $script:AppVersion = $identity.version
     $summary = Invoke-SelfMinifierBridge @{ command = 'summary' }
     if (-not $summary.ok) {
         $continuar = $false
@@ -1413,8 +1496,7 @@ function Start-SelfMinifierUi {
         if (-not $continuar) { return }
     }
     while ($true) {
-        Write-Host "`nSELFMINIFIER" -ForegroundColor Cyan
-        Write-Host '────────────────────────────────────' -ForegroundColor Cyan
+        Show-AppScreen
         Write-Host '1. Minificar projeto'
         Write-Host '2. Configurações'
         Write-Host '3. Backups e restauração'
@@ -1433,6 +1515,6 @@ function Start-SelfMinifierUi {
                 default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
             }
         } catch [System.Management.Automation.PipelineStoppedException] { Show-Mensagem 'Operação cancelada.' Yellow }
-          catch { Show-Mensagem "Operação bloqueada: $($_.Exception.Message)" Red }
+          catch { Show-Mensagem "Operação bloqueada: $($_.Exception.Message)" Red; Confirmar-Continuar }
     }
 }

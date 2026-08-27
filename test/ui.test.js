@@ -32,7 +32,7 @@ test('UI explicita cancelamento, entrada inválida e recursos indisponíveis', a
 test('UI configurações expõe menu final, view V2 read-only e delega Comportamento ao editor persistente existente', async () => {
   const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
   assert.match(source, /function Show-ConfigurationMenu/);
-  assert.match(source, /1\. Origem do projeto/);
+  assert.match(source, /1\. Pasta raiz do projeto/);
   assert.match(source, /2\. Tipos de arquivo/);
   assert.match(source, /3\. Exclusões/);
   assert.match(source, /4\. Perfil de minificação/);
@@ -47,7 +47,7 @@ test('UI configurações expõe menu final, view V2 read-only e delega Comportam
   assert.match(source, /Nenhuma configuração foi alterada/);
   assert.match(source, /command = 'summary'/);
   assert.match(source, /\$config = \$summary\.configuration/);
-  assert.match(source, /Origem do projeto \(PastaRaiz\):/);
+  assert.match(source, /Pasta raiz do projeto:/);
   assert.match(source, /Tipos de arquivo \(TiposArquivo\):/);
   assert.match(source, /Perfil \(Perfil\):/);
   assert.match(source, /Comportamento de saída \(ModoSaida\):/);
@@ -64,9 +64,9 @@ test('UI B1.2 expõe edição de origem e tipos de arquivo com confirmação num
   assert.match(source, /function Invoke-EditFileTypes/);
   assert.match(source, /'1' \{ Invoke-EditProjectRoot \}/);
   assert.match(source, /'2' \{ Invoke-EditFileTypes \}/);
-  assert.match(source, /Origem atual:/);
-  assert.match(source, /Informe a nova pasta do projeto/);
-  assert.match(source, /Nova origem:/);
+  assert.match(source, /Pasta raiz atual:/);
+  assert.match(source, /Informe a nova pasta raiz do projeto/);
+  assert.match(source, /Nova pasta raiz:/);
   assert.match(source, /1\. Salvar alteração/);
   assert.match(source, /command = 'update-configuration-v2'; projectRoot = \$entrada; confirmed = \$true/);
   assert.match(source, /command = 'update-configuration-v2'; fileTypes = \$novoValor; confirmed = \$true/);
@@ -246,4 +246,46 @@ test('UI F4 humaniza status, separa telas e preserva resultado até continuar', 
   assert.match(source, /Status: \$\(Get-ExecutionStatusLabel/);
   assert.match(source, /Operação concluída com sucesso\./);
   assert.doesNotMatch(source, /%\s*\.\.\.|progresso|Progress/);
+});
+
+test('UI usa linguagem compreensível para a raiz do projeto e IDs de backup [Bn]', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  assert.match(source, /PASTA RAIZ DO PROJETO/);
+  assert.match(source, /Pasta raiz atual:/);
+  assert.match(source, /Informe a nova pasta raiz do projeto\. 0 = Cancelar/);
+  assert.match(source, /Pasta raiz do projeto \(caminho completo\)/);
+  assert.match(source, /a pasta onde estão os arquivos do projeto que serão analisados e minificados/);
+  assert.doesNotMatch(source, /PastaRaiz/);
+  assert.match(source, /BACKUPS CONHECIDOS/);
+  assert.match(source, /function Show-AppScreen/);
+  assert.match(source, /\$backupId = 'B' \+ \(\$index \+ 1\)/);
+  assert.match(source, /Digite o ID do backup a restaurar \(ex\.: B1\)/);
+  assert.doesNotMatch(source, /cancelar:'\)/);
+  assert.match(source, /B\(\[1-9\]\[0-9\]\*\)/);
+  assert.match(source, /ID inválido; use o formato B1, B2/);
+  assert.match(source, /ID fora da lista; escolha um ID exibido/);
+});
+
+test('todas as telas interativas identificadas usam o ciclo de tela comum', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  const screens = [
+    'Start-SelfMinifierUi', 'Invoke-MinifyProject', 'Show-ConfigurationMenu', 'Show-RestoreMenu',
+    'Show-Artefatos', 'Show-MissingConfigurationMenu', 'Show-InvalidConfigurationMenu',
+    'Invoke-EditProjectRoot', 'Invoke-KnownBackupRestoreSelection', 'Invoke-EditFileTypes',
+    'Invoke-PersistentConfiguration', 'Invoke-EditOutputMode', 'Invoke-EditBackupRoot',
+    'Invoke-EditExclusions', 'Invoke-EditIgnoredFolders', 'Invoke-EditIgnoredFiles',
+    'Add-ExclusionEntry', 'Remove-ExclusionEntry', 'Show-CurrentConfiguration',
+    'Show-IgnoredFoldersList', 'Show-IgnoredFilesList', 'Show-CurrentExclusions',
+    'Invoke-EditProfile', 'Invoke-TemporaryAdjustment', 'Invoke-ScanAnalysis',
+    'Show-CandidatePreview', 'Invoke-CreateInitialConfiguration', 'Show-CorrectConfiguration',
+    'Invoke-SearchHistoricalTag', 'Invoke-SearchHistoryByPath', 'Invoke-HistoricalArtifactFlow',
+    'Invoke-HistoricalRecoveryExport',
+  ];
+  for (const name of screens) {
+    const start = source.indexOf(`function ${name} {`);
+    assert.ok(start !== -1, name);
+    const next = source.indexOf('\nfunction ', start + 1);
+    const body = next === -1 ? source.slice(start) : source.slice(start, next);
+    assert.match(body, /Show-AppScreen/, name);
+  }
 });
