@@ -6,7 +6,7 @@ import { resolveRuntimePaths } from '../runtime/paths.js';
 import { assertPathHasNoLinks } from './backup.js';
 import { IntegrityError } from './errors.js';
 import { hashContentSha256, hashFileSha256 } from './hash.js';
-import { readJsonUtf8, writeJsonUtf8Atomic } from './json-store.js';
+import { readJsonUtf8WithBytes, writeJsonUtf8Atomic } from './json-store.js';
 import { SHA256_PATTERN, requireObject } from './schema.js';
 
 export const ARTIFACT_ID_PATTERN = /^[A-F0-9]{24}$/;
@@ -136,15 +136,65 @@ export async function assertHistoricalExecutionWritable(historyDirectory, execut
   }
 }
 
-export async function writeHistoricalExecutionRecord(historyDirectory, record) {
+class HistoricalIndex {
+  #executionIds = new Set();
+  #artifactIds = new Set();
+  #fingerprints = new Map();
+
+  constructor(snapshots) {
+    for (const snapshot of snapshots) {
+      this.#executionIds.add(snapshot.record.executionId);
+      this.#fingerprints.set(snapshot.record.executionId, snapshot.fingerprint);
+      for (const artifact of snapshot.record.artifacts) this.#artifactIds.add(artifact.artifactId);
+    }
+  }
+
+  hasExecutionId(executionId) { return this.#executionIds.has(executionId); }
+
+  hasArtifactId(artifactId) { return this.#artifactIds.has(artifactId); }
+
+  reserveArtifactId(artifactId) {
+    if (!ARTIFACT_ID_PATTERN.test(artifactId)) throw new IntegrityError('INVALID_ARTIFACT_ID', 'O artifactId reservado é inválido.');
+    if (this.#artifactIds.has(artifactId)) return false;
+    this.#artifactIds.add(artifactId);
+    return true;
+  }
+
+  fingerprintFor(executionId) { return this.#fingerprints.get(executionId); }
+
+  assertPreservedBy(current) {
+    requireHistoryIndex(current);
+    for (const [executionId, fingerprint] of this.#fingerprints) {
+      if (current.fingerprintFor(executionId) !== fingerprint) {
+        throw new IntegrityError('HISTORY_IMMUTABILITY_VIOLATION', `O registro histórico ${executionId} mudou durante a operação.`);
+      }
+    }
+  }
+}
+
+function requireHistoryIndex(index) {
+  if (!(index instanceof HistoricalIndex)) throw new IntegrityError('INVALID_HISTORY_INDEX', 'O índice histórico da operação é inválido.');
+  return index;
+}
+
+function assertImmutableHistoryPreserved(baseline, current) {
+  requireHistoryIndex(baseline).assertPreservedBy(current);
+}
+
+export async function writeHistoricalExecutionRecord(historyDirectory, record, options = {}) {
   validateHistoricalExecutionRecord(record);
-  const recordPath = await assertHistoricalExecutionWritable(historyDirectory, record.executionId);
+  const buildIndex = options.createHistoricalIndex ?? createHistoricalIndex;
+  const currentIndex = await buildIndex(historyDirectory);
+  if (options.historyIndex) assertImmutableHistoryPreserved(options.historyIndex, currentIndex);
+  if (currentIndex.hasExecutionId(record.executionId)) {
+    throw new IntegrityError('HISTORY_RECORD_COLLISION', `Já existe um registro histórico para a execução ${record.executionId}.`);
+  }
   for (const artifact of record.artifacts) {
-    const existing = await findHistoricalArtifact(historyDirectory, artifact.artifactId);
-    if (existing) {
+    if (currentIndex.hasArtifactId(artifact.artifactId)) {
       throw new IntegrityError('HISTORY_ARTIFACT_ID_COLLISION', `O artifactId ${artifact.artifactId} já pertence a outro registro histórico.`);
     }
   }
+  const recordPath = await assertHistoricalExecutionWritable(historyDirectory, record.executionId);
   const temporaryPath = join(normalize(resolve(historyDirectory)), `.history-write-${randomUUID()}.tmp`);
   try {
     await writeJsonUtf8Atomic(temporaryPath, record, 'HISTORY_RECORD');
@@ -160,22 +210,32 @@ export async function writeHistoricalExecutionRecord(historyDirectory, record) {
     if (JSON.stringify(persisted) !== JSON.stringify(record) || actualHash !== expectedHash) {
       throw new IntegrityError('HISTORY_RECORD_VERIFICATION_FAILED', 'O registro histórico persistido não corresponde ao conteúdo esperado.', { recordPath });
     }
-    return { path: recordPath, hash: actualHash, record: persisted };
+    const persistedIndex = await buildIndex(historyDirectory);
+    assertImmutableHistoryPreserved(currentIndex, persistedIndex);
+    if (requireHistoryIndex(persistedIndex).fingerprintFor(record.executionId) !== actualHash) {
+      throw new IntegrityError('HISTORY_RECORD_VERIFICATION_FAILED', 'O índice histórico não confirmou o registro persistido.', { recordPath });
+    }
+    return { path: recordPath, hash: actualHash, record: persisted, historyIndex: persistedIndex };
   } finally {
     await rm(temporaryPath, { force: true }).catch(() => {});
   }
 }
 
-async function readHistoricalExecutionRecordFromValidatedDirectory(normalizedDirectory, executionId, { memo = null } = {}) {
+async function readHistoricalExecutionSnapshotFromValidatedDirectory(normalizedDirectory, executionId, { memo = null } = {}) {
   const recordPath = resolveHistoricalExecutionPath(normalizedDirectory, executionId);
   await assertPathHasNoLinks(recordPath, { memo });
   const stats = await lstat(recordPath).catch((cause) => {
     throw new IntegrityError('HISTORY_RECORD_READ_FAILED', `Não foi possível acessar o registro histórico: ${recordPath}.`, { cause });
   });
   if (!stats.isFile() || stats.isSymbolicLink()) throw new IntegrityError('UNSAFE_HISTORY_RECORD', `O registro histórico não é um arquivo físico regular: ${recordPath}.`);
-  const record = validateHistoricalExecutionRecord(await readJsonUtf8(recordPath, 'HISTORY_RECORD'));
+  const document = await readJsonUtf8WithBytes(recordPath, 'HISTORY_RECORD');
+  const record = validateHistoricalExecutionRecord(document.value);
   if (record.executionId !== executionId) throw new IntegrityError('HISTORY_RECORD_ID_MISMATCH', 'O executionId interno diverge do nome do registro histórico.');
-  return record;
+  return { record, fingerprint: hashContentSha256(document.bytes) };
+}
+
+async function readHistoricalExecutionRecordFromValidatedDirectory(normalizedDirectory, executionId, options = {}) {
+  return (await readHistoricalExecutionSnapshotFromValidatedDirectory(normalizedDirectory, executionId, options)).record;
 }
 
 export async function readHistoricalExecutionRecord(historyDirectory, executionId) {
@@ -184,7 +244,7 @@ export async function readHistoricalExecutionRecord(historyDirectory, executionI
   return readHistoricalExecutionRecordFromValidatedDirectory(normalizedDirectory, executionId);
 }
 
-export async function listHistoricalExecutionRecords(historyDirectory = resolveRuntimePaths().historyDirectory) {
+async function loadHistoricalExecutionSnapshots(historyDirectory) {
   const memo = new Map();
   const normalizedDirectory = await ensureSafeHistoryDirectory(historyDirectory, { memo });
   if (!normalizedDirectory) return [];
@@ -200,19 +260,28 @@ export async function listHistoricalExecutionRecords(historyDirectory = resolveR
     executionIds.push(executionId);
   }
   executionIds.sort((left, right) => left.localeCompare(right));
-  const records = [];
+  const snapshots = [];
   const artifactIds = new Set();
   for (const executionId of executionIds) {
-    const record = await readHistoricalExecutionRecordFromValidatedDirectory(normalizedDirectory, executionId, { memo });
+    const snapshot = await readHistoricalExecutionSnapshotFromValidatedDirectory(normalizedDirectory, executionId, { memo });
+    const { record } = snapshot;
     for (const artifact of record.artifacts) {
       if (artifactIds.has(artifact.artifactId)) {
         throw new IntegrityError('DUPLICATE_HISTORICAL_ARTIFACT_ID', `O artifactId ${artifact.artifactId} aparece em mais de um registro histórico.`);
       }
       artifactIds.add(artifact.artifactId);
     }
-    records.push(record);
+    snapshots.push(snapshot);
   }
-  return records;
+  return snapshots;
+}
+
+export async function createHistoricalIndex(historyDirectory = resolveRuntimePaths().historyDirectory) {
+  return new HistoricalIndex(await loadHistoricalExecutionSnapshots(historyDirectory));
+}
+
+export async function listHistoricalExecutionRecords(historyDirectory = resolveRuntimePaths().historyDirectory) {
+  return (await loadHistoricalExecutionSnapshots(historyDirectory)).map((snapshot) => snapshot.record);
 }
 
 export async function findHistoricalArtifact(historyDirectory, artifactId) {

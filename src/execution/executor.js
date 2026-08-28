@@ -4,11 +4,11 @@ import { OUTPUT_MODES } from '../domain/index.js';
 import {
   ARTIFACT_ID_PATTERN,
   assertHistoricalExecutionWritable,
+  createHistoricalIndex,
   createHistoricalExecutionRecord,
   generateArtifactId,
   historicalExecutionRecordHash,
   insertSelfMinifierTag,
-  listHistoricalExecutionRecords,
   resolveHistoricalExecutionPath,
   createBackupManifest,
   createBackupManifestEntry,
@@ -126,14 +126,11 @@ function plannedRecoveryPath(plan, item) {
   return null;
 }
 
-function allocateArtifactId(generator, usedArtifactIds) {
+function allocateArtifactId(generator, historyIndex) {
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const artifactId = generator();
     if (!ARTIFACT_ID_PATTERN.test(artifactId)) throw new ExecutionError('ARTIFACT_ID_GENERATION_FAILED', 'O gerador produziu um artifactId fora do contrato aprovado.');
-    if (!usedArtifactIds.has(artifactId)) {
-      usedArtifactIds.add(artifactId);
-      return artifactId;
-    }
+    if (historyIndex.reserveArtifactId(artifactId)) return artifactId;
   }
   throw new ExecutionError('ARTIFACT_ID_COLLISION', 'Não foi possível gerar um artifactId único para a execução.');
 }
@@ -288,9 +285,9 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
 
   await recoverInterruptedExecution(plan.runtimePaths.lastExecutionJournal);
   const persistHistory = dependencies.writeHistoricalExecutionRecord ?? writeHistoricalExecutionRecord;
+  const buildHistoryIndex = dependencies.createHistoricalIndex ?? createHistoricalIndex;
   const historyPath = await assertHistoricalExecutionWritable(plan.runtimePaths.historyDirectory, plan.executionId);
-  const priorHistory = await listHistoricalExecutionRecords(plan.runtimePaths.historyDirectory);
-  const knownArtifactIds = priorHistory.flatMap((execution) => execution.artifacts.map((artifact) => artifact.artifactId));
+  const historyIndex = await buildHistoryIndex(plan.runtimePaths.historyDirectory);
   if ([2, 3].includes(plan.configurationSchemaVersion) && plan.items.length === 0) {
     const history = createHistoricalExecutionRecord({
       executionId: plan.executionId,
@@ -302,7 +299,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
     });
     const expectedHistoryHash = historicalExecutionRecordHash(history);
     try {
-      await persistHistory(plan.runtimePaths.historyDirectory, history);
+      await persistHistory(plan.runtimePaths.historyDirectory, history, { historyIndex, createHistoricalIndex: buildHistoryIndex });
       const writtenHistory = await inspectRegularFile(historyPath);
       if (!writtenHistory.exists || writtenHistory.hash !== expectedHistoryHash) {
         throw new ExecutionError('HISTORY_HASH_MISMATCH', 'O histórico persistido não corresponde à execução sem artefatos.');
@@ -345,7 +342,6 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
   const workingState = clone(plan.stateBefore.value);
   const backupManifestEntries = [];
   const historicalArtifacts = [];
-  const usedArtifactIds = new Set(knownArtifactIds);
   await persistJournal(journalPath, journal);
   journal.status = 'prepared';
   await persistJournal(journalPath, journal);
@@ -378,7 +374,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
         const destination = await inspectRegularFile(item.destinationPath);
         if (destination.exists) throw new ExecutionError('LATE_DESTINATION_CONFLICT', `O destino passou a existir após a pré-análise: ${item.destinationPath}.`);
       }
-      journalItem.artifactId = allocateArtifactId(dependencies.generateArtifactId ?? generateArtifactId, usedArtifactIds);
+      journalItem.artifactId = allocateArtifactId(dependencies.generateArtifactId ?? generateArtifactId, historyIndex);
 
       const backup = await prepareRecovery(plan, item, journalItem, dependencies);
       journalItem.status = 'prepared';
@@ -482,7 +478,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
     });
     journal.historyExpectedHash = historicalExecutionRecordHash(history);
     await persistJournal(journalPath, journal);
-    await persistHistory(plan.runtimePaths.historyDirectory, history);
+    await persistHistory(plan.runtimePaths.historyDirectory, history, { historyIndex, createHistoricalIndex: buildHistoryIndex });
     const writtenHistory = await inspectRegularFile(historyPath);
     if (!writtenHistory.exists || writtenHistory.hash !== journal.historyExpectedHash) {
       throw new ExecutionError('HISTORY_HASH_MISMATCH', 'O histórico persistido não corresponde ao conteúdo esperado.');

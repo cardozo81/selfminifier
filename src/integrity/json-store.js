@@ -26,7 +26,7 @@ async function renameAtomicWithWindowsRetry(oldPath, newPath, renameFile, wait, 
   }
 }
 
-export async function readJsonUtf8(filePath, kind) {
+async function readJsonUtf8Document(filePath, kind) {
   let bytes;
   try {
     bytes = await readFile(filePath);
@@ -42,10 +42,18 @@ export async function readJsonUtf8(filePath, kind) {
   }
 
   try {
-    return JSON.parse(text);
+    return { value: JSON.parse(text), bytes };
   } catch (cause) {
     throw new IntegrityError(`${kind}_INVALID_JSON`, `O arquivo contém JSON inválido: ${filePath}.`, { filePath, cause });
   }
+}
+
+export async function readJsonUtf8(filePath, kind) {
+  return (await readJsonUtf8Document(filePath, kind)).value;
+}
+
+export async function readJsonUtf8WithBytes(filePath, kind) {
+  return readJsonUtf8Document(filePath, kind);
 }
 
 export async function writeJsonUtf8Atomic(filePath, value, kind, dependencies = {}) {

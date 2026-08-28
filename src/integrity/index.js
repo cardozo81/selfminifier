@@ -16,6 +16,7 @@ export {
 export {
   ARTIFACT_ID_PATTERN,
   assertHistoricalExecutionWritable,
+  createHistoricalIndex,
   createHistoricalExecutionRecord,
   findHistoricalArtifact,
   generateArtifactId,

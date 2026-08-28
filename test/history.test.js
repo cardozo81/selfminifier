@@ -7,6 +7,7 @@ import { OUTPUT_MODES } from '../src/domain/index.js';
 import { createExecutionPlan, executePlan, readExecutionJournal } from '../src/execution/index.js';
 import {
   IntegrityError,
+  createHistoricalIndex,
   createHistoricalExecutionRecord,
   findHistoricalArtifact,
   generateArtifactId,
@@ -273,6 +274,111 @@ test('writer histórico rejeita artifactId já pertencente a outra execução', 
     assert.equal(await exists(resolveHistoricalExecutionPath(historyDirectory, 'collision-second')), false);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('execução multi-artefato reutiliza o HistoryIndex e limita enumerações completas a três', async () => {
+  const paths = await fixture(['a.js', 'b.js', 'c.js', 'd.js']);
+  try {
+    const { plan, minifier } = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED, 'history-index-count');
+    let indexBuilds = 0;
+    const result = await executePlan(plan, minifier, { confirmed: true }, {
+      createHistoricalIndex: async (historyDirectory) => {
+        indexBuilds += 1;
+        return createHistoricalIndex(historyDirectory);
+      },
+    });
+    assert.equal(result.status, 'completed');
+    assert.equal(result.items.length, 4);
+    assert.equal(indexBuilds, 3);
+    assert.equal((await readHistoricalExecutionRecord(paths.runtime.historyDirectory, plan.executionId)).artifacts.length, 4);
+  } finally {
+    await rm(paths.root, { recursive: true, force: true });
+  }
+});
+
+test('colisão externa de artifactId depois do snapshot bloqueia a persistência e aciona rollback', async () => {
+  const paths = await fixture();
+  const artifactId = 'ABCDEF0123456789ABCDEF99';
+  try {
+    const { plan, minifier } = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED, 'history-index-late-collision');
+    let indexBuilds = 0;
+    await assert.rejects(
+      executePlan(plan, minifier, { confirmed: true }, {
+        generateArtifactId: () => artifactId,
+        createHistoricalIndex: async (historyDirectory) => {
+          indexBuilds += 1;
+          if (indexBuilds === 2) {
+            await writeHistoricalExecutionRecord(historyDirectory, record(paths.projectRoot, 'external-collision', artifactId));
+          }
+          return createHistoricalIndex(historyDirectory);
+        },
+      }),
+      (error) => error.code === 'HISTORY_ARTIFACT_ID_COLLISION' && error.details.rollbackStatus === 'rolled-back',
+    );
+    assert.equal(await exists(plan.items[0].destinationPath), false);
+    assert.equal(await exists(resolveHistoricalExecutionPath(paths.runtime.historyDirectory, plan.executionId)), false);
+    assert.equal((await readExecutionJournal(paths.runtime.lastExecutionJournal)).status, 'rolled-back');
+    assert.equal((await findHistoricalArtifact(paths.runtime.historyDirectory, artifactId)).execution.executionId, 'external-collision');
+  } finally {
+    await rm(paths.root, { recursive: true, force: true });
+  }
+});
+
+test('mudança de bytes em registro histórico após o snapshot falha fechado por fingerprint', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'selfminifier-history-index-fingerprint-'));
+  const historyDirectory = join(root, 'Dados', 'Historico');
+  try {
+    const first = record(root, 'fingerprint-first', '111111111111111111111199');
+    await writeHistoricalExecutionRecord(historyDirectory, first);
+    const historyIndex = await createHistoricalIndex(historyDirectory);
+    const firstPath = resolveHistoricalExecutionPath(historyDirectory, first.executionId);
+    await writeFile(firstPath, `${await readFile(firstPath, 'utf8')} `, 'utf8');
+    await assert.rejects(
+      writeHistoricalExecutionRecord(
+        historyDirectory,
+        record(root, 'fingerprint-second', '222222222222222222222299'),
+        { historyIndex },
+      ),
+      (error) => error.code === 'HISTORY_IMMUTABILITY_VIOLATION',
+    );
+    assert.equal(await exists(resolveHistoricalExecutionPath(historyDirectory, 'fingerprint-second')), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('colisão externa após o link exclusivo é detectada e o journal remove somente o registro da tentativa', async () => {
+  const paths = await fixture();
+  const artifactId = 'ABCDEF0123456789ABCDEF98';
+  const externalExecutionId = 'external-after-link';
+  try {
+    const { plan, minifier } = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED, 'history-index-post-collision');
+    let indexBuilds = 0;
+    await assert.rejects(
+      executePlan(plan, minifier, { confirmed: true }, {
+        generateArtifactId: () => artifactId,
+        createHistoricalIndex: async (historyDirectory) => {
+          indexBuilds += 1;
+          if (indexBuilds === 3) {
+            const external = record(paths.projectRoot, externalExecutionId, artifactId);
+            await writeFile(
+              resolveHistoricalExecutionPath(historyDirectory, externalExecutionId),
+              `${JSON.stringify(external, null, 2)}\n`,
+              'utf8',
+            );
+          }
+          return createHistoricalIndex(historyDirectory);
+        },
+      }),
+      (error) => error.code === 'DUPLICATE_HISTORICAL_ARTIFACT_ID' && error.details.rollbackStatus === 'rolled-back',
+    );
+    assert.equal(await exists(plan.items[0].destinationPath), false);
+    assert.equal(await exists(resolveHistoricalExecutionPath(paths.runtime.historyDirectory, plan.executionId)), false);
+    assert.equal(await exists(resolveHistoricalExecutionPath(paths.runtime.historyDirectory, externalExecutionId)), true);
+    assert.equal((await readExecutionJournal(paths.runtime.lastExecutionJournal)).status, 'rolled-back');
+  } finally {
+    await rm(paths.root, { recursive: true, force: true });
   }
 });
 
