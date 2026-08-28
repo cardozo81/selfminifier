@@ -13,7 +13,7 @@ import { readTechnicalState } from '../integrity/state.js';
 import { resolveRuntimePaths } from '../runtime/paths.js';
 import { scan } from '../scanner/index.js';
 import { ExecutionError } from './errors.js';
-import { readSourceUtf8 } from './filesystem.js';
+import { readSourceUtf8Snapshot } from './filesystem.js';
 import { calculateExecutionRisk } from './risk.js';
 
 function deepFreeze(value) {
@@ -71,6 +71,7 @@ export async function createExecutionPlan({
   timestamp = new Date().toISOString(),
   meminifyVersion = null,
   scannerOptions = {},
+  dependencies = {},
 }) {
   if (!configuration || typeof executionId !== 'string' || !SAFE_EXECUTION_ID.test(executionId) || executionId === '.' || executionId === '..') {
     throw new ExecutionError('INVALID_PLAN_INPUT', 'Configuração e executionId são obrigatórios para a pré-análise.');
@@ -134,10 +135,11 @@ export async function createExecutionPlan({
       blockers.push({ code: 'UNKNOWN_SOURCE_ORIGIN', sourceId: eligible.sourceId, normalizedPath: sourcePath });
       continue;
     }
-    const sourceHash = await hashFileSha256(sourcePath);
+    const sourceSnapshot = await (dependencies.readSourceUtf8Snapshot ?? readSourceUtf8Snapshot)(sourcePath);
+    const sourceHash = sourceSnapshot.hash;
     const sourceStats = await lstat(sourcePath);
     const tagClassification = await classifySelfMinifierTag({
-      content: await readSourceUtf8(sourcePath),
+      content: sourceSnapshot.content,
       fileType: eligible.fileType,
       currentHash: sourceHash,
       historyDirectory: runtimePaths.historyDirectory,
@@ -216,7 +218,7 @@ export async function createExecutionPlan({
       sourcePath,
       relativePath: eligible.relativePath ?? null,
       sourceHash,
-      sourceSize: sourceStats.size,
+      sourceSize: sourceSnapshot.size,
       fileType: eligible.fileType,
       destinationPath,
       destinationExistedAtPlan: destination.exists,

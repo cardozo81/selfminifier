@@ -17,6 +17,7 @@ import {
 import { hashContentSha256, hashFileSha256, readTechnicalState } from '../src/integrity/index.js';
 import { createDefaultMinifierRegistry } from '../src/minifiers/index.js';
 import { resolveRuntimePaths } from '../src/runtime/paths.js';
+import { readSourceUtf8Snapshot } from '../src/execution/filesystem.js';
 
 async function exists(filePath) {
   try { await lstat(filePath); return true; } catch (cause) { if (cause?.code === 'ENOENT') return false; throw cause; }
@@ -52,6 +53,19 @@ function adapter() {
   return createDefaultMinifierRegistry().get('esbuild');
 }
 
+function observeMinifier(baseMinifier, onMinify) {
+  return {
+    id: baseMinifier.id,
+    version: baseMinifier.version,
+    validateInstallation: (...args) => baseMinifier.validateInstallation(...args),
+    validateConfiguration: (...args) => baseMinifier.validateConfiguration(...args),
+    minify: async (input) => {
+      await onMinify(input);
+      return baseMinifier.minify(input);
+    },
+  };
+}
+
 async function planFor(paths, outputMode, options = {}) {
   const minifier = options.minifier ?? adapter();
   const plan = await createExecutionPlan({
@@ -61,9 +75,74 @@ async function planFor(paths, outputMode, options = {}) {
     backupRoot: paths.backupRoot,
     executionId: options.executionId ?? 'exec-001',
     timestamp: '2026-08-21T12:00:00.000Z',
+    dependencies: options.planDependencies,
   });
   return { plan, minifier };
 }
+
+test('planejamento e execução adquirem os bytes da fonte uma vez por fase e mantêm hash e conteúdo idênticos', async () => {
+  const paths = await fixture();
+  try {
+    const originalBytes = await readFile(paths.files[0]);
+    let planningAcquisitions = 0;
+    let executionAcquisitions = 0;
+    let minifierInput = null;
+    const baseMinifier = adapter();
+    const observedMinifier = observeMinifier(baseMinifier, async (input) => {
+      minifierInput = input.source;
+    });
+    const { plan } = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED, {
+      minifier: observedMinifier,
+      planDependencies: {
+        readSourceUtf8Snapshot: (filePath) => readSourceUtf8Snapshot(filePath, {
+          readFile: async (path) => {
+            planningAcquisitions += 1;
+            return readFile(path);
+          },
+        }),
+      },
+    });
+    assert.equal(planningAcquisitions, 1);
+    assert.equal(plan.items[0].sourceHash, hashContentSha256(originalBytes));
+    assert.equal(plan.items[0].sourceSize, originalBytes.byteLength);
+
+    const result = await executePlan(plan, observedMinifier, { confirmed: true }, {
+      readSourceUtf8Snapshot: (filePath) => readSourceUtf8Snapshot(filePath, {
+        readFile: async (path) => {
+          executionAcquisitions += 1;
+          return readFile(path);
+        },
+      }),
+    });
+    assert.equal(result.status, 'completed');
+    assert.equal(executionAcquisitions, 1);
+    assert.equal(minifierInput, originalBytes.toString('utf8'));
+  } finally {
+    await rm(paths.root, { recursive: true, force: true });
+  }
+});
+
+test('mudança da fonte entre planejamento e execução continua bloqueada antes da minificação nos dois modos', async () => {
+  for (const outputMode of [OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED, OUTPUT_MODES.BACKUP_OVERWRITE]) {
+    const paths = await fixture();
+    try {
+      const { plan, minifier } = await planFor(paths, outputMode);
+      await writeFile(paths.files[0], 'const alterado = true;\n', 'utf8');
+      let minifierCalled = false;
+      const observedMinifier = observeMinifier(minifier, async () => {
+        minifierCalled = true;
+      });
+      await assert.rejects(
+        executePlan(plan, observedMinifier, { confirmed: true }),
+        (error) => error.code === 'SOURCE_CHANGED' && error.details.rollbackStatus === 'rolled-back',
+      );
+      assert.equal(minifierCalled, false);
+      assert.equal(await exists(paths.files[0].replace(/\.js$/, '.min.js')), false);
+    } finally {
+      await rm(paths.root, { recursive: true, force: true });
+    }
+  }
+});
 
 test('pré-análise V2 é imutável, preserva destinos .min existentes e exige confirmação', async () => {
   const paths = await fixture(['a.js', 'b.js']);

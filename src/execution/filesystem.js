@@ -19,14 +19,21 @@ export async function inspectRegularFile(filePath) {
   }
 }
 
-export async function readSourceUtf8(filePath) {
+export async function readSourceUtf8Snapshot(filePath, dependencies = {}) {
+  const read = dependencies.readFile ?? readFile;
   let bytes;
-  try { bytes = await readFile(filePath); } catch (cause) {
+  try { bytes = await read(filePath); } catch (cause) {
     throw new ExecutionError('SOURCE_READ_FAILED', `Não foi possível ler a fonte: ${filePath}.`, { filePath, cause });
   }
-  try { return UTF8_DECODER.decode(bytes); } catch (cause) {
+  let content;
+  try { content = UTF8_DECODER.decode(bytes); } catch (cause) {
     throw new ExecutionError('SOURCE_INVALID_UTF8', `A fonte não contém UTF-8 válido: ${filePath}.`, { filePath, cause });
   }
+  return { content, hash: hashContentSha256(bytes), size: bytes.byteLength };
+}
+
+export async function readSourceUtf8(filePath) {
+  return (await readSourceUtf8Snapshot(filePath)).content;
 }
 
 async function writeDurableTemporary(targetPath, content, expectedHash) {

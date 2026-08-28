@@ -24,7 +24,7 @@ import {
   createValidatedRecoveryCopy,
   hashContentSha256,
   inspectRegularFile,
-  readSourceUtf8,
+  readSourceUtf8Snapshot,
   removeExactFile,
   replaceFileExact,
 } from './filesystem.js';
@@ -362,8 +362,16 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       const journalItem = journal.items[index];
       await dependencies.hooks?.beforeItem?.({ item: clone(item), index });
       await assertV2ItemSecurityAtWriteTime(plan, item);
-      const sourceBefore = await inspectRegularFile(item.sourcePath);
-      if (!sourceBefore.exists || sourceBefore.hash !== item.sourceHash) {
+      let sourceSnapshot;
+      try {
+        sourceSnapshot = await (dependencies.readSourceUtf8Snapshot ?? readSourceUtf8Snapshot)(item.sourcePath);
+      } catch (cause) {
+        if (cause?.code === 'SOURCE_READ_FAILED' && cause.details?.cause?.code === 'ENOENT') {
+          throw new ExecutionError('SOURCE_CHANGED', `A fonte mudou após a pré-análise: ${item.sourcePath}.`);
+        }
+        throw cause;
+      }
+      if (sourceSnapshot.hash !== item.sourceHash) {
         throw new ExecutionError('SOURCE_CHANGED', `A fonte mudou após a pré-análise: ${item.sourcePath}.`);
       }
       if (journalItem.operation === 'create-output') {
@@ -376,11 +384,10 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       journalItem.status = 'prepared';
       await persistJournal(journalPath, journal);
 
-      const sourceText = await readSourceUtf8(item.sourcePath);
       const minified = await minifier.minify({
         type: item.fileType,
         profile: plan.profile,
-        source: sourceText,
+        source: sourceSnapshot.content,
         engineId: plan.engine.id,
       });
       if (minified.status !== 'success' || typeof minified.output !== 'string' || minified.output.length === 0) {
