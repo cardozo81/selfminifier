@@ -1,6 +1,6 @@
 # SelfMinifier
 
-Status atual: versão `0.2.2`, com interface interativa, minificação transacional, restauração manual segura, documentação offline e empacotamento local validado.
+Status atual: versão `0.2.3`, com otimizações de desempenho, interface interativa, minificação transacional, restauração manual segura, documentação offline e empacotamento local validado.
 
 O SelfMinifier (anteriormente Meminify) tem como objetivo oferecer minificação segura e controlada de arquivos JavaScript e CSS. O projeto é direcionado ao Windows, com interface interativa em PowerShell e execução baseada em Node.js.
 
@@ -20,4 +20,4 @@ Use `Executar.cmd` para iniciar o menu PowerShell. O menu principal consolidado 
 
 Já existem domínio/configuração, adapter esbuild, scanner read-only, integridade SHA-256, matriz determinística de risco de execução, execução transacional, bootstrap Windows, menu PowerShell, restauração manual, logs, relatórios e empacotamento local. A interface 0.2.2 adiciona cabeçalho persistente com versão, ciclo de vida de tela que substitui a anterior em vez de acumular saída, terminologia `Pasta raiz do projeto` e seleção de backups com identificadores efêmeros `[B1]`, `[B2]`, etc. O perfil `Personalizado` e a retenção automática permanecem pendentes; os GitHub Releases `0.2.0-rc.1`, `0.2.0-rc.2` e `0.2.0-rc.3` já foram publicados como PRERELEASE.
 
-Use `publicar.cmd` para gerar localmente `dist/SelfMinifier-0.2.2.zip` e seu checksum SHA-256. O SelfMinifier 0.2.2 suporta Node.js 24.x (LTS recomendado) e 25.x; a major mínima é 24 e majors futuras não são aceitas automaticamente. Com Node homologado, o início normal é offline e nunca executa `npm ci` nem `npm install`; dependência ausente ou divergente bloqueia e exige reextrair uma distribuição íntegra. O `publicar.cmd` pode preparar as dependências locais do checkout com `npm ci` somente após confirmação explícita. Esse fluxo não publica GitHub Release.
+Use `publicar.cmd` para gerar localmente `dist/SelfMinifier-0.2.3.zip` e seu checksum SHA-256. O SelfMinifier 0.2.3 inclui otimizações que reduzem leituras redundantes da fonte e enumerações repetidas do histórico, preservando as validações de integridade e segurança. A versão suporta Node.js 24.x (LTS recomendado) e 25.x; a major mínima é 24 e majors futuras não são aceitas automaticamente. Com Node homologado, o início normal é offline e nunca executa `npm ci` nem `npm install`; dependência ausente ou divergente bloqueia e exige reextrair uma distribuição íntegra. O `publicar.cmd` pode preparar as dependências locais do checkout com `npm ci` somente após confirmação explícita. Esse fluxo não publica GitHub Release.

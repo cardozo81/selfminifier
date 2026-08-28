@@ -2,6 +2,11 @@
 
 ## Versões
 
+### 0.2.3
+
+- Otimização de desempenho com redução de leituras redundantes da fonte e de enumerações repetidas do histórico durante a minificação.
+- Validações de integridade e segurança, incluindo SHA-256, revalidação TOCTOU e persistência fail-closed, permanecem preservadas.
+
 ### 0.2.2
 
 - Cabeçalho persistente com versão da aplicação visível em telas interativas completas.
