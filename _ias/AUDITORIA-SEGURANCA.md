@@ -1,6 +1,6 @@
 # Auditoria de segurança e limites do redesign
 
-Documento de contexto para agentes de IA. Registra o estado **atual** (v0.2.3) dos
+Documento de contexto para agentes de IA. Registra o estado **atual** (v0.3.0) dos
 invariantes permanentes de integridade e os limites que mudanças futuras não podem
 enfraquecer. O contrato de configuração e scanner aqui descrito é V2-only.
 

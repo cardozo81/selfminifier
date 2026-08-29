@@ -2,6 +2,14 @@
 
 ## Versões
 
+### 0.3.0
+
+- Nova tela de **Uso de armazenamento** com diagnóstico read-only das categorias: backups, histórico imutável, relatórios e logs técnicos.
+- Exibição do `Total contabilizado` com medição exata; estados parciais ou indisponíveis não são apresentados como completos.
+- Symlinks, junctions e reparse points não são seguidos na medição.
+- Raiz externa de backups (V3) medida com a mesma validação de segurança read-only existente.
+- Dados técnicos de runtime, recuperação e temporários são intencionalmente excluídos do `Total contabilizado`.
+
 ### 0.2.3
 
 - Otimização de desempenho com redução de leituras redundantes da fonte e de enumerações repetidas do histórico durante a minificação.
