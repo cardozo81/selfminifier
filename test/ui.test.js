@@ -266,11 +266,23 @@ test('UI usa linguagem compreensível para a raiz do projeto e IDs de backup [Bn
   assert.match(source, /ID fora da lista; escolha um ID exibido/);
 });
 
+test('UI D1 expõe tela de uso de armazenamento e item do menu principal', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  assert.match(source, /6\. Uso de armazenamento/);
+  assert.match(source, /'6' \{ Show-StorageUsage \}/);
+  assert.match(source, /function Show-StorageUsage/);
+  assert.match(source, /USO DE ARMAZENAMENTO/);
+  assert.match(source, /Total contabilizado:/);
+  assert.match(source, /Não inclui estado técnico de runtime, recuperação ou dados temporários\./);
+  assert.match(source, /function Format-StorageSize/);
+  assert.match(source, /command = 'storage-usage'/);
+});
+
 test('todas as telas interativas identificadas usam o ciclo de tela comum', async () => {
   const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
   const screens = [
     'Start-SelfMinifierUi', 'Invoke-MinifyProject', 'Show-ConfigurationMenu', 'Show-RestoreMenu',
-    'Show-Artefatos', 'Show-MissingConfigurationMenu', 'Show-InvalidConfigurationMenu',
+    'Show-Artefatos', 'Show-StorageUsage', 'Show-MissingConfigurationMenu', 'Show-InvalidConfigurationMenu',
     'Invoke-EditProjectRoot', 'Invoke-KnownBackupRestoreSelection', 'Invoke-EditFileTypes',
     'Invoke-PersistentConfiguration', 'Invoke-EditOutputMode', 'Invoke-EditBackupRoot',
     'Invoke-EditExclusions', 'Invoke-EditIgnoredFolders', 'Invoke-EditIgnoredFiles',

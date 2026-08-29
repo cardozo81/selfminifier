@@ -108,6 +108,51 @@ function Show-Artefatos {
     Confirmar-Continuar
 }
 
+function Format-StorageValue {
+    param([double]$Value)
+    $text = $Value.ToString('0.0', [System.Globalization.CultureInfo]::InvariantCulture)
+    return $text.Replace('.', ',')
+}
+
+function Format-StorageSize {
+    param([long]$Bytes)
+    if ($Bytes -lt 0) { $Bytes = 0 }
+    if ($Bytes -lt 1KB) { return "$Bytes B" }
+    if ($Bytes -lt 1MB) { return "$(Format-StorageValue ($Bytes / 1KB)) KB" }
+    if ($Bytes -lt 1GB) { return "$(Format-StorageValue ($Bytes / 1MB)) MB" }
+    return "$(Format-StorageValue ($Bytes / 1GB)) GB"
+}
+
+function Get-StorageStatusLabel {
+    param([string]$Status)
+    switch ($Status) {
+        'present' { return 'presente' }
+        'absent' { return 'ausente' }
+        'partial' { return 'parcial' }
+        'unavailable' { return 'indisponível' }
+        default { return $Status }
+    }
+}
+
+function Show-StorageUsage {
+    Show-AppScreen
+    Show-Mensagem 'USO DE ARMAZENAMENTO' Cyan
+    Show-Separador
+    $response = Invoke-SelfMinifierBridge @{ command = 'storage-usage' }
+    if (-not $response.ok) { Show-Mensagem "Erro: $($response.diagnostic.message)" Red; Confirmar-Continuar; return }
+    foreach ($category in $response.categories) {
+        $size = Format-StorageSize $category.bytes
+        $line = "$($category.label): $size"
+        if ($category.status -ne 'present') { $line += " ($(Get-StorageStatusLabel $category.status))" }
+        Show-Mensagem $line White
+    }
+    Show-Mensagem ''
+    Show-Mensagem "Total contabilizado: $(Format-StorageSize $response.totalContabilizado)" Cyan
+    if (-not $response.complete) { Show-Mensagem 'Total parcial: uma ou mais categorias não puderam ser medidas integralmente.' Yellow }
+    Show-Mensagem 'Não inclui estado técnico de runtime, recuperação ou dados temporários.' Gray
+    Confirmar-Continuar
+}
+
 function Invoke-RestoreFlow {
     param([ValidateSet('backup', 'last-min')][string]$Kind, [string]$BackupDirectory = '')
     $request = @{ command = 'plan-restore'; kind = $Kind }
@@ -1502,6 +1547,7 @@ function Start-SelfMinifierUi {
         Write-Host '3. Backups e restauração'
         Write-Host '4. Relatórios'
         Write-Host '5. Logs técnicos'
+        Write-Host '6. Uso de armazenamento'
         Write-Host '0. Sair'
         $choice = (Read-Host 'Escolha').Trim()
         try {
@@ -1511,6 +1557,7 @@ function Start-SelfMinifierUi {
                 '3' { Show-RestoreMenu }
                 '4' { Show-Artefatos reports }
                 '5' { Show-Artefatos logs }
+                '6' { Show-StorageUsage }
                 '0' { return }
                 default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
             }

@@ -2,11 +2,12 @@ import { access } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   deriveEffectiveConfiguration,
   loadConfiguration,
   resolveEffectiveBackupRoot,
+  validateExternalBackupRoot,
   validateV2Configuration,
   validateV3Configuration,
   writeV2Configuration,
@@ -17,6 +18,7 @@ import { assertPhysicalPath } from '../integrity/index.js';
 import { createDefaultMinifierRegistry } from '../minifiers/index.js';
 import { createExecutionPlan, executePlan, ExecutionError } from '../execution/index.js';
 import { listArtifacts, readArtifact, writeOperationalReports, writeTechnicalLog } from '../observability/index.mjs';
+import { measureStorageDirectory, STORAGE_STATES, summarizeStorageUsage } from '../observability/storage.js';
 import { createBackupRestorePlan, createLastMinRestorePlan, executeRestorePlan, listKnownBackups } from '../restore/index.js';
 import {
   inspectHistoricalArtifact,
@@ -111,6 +113,89 @@ async function persistArtifacts({ projectRoot, plan, result = null, resultStatus
   } catch (cause) { failures.push({ code: 'LOG_WRITE_FAILED', message: cause.message }); }
   if (failures.length) artifacts.diagnostics = failures;
   return artifacts;
+}
+
+const STORAGE_CATEGORY_LABELS = Object.freeze({
+  backups: 'Backups',
+  history: 'Histórico',
+  reports: 'Relatórios',
+  logs: 'Logs técnicos',
+});
+
+function storageCategory(key, path, status, bytes, complete, extra = {}) {
+  return Object.freeze({ key, label: STORAGE_CATEGORY_LABELS[key], path, status, bytes, complete, ...extra });
+}
+
+function hasNestedCode(error, code) {
+  const seen = new Set();
+  const pending = [error];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+    if (current.code === code) return true;
+    if (current.cause) pending.push(current.cause);
+    if (current.details && typeof current.details === 'object') pending.push(current.details);
+  }
+  return false;
+}
+
+async function measureInternalCategory(directoryPath, memo) {
+  try {
+    const proof = await assertPhysicalPath(directoryPath, { requireDirectory: true, allowMissing: true, memo });
+    if (!proof.exists) return { status: STORAGE_STATES.ABSENT, bytes: 0, complete: true };
+  } catch {
+    return { status: STORAGE_STATES.UNAVAILABLE, bytes: 0, complete: false };
+  }
+  return measureStorageDirectory(directoryPath);
+}
+
+async function measureBackupStorage(projectRoot, persistent) {
+  const backupRoot = resolveApplicationPaths(projectRoot).backupRoot;
+  const mode = persistent.ok && persistent.schema === 'v3' && persistent.configuration.backupRoot !== null
+    ? 'external'
+    : 'internal';
+  if (mode === 'external') {
+    let effectiveRoot;
+    try {
+      effectiveRoot = await resolveEffectiveBackupRoot(persistent.configuration, projectRoot);
+    } catch {
+      return { mode, path: backupRoot, status: STORAGE_STATES.UNAVAILABLE, bytes: 0, complete: false };
+    }
+    try {
+      await validateExternalBackupRoot(effectiveRoot, persistent.configuration.projectRoot, { proveWritable: false });
+    } catch (error) {
+      const status = hasNestedCode(error, 'ENOENT') ? STORAGE_STATES.ABSENT : STORAGE_STATES.UNAVAILABLE;
+      return { mode, path: effectiveRoot, status, bytes: 0, complete: status === STORAGE_STATES.ABSENT };
+    }
+    return { mode, path: effectiveRoot, ...(await measureStorageDirectory(effectiveRoot)) };
+  }
+  const measured = await measureInternalCategory(backupRoot, new Map());
+  return { mode, path: backupRoot, ...measured };
+}
+
+async function storageUsage(projectRoot, persistent) {
+  const runtime = resolveRuntimePaths(projectRoot);
+  const memo = new Map();
+  const reportsDirectory = join(resolve(projectRoot), 'Dados', 'Relatorios');
+  const logsDirectory = join(resolve(projectRoot), 'Dados', 'Logs');
+  const backups = await measureBackupStorage(projectRoot, persistent);
+  const history = await measureInternalCategory(runtime.historyDirectory, memo);
+  const reports = await measureInternalCategory(reportsDirectory, memo);
+  const logs = await measureInternalCategory(logsDirectory, memo);
+  const categories = [
+    storageCategory('backups', backups.path, backups.status, backups.bytes, backups.complete, { mode: backups.mode }),
+    storageCategory('history', runtime.historyDirectory, history.status, history.bytes, history.complete),
+    storageCategory('reports', reportsDirectory, reports.status, reports.bytes, reports.complete),
+    storageCategory('logs', logsDirectory, logs.status, logs.bytes, logs.complete),
+  ];
+  const summary = summarizeStorageUsage(categories);
+  return Object.freeze({
+    ok: true,
+    categories,
+    totalContabilizado: summary.totalContabilizado,
+    complete: summary.complete,
+  });
 }
 
 function summarizeHistoricalResult(command, result) {
@@ -533,6 +618,10 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
   }
   if (request.command === 'read-artifact') {
     try { return { ok: true, kind: request.kind, name: request.name, content: await readArtifact(projectRoot, request.kind, request.name) }; }
+    catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+  }
+  if (request.command === 'storage-usage') {
+    try { return await storageUsage(projectRoot, persistent); }
     catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
   }
   if (request.command === 'summary') {
