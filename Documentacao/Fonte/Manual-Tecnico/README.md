@@ -58,6 +58,8 @@ A restauração `.min` lê somente a última execução concluída e remove apen
 
 `src/observability/index.mjs` produz logs técnicos em `Dados\Logs` e relatórios TXT/CSV em `Dados\Relatorios`. As quatro operações históricas reutilizam `writeTechnicalLog` para sucesso e bloqueio, sem criar outro subsistema. Relatórios não expõem stack traces e preservam motivos de itens ignorados ou pulados. A visualização pelo menu é read-only.
 
+`src/observability/cleanup.js` implementa a limpeza explícita de logs e relatórios. `previewArtifactCleanup` enumera artefatos canônicos (`tecnico-*.log`, `execucao-*.txt`, `execucao-*.csv`), calcula SHA-256 e tamanho por arquivo e retorna um snapshot imutável. `executeArtifactCleanup` recebe o snapshot confirmado pelo usuário e, para cada candidato: revalida o caminho físico (symlinks, junctions, reparse points), inspeciona o arquivo regular, compara o SHA-256 atual com o snapshot, verifica readonly e só então remove com `removeExactFile`. Candidatos alterados, ausentes, inseguros, readonly ou com falha de exclusão são pulados ou reportados como falha; o status final é `completed` ou `partial`. O bridge expõe `cleanup-artifacts` com `confirmed: false` para prévia e `confirmed: true` com o array de candidatos para execução. A limpeza não afeta backups, histórico, estado nem configuração.
+
 Diretórios técnicos relevantes:
 
 - `Dados\estado.json`: registros de fontes e saídas comprovadas.
@@ -67,7 +69,7 @@ Diretórios técnicos relevantes:
 - `_source_versions`: raiz interna compatível para backups V2 e V3 sem pasta externa.
 - `PastaBackups`: raiz física externa opcional em V3; não contém índice global e não recebe migração automática.
 
-Não há política automática de retenção ou remoção histórica.
+Não há política automática de retenção ou remoção histórica. A limpeza explícita de logs e relatórios está disponível desde 0.4.0.
 
 ## Runtime e bootstrap
 
@@ -106,5 +108,5 @@ O pacote inclui launcher, manifestos npm, `src`, `resources`, modelo de configur
 Os itens a seguir são registrados como planejamento futuro e não estão implementados nesta RC.
 
 - Linux e macOS: prioridade futura Linux, depois macOS se viável. A arquitetura desejada é um núcleo SelfMinifier compartilhado com adaptador por plataforma. Não há implementação nem suporte parcial declarado nesta RC.
-- Retenção e limpeza: estudo futuro sobre metadados históricos, backups, logs, relatórios e gestão de espaço. A prioridade de preservação é metadados de proveniência sobre payloads grandes de backup. Não há limpeza automática nesta RC.
+- Retenção automática: estudo futuro sobre metadados históricos, backups e gestão de espaço. A prioridade de preservação é metadados de proveniência sobre payloads grandes de backup. Não há limpeza automática nesta versão. A limpeza explícita e manual de logs e relatórios está implementada desde 0.4.0.
 - Arquivamento/remoção histórica: se dados históricos ou payload de backup forem arquivados, compactados ou removidos, a pesquisa por SelfMinifier-Tag não deve transformar silenciosamente um artefato conhecido em UNKNOWN. Uma solução futura deve reportar, quando aplicável: artefato existiu, artifactId/SelfMinifier-Tag, execução original, ação de retenção, timestamp da ação, status atual, local do arquivo/ZIP, disponibilidade de recuperação e perda explícita do payload quando removido. Arquiteturas futuras possíveis: (A) preservar o JSON histórico e remover somente o payload grande; (B) arquivar registros históricos completos e deixar catálogo/tombstone; (C) deixar tombstone reduzido em `Dados\Historico`; (D) catálogo de retenção explícito. Nada de índice persistente, tombstone, formato de arquivo ou fluxo de limpeza é implementado agora.

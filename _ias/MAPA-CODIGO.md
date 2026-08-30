@@ -99,7 +99,9 @@ Este mapa registra somente arquivos que existem e suas responsabilidades reais.
 | Arquivo | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
 | `src/observability/index.mjs` | Logs técnicos UTF-8, relatórios operacionais TXT/CSV e leitura/listagem read-only | Resultados de análise/execução, Node.js `fs/promises` |
+| `src/observability/cleanup.js` | Prévia e exclusão explícita de logs e relatórios canônicos com validação de segurança fresca | Integridade física, filesystem, scanner, observabilidade |
 | `test/observability.test.js` | Testes focados de logs, relatórios, CSV, falhas, recuperação e leitura read-only | `src/observability/index.mjs`, bridge |
+| `test/cleanup.test.js` | Testes focados de limpeza: prévia, confirmação, estrangeiro, readonly, junction, snapshot, parcial e fail-closed | Bridge, observabilidade |
 | `test/ui.test.js` | Validação textual dos menus, configuração e fluxo principal PowerShell | `src/app/ui.ps1` |
 | `test/ui-workflow.test.js` | Validação executável da paginação da prévia e do ciclo de vida do ajuste temporário B2/B2.1 | `src/app/ui.ps1`, Windows PowerShell |
 | `test/b3-ux.test.js` e `test/b3-ux-harness.ps1` | Navegação, estados históricos, seleção, exportação, cancelamento, regressões e logging B3-UX | UI PowerShell, bridge e observabilidade |

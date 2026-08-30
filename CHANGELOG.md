@@ -2,6 +2,17 @@
 
 ## Versões
 
+### 0.4.0
+
+- Limpeza explícita e manual de logs técnicos (`Dados\Logs`) e relatórios operacionais (`Dados\Relatorios`) pelo menu principal.
+- Prévia de candidatos antes da exclusão, com contagem, tamanho total e SHA-256 de cada artefato.
+- Confirmação explícita obrigatória; a exclusão é permanente e não pode ser desfeita.
+- Elegibilidade restrita a artefatos canônicos (`tecnico-*.log`, `execucao-*.txt`, `execucao-*.csv`); arquivos estrangeiros não são tocados.
+- Validação de segurança fresca imediatamente antes da exclusão: prova de caminhos, rejeição de symlinks, junctions e reparse points.
+- Preservação de arquivos somente leitura; itens readonly são pulados e reportados.
+- Confirmação vinculada ao snapshot da prévia: arquivo alterado ou ausente entre a prévia e a execução não é removido.
+- Relatório factual de falha parcial com listagens separadas de excluídos, pulados e falhos.
+
 ### 0.3.0
 
 - Nova tela de **Uso de armazenamento** com diagnóstico read-only das categorias: backups, histórico imutável, relatórios e logs técnicos.

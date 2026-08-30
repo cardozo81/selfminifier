@@ -1,12 +1,13 @@
-SelfMinifier 0.3.0
+SelfMinifier 0.4.0
 
 O SelfMinifier minifica arquivos JavaScript e CSS no Windows com análise prévia,
-confirmação explícita e mecanismos de backup/restauração.
+confirmação explícita, mecanismos de backup/restauração e limpeza explícita de
+logs e relatórios.
 
 Como iniciar
 - Para uso normal, clique duas vezes em Executar.cmd.
 - Executar.ps1 é a alternativa técnica/direta.
-- O SelfMinifier 0.3.0 suporta Node.js 24.x (LTS recomendado) e 25.x. A major
+- O SelfMinifier 0.4.0 suporta Node.js 24.x (LTS recomendado) e 25.x. A major
   mínima é 24; majors futuras não listadas não são aceitas automaticamente.
 - Na primeira execução, o programa valida o Node.js e as dependências. Se o
   Node.js estiver ausente, a instalação homologada pode ser oferecida com sua
@@ -44,6 +45,10 @@ Uso seguro
   válidos para a página atual.
 - Backups e restauração ficam disponíveis no menu. Relatórios ficam em
   Dados\Relatorios e logs técnicos em Dados\Logs.
+- Limpar relatórios e Limpar logs técnicos removem exclusivamente artefatos
+  canônicos (tecnico-*.log, execucao-*.txt, execucao-*.csv) após prévia,
+  confirmação explícita e validação de segurança. Arquivos estrangeiros,
+  somente leitura e alterados após a prévia são preservados.
 
 Configuracao
 - Configuracao\configuracao.ini.example é apenas o modelo distribuído, sem

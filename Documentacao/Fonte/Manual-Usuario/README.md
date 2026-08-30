@@ -28,6 +28,9 @@ SELFMINIFIER
 3. Backups e restauração
 4. Relatórios
 5. Logs técnicos
+6. Uso de armazenamento
+7. Limpar relatórios
+8. Limpar logs técnicos
 0. Sair
 ```
 
@@ -139,6 +142,17 @@ Históricos do modo `.min` continuam pesquisáveis e inspecionáveis. Quando `ba
 Após análise, execução, restauração ou operação histórica, o SelfMinifier registra rastreabilidade técnica UTF-8 em `Dados\Logs`; os fluxos operacionais aplicáveis também podem gerar relatórios TXT/CSV em `Dados\Relatorios`. O menu permite listar e visualizar esses arquivos em modo somente leitura.
 
 Relatórios mostram totais, itens ignorados com motivo, resultados de restauração e falhas. Logs técnicos podem conter caminhos, diagnósticos e stack traces; eles não são exibidos como mensagem normal do menu.
+
+## Limpeza de relatórios e logs
+
+O menu oferece **Limpar relatórios** e **Limpar logs técnicos** para remover explicitamente artefatos canônicos gerados pelo SelfMinifier. A limpeza segue dois passos:
+
+1. **Prévia:** o SelfMinifier lista os candidatos elegíveis, mostrando a quantidade e o tamanho total. Somente arquivos com nomes canônicos (`tecnico-*.log`, `execucao-*.txt`, `execucao-*.csv`) são candidatos; arquivos estrangeiros não são tocados.
+2. **Confirmação explícita:** após revisar a prévia, confirme a exclusão. A exclusão é permanente e não pode ser desfeita.
+
+Antes de cada exclusão, o SelfMinifier revalida o caminho e o conteúdo do arquivo. Se o arquivo foi alterado, se tornou somente leitura ou se foi substituído por um link simbólico, junction ou reparse point após a prévia, ele é preservado e reportado como pulado. O resultado da limpeza lista separadamente os arquivos excluídos, pulados e com falha.
+
+A limpeza não afeta backups, histórico, configuração ou qualquer outro dado do projeto.
 
 ## Problemas comuns
 
