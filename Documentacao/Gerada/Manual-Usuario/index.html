@@ -39,6 +39,9 @@ a { color: #005a9c; }
 3. Backups e restauração
 4. Relatórios
 5. Logs técnicos
+6. Uso de armazenamento
+7. Limpar relatórios
+8. Limpar logs técnicos
 0. Sair</code></pre>
 <p>Na primeira execução, ou sempre que <code>Configuracao\configuracao.ini</code> não existir, o menu operacional não é exibido. Em seu lugar aparece o menu restrito <strong>CONFIGURAÇÃO NECESSÁRIA</strong>, com <strong>Criar configuração inicial</strong>, <strong>Backups, restauração e histórico</strong> e <strong>Sair</strong>. A criação é guiada: o SelfMinifier solicita explicitamente a <code>PastaRaiz</code> (nunca infere o diretório atual), valida o caminho pelas regras de segurança existentes, mostra um resumo e só grava após confirmação explícita. Backups, restauração e histórico continuam acessíveis mesmo sem uma configuração operacional válida.</p>
 <p>Se o arquivo existir mas não puder ser validado, aparece <strong>CONFIGURAÇÃO INVÁLIDA</strong> com o motivo em linguagem compreensível. Nenhuma configuração é corrigida ou substituída automaticamente: o arquivo nunca é sobrescrito e o modelo <code>.example</code> nunca é copiado por cima. O menu normal só é liberado depois que a configuração é relida e validada pelo caminho normal.</p>
@@ -108,6 +111,14 @@ IgnorarArquivo01=src\config.js</code></pre>
 <h2>Relatórios e logs</h2>
 <p>Após análise, execução, restauração ou operação histórica, o SelfMinifier registra rastreabilidade técnica UTF-8 em <code>Dados\Logs</code>; os fluxos operacionais aplicáveis também podem gerar relatórios TXT/CSV em <code>Dados\Relatorios</code>. O menu permite listar e visualizar esses arquivos em modo somente leitura.</p>
 <p>Relatórios mostram totais, itens ignorados com motivo, resultados de restauração e falhas. Logs técnicos podem conter caminhos, diagnósticos e stack traces; eles não são exibidos como mensagem normal do menu.</p>
+<h2>Limpeza de relatórios e logs</h2>
+<p>O menu oferece <strong>Limpar relatórios</strong> e <strong>Limpar logs técnicos</strong> para remover explicitamente artefatos canônicos gerados pelo SelfMinifier. A limpeza segue dois passos:</p>
+<ol>
+<li><strong>Prévia:</strong> o SelfMinifier lista os candidatos elegíveis, mostrando a quantidade e o tamanho total. Somente arquivos com nomes canônicos (<code>tecnico-*.log</code>, <code>execucao-*.txt</code>, <code>execucao-*.csv</code>) são candidatos; arquivos estrangeiros não são tocados.</li>
+<li><strong>Confirmação explícita:</strong> após revisar a prévia, confirme a exclusão. A exclusão é permanente e não pode ser desfeita.</li>
+</ol>
+<p>Antes de cada exclusão, o SelfMinifier revalida o caminho e o conteúdo do arquivo. Se o arquivo foi alterado, se tornou somente leitura ou se foi substituído por um link simbólico, junction ou reparse point após a prévia, ele é preservado e reportado como pulado. O resultado da limpeza lista separadamente os arquivos excluídos, pulados e com falha.</p>
+<p>A limpeza não afeta backups, histórico, configuração ou qualquer outro dado do projeto.</p>
 <h2>Problemas comuns</h2>
 <ul>
 <li><strong>Configuração ausente ou inválida:</strong> se ausente, use <strong>Criar configuração inicial</strong> e informe explicitamente a <code>PastaRaiz</code>; se inválida, corrija <code>Configuracao\configuracao.ini</code> manualmente. Nenhuma configuração é sobrescrita ou substituída automaticamente.</li>
