@@ -297,7 +297,7 @@ async function createPlan(request, persistent, applicationVersion) {
     runtimeRoot: persistent.projectRoot,
     backupRoot,
     executionId: request.executionId ?? `exec-${Date.now()}`,
-    meminifyVersion: applicationVersion,
+    selfMinifierVersion: applicationVersion,
   });
   return { plan, minifier: registry.get(engineId), effective };
 }
@@ -745,7 +745,7 @@ export async function runBridgeRequest(request, { projectRoot } = {}) {
         }
         const result = await executePlan(plan, created.minifier, {
           confirmed: request.confirmed === true,
-          meminifyVersion: application.version,
+          selfMinifierVersion: application.version,
         });
         const artifacts = await persistArtifacts({ projectRoot, plan, result, resultStatus: result.status, startedAt, phases: [{ name: 'execução', status: result.status }], applicationVersion: application.version });
         return { ok: true, plan: confirmedPlan, result, artifacts };

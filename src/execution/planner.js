@@ -69,7 +69,7 @@ export async function createExecutionPlan({
   backupRoot,
   executionId,
   timestamp = new Date().toISOString(),
-  meminifyVersion = null,
+  selfMinifierVersion = null,
   scannerOptions = {},
   dependencies = {},
 }) {
@@ -264,10 +264,10 @@ export async function createExecutionPlan({
   };
 
   return deepFreeze({
-    formatVersion: 1,
+    formatVersion: 2,
     configurationSchemaVersion: configuration.schemaVersion,
     executionId,
-    meminifyVersion,
+    selfMinifierVersion,
     timestamp,
     status: blockers.length === 0 ? 'ready' : 'blocked',
     outputMode: configuration.outputMode,

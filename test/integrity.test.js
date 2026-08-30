@@ -112,7 +112,7 @@ test('manifesto UTF-8 faz round-trip e explicita campos futuros indisponíveis',
     const manifestPath = join(backupRoot, 'exec-004', 'manifest.json');
     await writeBackupManifest(manifestPath, manifest);
     assert.deepEqual(await readBackupManifest(manifestPath), manifest);
-    assert.equal(manifest.meminifyVersion, null);
+    assert.equal(manifest.selfMinifierVersion, null);
     assert.equal(manifest.files[0].minifiedSha256, null);
     assert.equal(manifest.files[0].minifiedSize, null);
     assert.match(await readFile(manifestPath, 'utf8'), /origem-ç/);

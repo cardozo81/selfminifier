@@ -54,10 +54,10 @@ async function analyzeAndExecute(root, executionId) {
   return executed;
 }
 
-test('manifesto aceita v1 raw e v2 gzip; rejeita versão e compressão desconhecidas', () => {
+test('manifesto aceita somente v3 gzip e rejeita versões ou compressão inválidas', () => {
   const root = join(tmpdir(), 'selfminifier-b3-a3-manifesto');
   const originalPath = join(root, 'entrada.js');
-  const entryV2 = {
+  const entryV3 = {
     originId: 'origem-project-root',
     originalPath,
     backupRelativePath: 'exec-001/origem-project-root/entrada.js.gz',
@@ -73,19 +73,17 @@ test('manifesto aceita v1 raw e v2 gzip; rejeita versão e compressão desconhec
     status: 'minificado',
     minificationDate: null,
   };
-  const header = { executionId: 'exec-001', timestamp: 'x', meminifyVersion: null, origins: [{ originId: 'origem-project-root', rootPath: root }] };
-  validateBackupManifest({ ...header, formatVersion: 2, files: [entryV2] });
+  const header = { executionId: 'exec-001', timestamp: 'x', selfMinifierVersion: null, origins: [{ originId: 'origem-project-root', rootPath: root }] };
+  validateBackupManifest({ ...header, formatVersion: 3, files: [entryV3] });
 
-  const entryV1 = { ...entryV2, backupRelativePath: 'exec-001/origem-project-root/entrada.js' };
-  delete entryV1.compression;
-  validateBackupManifest({ ...header, formatVersion: 1, files: [entryV1] });
-
-  assert.throws(() => validateBackupManifest({ ...header, formatVersion: 3, files: [] }), (error) => error.code === 'INVALID_MANIFEST');
-  assert.throws(() => validateBackupManifest({ ...header, formatVersion: 2, files: [{ ...entryV2, compression: 'zip' }] }), (error) => error.code === 'INVALID_MANIFEST');
-  assert.throws(() => validateBackupManifest({ ...header, formatVersion: 2, files: [entryV1] }), (error) => error.code === 'INVALID_MANIFEST');
+  assert.throws(() => validateBackupManifest({ formatVersion: 1 }), (error) => error.code === 'INVALID_MANIFEST');
+  assert.throws(() => validateBackupManifest({ formatVersion: 2 }), (error) => error.code === 'INVALID_MANIFEST');
+  assert.throws(() => validateBackupManifest({ formatVersion: 4 }), (error) => error.code === 'INVALID_MANIFEST');
+  assert.throws(() => validateBackupManifest({ ...header, formatVersion: 3, files: [{ ...entryV3, compression: 'zip' }] }), (error) => error.code === 'INVALID_MANIFEST');
+  assert.throws(() => validateBackupManifest({ ...header, formatVersion: 3, files: [{ ...entryV3, compression: undefined }] }), (error) => error.code === 'INVALID_MANIFEST');
 });
 
-test('sobrescrita V2 cria payload .gz com manifesto v2 e histórico gzip', async () => {
+test('sobrescrita V2 cria payload .gz com manifesto v3 e histórico gzip', async () => {
   const paths = await fixture();
   try {
     const original = await readFile(paths.source, 'utf8');
@@ -94,7 +92,7 @@ test('sobrescrita V2 cria payload .gz com manifesto v2 e histórico gzip', async
     assert.equal(executed.result.status, 'completed');
 
     const manifest = await readBackupManifest(executed.result.manifestPath);
-    assert.equal(manifest.formatVersion, 2);
+    assert.equal(manifest.formatVersion, 3);
     assert.equal(manifest.files.length, 1);
     assert.equal(manifest.files[0].compression, 'gzip');
     assert.ok(manifest.files[0].backupRelativePath.endsWith('.gz'));
@@ -119,7 +117,7 @@ test('sobrescrita V3 cria .gz na raiz externa de backups', async () => {
     const executionId = 'b3-a3-external';
     const executed = await analyzeAndExecute(paths.root, executionId);
     const manifest = await readBackupManifest(executed.result.manifestPath);
-    assert.equal(manifest.formatVersion, 2);
+    assert.equal(manifest.formatVersion, 3);
     assert.ok(manifest.files[0].backupRelativePath.endsWith('.gz'));
     assert.equal((await lstat(join(paths.externalA, manifest.files[0].backupRelativePath))).isFile(), true);
   } finally {
@@ -127,7 +125,7 @@ test('sobrescrita V3 cria .gz na raiz externa de backups', async () => {
   }
 });
 
-test('restauração v2 gzip descompacta e restaura a fonte original', async () => {
+test('restauração v3 gzip descompacta e restaura a fonte original', async () => {
   const paths = await fixture();
   try {
     const original = await readFile(paths.source, 'utf8');
@@ -169,52 +167,6 @@ test('gzip corrompido, truncado, ausente ou com SHA divergente bloqueia a restau
     // Ausente
     await rm(backupPath);
     await assert.rejects(createBackupRestorePlan({ projectRoot: paths.root, backupDirectory: directory }), (error) => error.code === 'PHYSICAL_PATH_ACCESS_FAILED');
-  } finally {
-    await rm(paths.root, { recursive: true, force: true });
-  }
-});
-
-test('backup legado v1 raw permanece restaurável', async () => {
-  const paths = await fixture();
-  try {
-    const original = await readFile(paths.source, 'utf8');
-    const executionId = 'b3-a3-legacy-v1';
-    const executed = await analyzeAndExecute(paths.root, executionId);
-    const manifest = await readBackupManifest(executed.result.manifestPath);
-    const backupRoot = join(paths.root, '_source_versions');
-    const directory = join(backupRoot, executionId);
-
-    for (const entry of manifest.files) {
-      const gzPath = join(backupRoot, entry.backupRelativePath);
-      const rawRelative = entry.backupRelativePath.replace(/\.gz$/, '');
-      const rawPath = join(backupRoot, rawRelative);
-      await mkdir(join(rawPath, '..'), { recursive: true });
-      await writeFile(rawPath, gunzipSync(await readFile(gzPath)));
-      await rm(gzPath);
-    }
-
-    const v1Manifest = {
-      formatVersion: 1,
-      executionId: manifest.executionId,
-      timestamp: manifest.timestamp,
-      meminifyVersion: manifest.meminifyVersion,
-      origins: manifest.origins,
-      files: manifest.files.map((entry) => {
-        const converted = { ...entry, backupRelativePath: entry.backupRelativePath.replace(/\.gz$/, '') };
-        delete converted.compression;
-        return converted;
-      }),
-    };
-    await writeFile(join(directory, 'manifest.json'), `${JSON.stringify(v1Manifest, null, 2)}\n`, 'utf8');
-    const runtimePaths = resolveRuntimePaths(paths.root);
-    await rm(join(runtimePaths.historyDirectory, `${executionId}.json`), { force: true });
-    await rm(runtimePaths.lastExecutionJournal, { force: true });
-
-    const plan = await createBackupRestorePlan({ projectRoot: paths.root, backupDirectory: directory });
-    assert.equal(plan.items[0].backupCompression, 'none');
-    const result = await executeRestorePlan(plan, { confirmed: true });
-    assert.equal(result.items[0].status, 'restored');
-    assert.equal(await readFile(paths.source, 'utf8'), original);
   } finally {
     await rm(paths.root, { recursive: true, force: true });
   }

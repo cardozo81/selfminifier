@@ -22,12 +22,12 @@ Timestamps não são prova primária, e aparência visual não comprova estado. 
 
 ## Histórico persistente de proveniência
 
-`Dados\Historico` é a autoridade histórica de metadados técnicos. Cada execução concluída possui um registro imutável `Dados\Historico\<executionId>.json`, com `formatVersion: 1`, sem índice global. `Dados\estado.json` permanece o estado técnico atual e não substitui nem acumula o histórico.
+`Dados\Historico` é a autoridade histórica de metadados técnicos. Cada execução concluída possui um registro imutável `Dados\Historico\<executionId>.json`, com `formatVersion: 2`, sem índice global. `Dados\estado.json` permanece o estado técnico atual e não substitui nem acumula o histórico.
 
 O cabeçalho histórico registra:
 
 - `executionId` existente, sem alteração;
-- `meminifyVersion`, preservando o nome compatível do formato 1;
+- `selfMinifierVersion`, com a versão do SelfMinifier que produziu o registro;
 - timestamp, modo de saída e raiz física do projeto;
 - lista dos artefatos efetivamente produzidos.
 
@@ -55,7 +55,7 @@ A consulta por caminho compara `sourcePath` e `outputPath` históricos e retorna
 
 A integridade atual é uma observação opcional, separada do fato histórico. Quando um caminho físico é fornecido, a aplicação prova arquivo regular seguro, inspeciona a Tag exata e compara o SHA-256 dos bytes completos com o `outputHash` histórico. Os estados são `MATCH`, `CONTENT_CHANGED`, `TAG_MISMATCH`, `TAG_MISSING`, `TAG_INVALID` e `FILE_UNAVAILABLE`.
 
-A disponibilidade do backup é observada exclusivamente na raiz gravada pelo histórico, sem fallback para `PastaBackups` atual. Histórico, manifesto, caminho relativo, identidade do artefato, hashes e compressão devem concordar. Manifestos v1 leem payload raw; manifestos v2 leem GZIP e comprovam o SHA-256 descompactado. Ausência, raiz indisponível, manifesto inválido, payload ausente, formato não suportado e divergência de hash permanecem estados distintos.
+A disponibilidade do backup é observada exclusivamente na raiz gravada pelo histórico, sem fallback para `PastaBackups` atual. Histórico, manifesto, caminho relativo, identidade do artefato, hashes e compressão devem concordar. Somente o manifesto `formatVersion: 3` é suportado; seu payload GZIP comprova o SHA-256 descompactado. Outros formatos são classificados como não suportados. Ausência, raiz indisponível, manifesto inválido, payload ausente, formato não suportado e divergência de hash permanecem estados distintos.
 
 Recuperação histórica é exportação, não restauração. `recoverHistoricalOriginal` exige destino absoluto explícito fora dos caminhos históricos de origem e saída, pai físico seguro e alvo inexistente. A criação é exclusiva, grava os bytes originais exatos e confirma o SHA-256 exportado contra `inputHash` e `backup.originalHash`; contradição bloqueia. O arquivo atual nunca é substituído. Artefato `.min` com `backup.available=false` continua pesquisável, mas retorna `HISTORICAL_BACKUP_UNAVAILABLE` para recuperação.
 ## `BackupESobrescreverOriginais`
@@ -163,7 +163,9 @@ O controle deve conter informação suficiente para desfazer somente os efeitos 
 - valores SHA-256 relevantes;
 - referência de backup ou recuperação.
 
-Por compatibilidade com os registros gerados pela v0.1.x, o campo serializado que registra a versão do produto mantém o nome `meminifyVersion`. Esse nome faz parte do contrato de `formatVersion` 1 e não deve ser renomeado.
+Os contratos persistidos novos registram a versão do produto em `selfMinifierVersion`. O histórico usa `formatVersion: 2`, o manifesto GZIP usa `formatVersion: 3` e o journal de execução usa `formatVersion: 2`; os validadores exigem o contrato do SelfMinifier em modo fail-closed, sem migração implícita.
+
+A versão `0.4.0` permanece uma publicação imutável, mas não é a base autorizada para o uso controlado planejado. Esse uso começa somente após a qualificação da versão corretiva com o contrato persistido atual.
 
 Devem ser diferenciados, no mínimo, “saída criada nesta execução” e “saída preexistente sobrescrita”.
 

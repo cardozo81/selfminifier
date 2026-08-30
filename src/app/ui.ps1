@@ -370,7 +370,7 @@ function Show-HistoricalArtifactSummary {
     Write-Host "SelfMinifier-Tag: /*! SelfMinifier-Tag: $($historical.artifactId) */"
     Write-Host "Data/hora: $($historical.timestamp)"
     Write-Host "Execução: $($historical.executionId)"
-    Write-Host "Versão do SelfMinifier: $($historical.meminifyVersion)"
+    Write-Host "Versão do SelfMinifier: $($historical.selfMinifierVersion)"
     Write-Host "Origem histórica: $($historical.sourcePath)"
     Write-Host "Saída histórica: $($historical.outputPath)"
     Write-Host "Modo de saída: $(Get-ModoSaidaDescricao $historical.outputMode)"

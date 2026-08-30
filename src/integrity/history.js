@@ -52,9 +52,9 @@ export function generateArtifactId(randomBytesFunction = randomBytes) {
 
 export function validateHistoricalExecutionRecord(record) {
   requireObject(record, 'INVALID_HISTORY_RECORD', 'Registro histórico');
-  if (record.formatVersion !== 1) throw new IntegrityError('INVALID_HISTORY_RECORD', 'A versão do formato do histórico não é suportada.');
+  if (record.formatVersion !== 2) throw new IntegrityError('INVALID_HISTORY_RECORD', 'A versão do formato do histórico não é suportada.');
   requireSafeExecutionId(record.executionId);
-  if (record.meminifyVersion !== null && typeof record.meminifyVersion !== 'string') throw new IntegrityError('INVALID_HISTORY_RECORD', 'Registro histórico.meminifyVersion deve ser texto ou null.');
+  if (record.selfMinifierVersion !== null && typeof record.selfMinifierVersion !== 'string') throw new IntegrityError('INVALID_HISTORY_RECORD', 'Registro histórico.selfMinifierVersion deve ser texto ou null.');
   for (const field of ['timestamp', 'outputMode', 'projectRoot']) {
     if (typeof record[field] !== 'string' || !record[field]) throw new IntegrityError('INVALID_HISTORY_RECORD', `Registro histórico.${field} deve ser texto não vazio.`);
   }
@@ -84,9 +84,9 @@ export function validateHistoricalExecutionRecord(record) {
 
 export function createHistoricalExecutionRecord(input) {
   return validateHistoricalExecutionRecord({
-    formatVersion: 1,
+    formatVersion: 2,
     executionId: input.executionId,
-    meminifyVersion: input.meminifyVersion ?? null,
+    selfMinifierVersion: input.selfMinifierVersion ?? null,
     timestamp: input.timestamp,
     outputMode: input.outputMode,
     projectRoot: normalize(resolve(input.projectRoot)),

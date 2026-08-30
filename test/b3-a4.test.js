@@ -63,7 +63,7 @@ async function planFor(paths, outputMode, executionId, fileTypes = ['javascript'
     backupRoot: paths.backupRoot,
     executionId,
     timestamp: '2026-08-25T12:00:00.000Z',
-    meminifyVersion: '0.2.0',
+    selfMinifierVersion: '0.2.0',
   });
   return { plan, minifier };
 }
@@ -102,7 +102,7 @@ test('saída .min vincula Tag ao artifactId e persiste o hash dos bytes completo
     const sourcePath = join(paths.projectRoot, 'app.js');
     const sourceBefore = await readFile(sourcePath);
     const { plan, minifier } = await planFor(paths, OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED, 'b3-a4-min');
-    const result = await executePlan(plan, minifier, { confirmed: true, meminifyVersion: '0.2.0' }, {
+    const result = await executePlan(plan, minifier, { confirmed: true, selfMinifierVersion: '0.2.0' }, {
       generateArtifactId: artifactGenerator(ARTIFACT_A),
     });
     const outputPath = join(paths.projectRoot, 'app.min.js');
@@ -211,7 +211,7 @@ test('sobrescrita mantém backup original, hashes coerentes, restaura sem Tag e 
     const sourcePath = join(paths.projectRoot, 'app.js');
     const original = await readFile(sourcePath);
     const { plan, minifier } = await planFor(paths, OUTPUT_MODES.BACKUP_OVERWRITE, 'b3-a4-overwrite');
-    const result = await executePlan(plan, minifier, { confirmed: true, meminifyVersion: '0.2.0' }, {
+    const result = await executePlan(plan, minifier, { confirmed: true, selfMinifierVersion: '0.2.0' }, {
       generateArtifactId: artifactGenerator(ARTIFACT_A),
     });
     const tagged = await readFile(sourcePath, 'utf8');

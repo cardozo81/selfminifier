@@ -2,7 +2,9 @@
 
 Status atual: versão `0.4.0`, com limpeza explícita de logs e relatórios, diagnóstico de uso de armazenamento, otimizações de desempenho, interface interativa, minificação transacional, restauração manual segura, documentação offline e empacotamento local validado.
 
-O SelfMinifier (anteriormente Meminify) tem como objetivo oferecer minificação segura e controlada de arquivos JavaScript e CSS. O projeto é direcionado ao Windows, com interface interativa em PowerShell e execução baseada em Node.js.
+O SelfMinifier tem como objetivo oferecer minificação segura e controlada de arquivos JavaScript e CSS. O projeto é direcionado ao Windows, com interface interativa em PowerShell e execução baseada em Node.js.
+
+A versão `0.4.0` permanece uma publicação imutável. O uso controlado deve começar somente após a qualificação da versão corretiva com o contrato persistido do SelfMinifier.
 
 As exigências autoritativas do produto ficam em [`Especificacoes/`](Especificacoes/). O desenvolvimento é incremental e assistido por IA, com mudanças pequenas, explícitas e validadas.
 

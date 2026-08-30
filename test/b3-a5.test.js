@@ -3,7 +3,6 @@ import { copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import test from 'node:test';
-import { gunzipSync } from 'node:zlib';
 import { runBridgeRequest } from '../src/app/bridge.mjs';
 import { OUTPUT_MODES } from '../src/domain/index.js';
 import { createExecutionPlan, executePlan } from '../src/execution/index.js';
@@ -79,9 +78,9 @@ async function executeFixture(paths, {
     backupRoot,
     executionId,
     timestamp,
-    meminifyVersion: '0.2.0',
+    selfMinifierVersion: '0.2.0',
   });
-  const result = await executePlan(plan, minifier, { confirmed: true, meminifyVersion: '0.2.0' }, {
+  const result = await executePlan(plan, minifier, { confirmed: true, selfMinifierVersion: '0.2.0' }, {
     generateArtifactId: artifactGenerator(artifactId),
   });
   const history = await readHistoricalExecutionRecord(paths.runtime.historyDirectory, executionId);
@@ -92,7 +91,7 @@ function manualRecord(paths, executionId, artifactId, timestamp, sourcePath = pa
   const outputPath = join(paths.projectRoot, 'app.min.js');
   return createHistoricalExecutionRecord({
     executionId,
-    meminifyVersion: '0.2.0',
+    selfMinifierVersion: '0.2.0',
     timestamp,
     outputMode: OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED,
     projectRoot: paths.projectRoot,
@@ -118,28 +117,6 @@ function manualRecord(paths, executionId, artifactId, timestamp, sourcePath = pa
       },
     }],
   });
-}
-
-async function convertExecutionToLegacyV1(paths, executionId) {
-  const historyPath = join(paths.runtime.historyDirectory, `${executionId}.json`);
-  const history = JSON.parse(await readFile(historyPath, 'utf8'));
-  const manifestPath = join(paths.backupRoot, executionId, 'manifest.json');
-  const manifest = await readBackupManifest(manifestPath);
-  for (let index = 0; index < manifest.files.length; index += 1) {
-    const entry = manifest.files[index];
-    const gzipPath = join(paths.backupRoot, entry.backupRelativePath);
-    const rawRelativePath = entry.backupRelativePath.replace(/\.gz$/, '');
-    const rawPath = join(paths.backupRoot, rawRelativePath);
-    await writeFile(rawPath, gunzipSync(await readFile(gzipPath)));
-    await rm(gzipPath);
-    entry.backupRelativePath = rawRelativePath;
-    delete entry.compression;
-    history.artifacts[index].backup.backupRelativePath = rawRelativePath;
-    history.artifacts[index].backup.compression = 'none';
-  }
-  manifest.formatVersion = 1;
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
-  await writeFile(historyPath, `${JSON.stringify(history, null, 2)}\n`, 'utf8');
 }
 
 test('pesquisa por Tag retorna o fato histórico, aceita marcador exato e não depende do caminho atual', async () => {
@@ -289,7 +266,7 @@ test('integridade atual distingue MATCH, CONTENT_CHANGED, TAG_MISMATCH, TAG_MISS
   }
 });
 
-test('backup v2 gzip usa raiz histórica, exporta bytes exatos e não modifica origem/saída atual', async () => {
+test('backup gzip atual usa raiz histórica, exporta bytes exatos e não modifica origem/saída atual', async () => {
   const paths = await fixture();
   try {
     const original = await readFile(paths.sourcePath);
@@ -335,28 +312,6 @@ test('backup v2 gzip usa raiz histórica, exporta bytes exatos e não modifica o
   }
 });
 
-test('backup legado v1 raw permanece disponível e exportável', async () => {
-  const paths = await fixture();
-  try {
-    const original = await readFile(paths.sourcePath);
-    await executeFixture(paths, { executionId: 'b3-a5-v1' });
-    await convertExecutionToLegacyV1(paths, 'b3-a5-v1');
-    const historical = await searchHistoryByTag({ projectRoot: paths.root, tag: ARTIFACT_A });
-    const availability = await inspectHistoricalBackup({ projectRoot: paths.root, historical });
-    assert.equal(availability.state, BACKUP_AVAILABILITY_STATES.AVAILABLE);
-    assert.equal(availability.manifestFormatVersion, 1);
-    assert.equal(availability.compression, 'none');
-
-    const exportDirectory = join(paths.root, 'exportacao');
-    await mkdir(exportDirectory);
-    const destination = join(exportDirectory, 'origem-v1.js');
-    await recoverHistoricalOriginal({ projectRoot: paths.root, tag: ARTIFACT_A, destinationPath: destination });
-    assert.deepEqual(await readFile(destination), original);
-  } finally {
-    await rm(paths.root, { recursive: true, force: true });
-  }
-});
-
 test('ausência e corrupção do backup histórico produzem estados distintos e bloqueiam exportação', async (t) => {
   await t.test('raiz indisponível', async () => {
     const paths = await fixture();
@@ -395,6 +350,24 @@ test('ausência e corrupção do backup histórico produzem estados distintos e 
       await rm(paths.root, { recursive: true, force: true });
     }
   });
+
+  for (const formatVersion of [1, 2]) {
+    await t.test(`manifesto com formato ${formatVersion} é classificado como não suportado`, async () => {
+      const paths = await fixture();
+      try {
+        await executeFixture(paths);
+        const manifestPath = join(paths.backupRoot, 'b3-a5-exec', 'manifest.json');
+        await writeFile(manifestPath, `${JSON.stringify({ formatVersion }, null, 2)}\n`, 'utf8');
+        const historical = await searchHistoryByTag({ projectRoot: paths.root, tag: ARTIFACT_A });
+        assert.equal(
+          (await inspectHistoricalBackup({ projectRoot: paths.root, historical })).state,
+          BACKUP_AVAILABILITY_STATES.UNSUPPORTED_FORMAT,
+        );
+      } finally {
+        await rm(paths.root, { recursive: true, force: true });
+      }
+    });
+  }
 
   await t.test('payload ausente', async () => {
     const paths = await fixture();
@@ -441,19 +414,12 @@ test('ausência e corrupção do backup histórico produzem estados distintos e 
     });
   }
 
-  await t.test('raw corrompido e hashes históricos contraditórios', async () => {
+  await t.test('hashes históricos contraditórios', async () => {
     const paths = await fixture();
     try {
-      await executeFixture(paths, { executionId: 'b3-a5-v1-corrupt' });
-      await convertExecutionToLegacyV1(paths, 'b3-a5-v1-corrupt');
+      await executeFixture(paths, { executionId: 'b3-a5-hash-conflict' });
       let historical = await searchHistoryByTag({ projectRoot: paths.root, tag: ARTIFACT_A });
-      await writeFile(join(paths.backupRoot, historical.backup.backupRelativePath), 'conteúdo divergente\n', 'utf8');
-      assert.equal(
-        (await inspectHistoricalBackup({ projectRoot: paths.root, historical })).state,
-        BACKUP_AVAILABILITY_STATES.HASH_MISMATCH,
-      );
-
-      const historyPath = join(paths.runtime.historyDirectory, 'b3-a5-v1-corrupt.json');
+      const historyPath = join(paths.runtime.historyDirectory, 'b3-a5-hash-conflict.json');
       const record = JSON.parse(await readFile(historyPath, 'utf8'));
       record.artifacts[0].backup.originalHash = 'c'.repeat(64);
       await writeFile(historyPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');

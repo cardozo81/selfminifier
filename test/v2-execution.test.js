@@ -269,7 +269,7 @@ windowsTest('V2 reutiliza backup, manifesto e operação de sobrescrita do execu
     assert.equal(journal.items[0].recovery.compression, 'gzip');
     assert.equal(gunzipSync(await readFile(journal.items[0].recovery.path)).toString('utf8'), original);
     const manifest = JSON.parse(await readFile(executed.result.manifestPath, 'utf8'));
-    assert.equal(Object.hasOwn(manifest, 'meminifyVersion'), true);
+    assert.deepEqual(Object.keys(manifest), ['formatVersion', 'executionId', 'timestamp', 'selfMinifierVersion', 'origins', 'files']);
     assert.equal(Object.hasOwn(manifest, 'selfminifierVersion'), false);
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -213,7 +213,7 @@ test('modo de sobrescrita exige backup válido, gera manifesto e mantém estado 
   try {
     const original = await readFile(paths.files[0], 'utf8');
     const { plan, minifier } = await planFor(paths, OUTPUT_MODES.BACKUP_OVERWRITE);
-    const result = await executePlan(plan, minifier, { confirmed: true, meminifyVersion: '0.1.0' });
+    const result = await executePlan(plan, minifier, { confirmed: true, selfMinifierVersion: '0.1.0' });
     assert.notEqual(await readFile(paths.files[0], 'utf8'), original);
     const journal = await readExecutionJournal(paths.runtime.lastExecutionJournal);
     assert.equal(journal.items[0].operation, 'overwrite-original');
@@ -298,7 +298,8 @@ test('journal interrompido é recuperado deterministicamente e ambiguidade bloqu
     const output = 'const interrompido=1;';
     await writeFile(destination, output);
     const journal = {
-      formatVersion: 1,
+      formatVersion: 2,
+      selfMinifierVersion: null,
       executionId: 'interrompida-001',
       timestamp: '2026-08-21T12:00:00.000Z',
       outputMode: OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED,

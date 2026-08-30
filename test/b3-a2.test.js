@@ -207,7 +207,7 @@ test('sobrescrita V3 usa layout externo e histórico persiste a raiz real com co
     const history = await readHistoricalExecutionRecord(resolveRuntimePaths(paths.root).historyDirectory, executionId);
     assert.equal(history.artifacts[0].backup.backupRoot, normalize(paths.externalA));
     assert.equal(history.artifacts[0].backup.compression, 'gzip');
-    assert.equal(history.formatVersion, 1);
+    assert.equal(history.formatVersion, 2);
     assert.equal(executed.result.status, 'completed');
   } finally { await rm(paths.root, { recursive: true, force: true }); }
 });
@@ -304,10 +304,10 @@ test('rollback transacional continua restaurando a fonte com payload externo', a
       backupRoot: paths.externalA,
       executionId: 'b3-a2-rollback',
       timestamp: '2026-08-25T12:00:00.000Z',
-      meminifyVersion: '0.2.0',
+      selfMinifierVersion: '0.2.0',
     });
     await assert.rejects(
-      executePlan(plan, minifier, { confirmed: true, meminifyVersion: '0.2.0' }, {
+      executePlan(plan, minifier, { confirmed: true, selfMinifierVersion: '0.2.0' }, {
         hooks: { afterMutation: async () => { throw new Error('falha sintética depois da mutação'); } },
       }),
       (error) => error.details?.rollbackStatus === 'rolled-back',

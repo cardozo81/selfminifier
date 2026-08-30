@@ -170,9 +170,9 @@ function createJournal(plan) {
     ? join(plan.backupRoot, plan.executionId, 'manifest.json')
     : null;
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     executionId: plan.executionId,
-    meminifyVersion: plan.meminifyVersion ?? null,
+    selfMinifierVersion: plan.selfMinifierVersion ?? null,
     timestamp: plan.timestamp,
     outputMode: plan.outputMode,
     executionRisk: clone(plan.executionRisk),
@@ -291,7 +291,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
   if ([2, 3].includes(plan.configurationSchemaVersion) && plan.items.length === 0) {
     const history = createHistoricalExecutionRecord({
       executionId: plan.executionId,
-      meminifyVersion: options.meminifyVersion ?? plan.meminifyVersion ?? null,
+      selfMinifierVersion: options.selfMinifierVersion ?? plan.selfMinifierVersion ?? null,
       timestamp: plan.timestamp,
       outputMode: plan.outputMode,
       projectRoot: plan.sources[0].path,
@@ -452,7 +452,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
       const manifest = createBackupManifest({
         executionId: plan.executionId,
         timestamp: plan.timestamp,
-        meminifyVersion: options.meminifyVersion ?? null,
+        selfMinifierVersion: options.selfMinifierVersion ?? null,
         origins,
         files: backupManifestEntries,
       });
@@ -470,7 +470,7 @@ export async function executePlan(plan, minifier, options = {}, dependencies = {
 
     const history = createHistoricalExecutionRecord({
       executionId: plan.executionId,
-      meminifyVersion: options.meminifyVersion ?? plan.meminifyVersion ?? null,
+      selfMinifierVersion: options.selfMinifierVersion ?? plan.selfMinifierVersion ?? null,
       timestamp: plan.timestamp,
       outputMode: plan.outputMode,
       projectRoot: plan.sources[0].path,

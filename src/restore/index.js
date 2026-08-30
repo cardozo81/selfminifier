@@ -224,7 +224,7 @@ export async function createBackupRestorePlan({ projectRoot = process.cwd(), bac
         fail('HISTORY_MANIFEST_MISMATCH', `O histórico não corresponde ao item ${entry.artifactId} do manifesto.`);
       }
     }
-    const compression = manifest.formatVersion === 2 ? entry.compression : 'none';
+    const compression = entry.compression;
     const backupPath = normalize(resolve(backupRoot, entry.backupRelativePath));
     if (!isInside(directory, backupPath)) fail('INVALID_BACKUP_MAPPING', 'O arquivo de backup não permanece na pasta da execução.', { backupPath });
     await assertPathHasNoLinks(backupPath);

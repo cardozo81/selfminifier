@@ -82,7 +82,7 @@ function historicalFact(execution, artifact) {
     artifactId: artifact.artifactId,
     executionId: execution.executionId,
     timestamp: artifact.timestamp,
-    meminifyVersion: execution.meminifyVersion,
+    selfMinifierVersion: execution.selfMinifierVersion,
     projectRoot: execution.projectRoot,
     sourcePath: artifact.sourcePath,
     outputPath: artifact.outputPath,
@@ -242,7 +242,7 @@ function unavailable(state, historical, details = {}) {
 async function manifestFormatState(manifestPath) {
   try {
     const parsed = JSON.parse(await readFile(manifestPath, 'utf8'));
-    return [1, 2].includes(parsed?.formatVersion)
+    return parsed?.formatVersion === 3
       ? null
       : BACKUP_AVAILABILITY_STATES.UNSUPPORTED_FORMAT;
   } catch {
@@ -312,7 +312,7 @@ export async function inspectHistoricalBackup({ projectRoot = process.cwd(), his
     });
   }
   const entry = entries[0];
-  const compression = manifest.formatVersion === 1 ? 'none' : entry.compression;
+  const compression = entry.compression;
   if ((entry.artifactId !== undefined && entry.artifactId !== historical.artifactId)
     || identity(entry.originalPath) !== identity(historical.sourcePath)
     || entry.originalSha256 !== historical.inputHash

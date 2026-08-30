@@ -41,7 +41,7 @@ function New-HistoricalArtifact {
         artifactId = $ArtifactId
         executionId = "exec-$ArtifactId"
         timestamp = '2026-08-25T12:00:00.000Z'
-        meminifyVersion = '0.2.0'
+        selfMinifierVersion = '0.2.0'
         sourcePath = 'C:\Projeto\origem.js'
         outputPath = 'C:\Projeto\saida.js'
         engine = 'esbuild'

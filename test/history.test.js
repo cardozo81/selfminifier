@@ -57,7 +57,7 @@ async function planFor(paths, outputMode, executionId) {
     backupRoot: paths.backupRoot,
     executionId,
     timestamp: '2026-08-25T12:00:00.000Z',
-    meminifyVersion: '0.2.0',
+    selfMinifierVersion: '0.2.0',
   });
   return { plan, minifier };
 }
@@ -65,7 +65,7 @@ async function planFor(paths, outputMode, executionId) {
 function record(root, executionId, artifactId) {
   return createHistoricalExecutionRecord({
     executionId,
-    meminifyVersion: '0.2.0',
+    selfMinifierVersion: '0.2.0',
     timestamp: '2026-08-25T12:00:00.000Z',
     outputMode: OUTPUT_MODES.PRESERVE_AND_CREATE_MINIFIED,
     projectRoot: root,
@@ -131,12 +131,13 @@ test('sobrescrita concluída persiste hashes, backup físico e artifactId em his
   try {
     const originals = await Promise.all(paths.files.map((filePath) => readFile(filePath)));
     const { plan, minifier } = await planFor(paths, OUTPUT_MODES.BACKUP_OVERWRITE, 'history-overwrite');
-    const result = await executePlan(plan, minifier, { confirmed: true, meminifyVersion: '0.2.0' });
+    const result = await executePlan(plan, minifier, { confirmed: true, selfMinifierVersion: '0.2.0' });
     const history = await readHistoricalExecutionRecord(paths.runtime.historyDirectory, plan.executionId);
     assert.equal(result.historyPath, join(paths.runtime.historyDirectory, `${plan.executionId}.json`));
-    assert.equal(history.formatVersion, 1);
+    assert.equal(history.formatVersion, 2);
     assert.equal(history.executionId, plan.executionId);
-    assert.equal(history.meminifyVersion, '0.2.0');
+    assert.equal(history.selfMinifierVersion, '0.2.0');
+    assert.deepEqual(Object.keys(history), ['formatVersion', 'executionId', 'selfMinifierVersion', 'timestamp', 'outputMode', 'projectRoot', 'artifacts']);
     assert.equal(history.outputMode, OUTPUT_MODES.BACKUP_OVERWRITE);
     assert.equal(history.projectRoot, paths.projectRoot);
     assert.equal(history.artifacts.length, 2);
@@ -159,6 +160,8 @@ test('sobrescrita concluída persiste hashes, backup físico e artifactId em his
     const state = await readTechnicalState(paths.runtime.technicalState);
     const journal = await readExecutionJournal(paths.runtime.lastExecutionJournal);
     const manifest = await readBackupManifest(result.manifestPath);
+    assert.equal(journal.formatVersion, 2);
+    assert.equal(journal.selfMinifierVersion, '0.2.0');
     assert.equal(journal.historyStatus, 'written');
     assert.equal(journal.historyPath, result.historyPath);
     assert.deepEqual(state.records.map((item) => item.artifactId).sort(), history.artifacts.map((item) => item.artifactId).sort());
@@ -382,7 +385,7 @@ test('colisão externa após o link exclusivo é detectada e o journal remove so
   }
 });
 
-test('journal formatVersion 1 sem artifactId nem ligação histórica continua válido', async () => {
+test('journal formatVersion 2 sem artifactId nem ligação histórica continua válido', async () => {
   const paths = await fixture();
   try {
     const { validateExecutionJournal } = await import('../src/execution/journal.js');
