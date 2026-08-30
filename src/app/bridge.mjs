@@ -18,6 +18,7 @@ import { assertPhysicalPath } from '../integrity/index.js';
 import { createDefaultMinifierRegistry } from '../minifiers/index.js';
 import { createExecutionPlan, executePlan, ExecutionError } from '../execution/index.js';
 import { listArtifacts, readArtifact, writeOperationalReports, writeTechnicalLog } from '../observability/index.mjs';
+import { executeArtifactCleanup, previewArtifactCleanup } from '../observability/cleanup.js';
 import { measureStorageDirectory, STORAGE_STATES, summarizeStorageUsage } from '../observability/storage.js';
 import { createBackupRestorePlan, createLastMinRestorePlan, executeRestorePlan, listKnownBackups } from '../restore/index.js';
 import {
@@ -533,7 +534,10 @@ async function createInitialConfiguration(request, projectRoot) {
   };
 }
 
-export async function runBridgeRequest(request, { projectRoot = resolveApplicationRoot() } = {}) {
+export async function runBridgeRequest(request, { projectRoot } = {}) {
+  if (request.command === 'cleanup-artifacts' && (typeof projectRoot !== 'string' || projectRoot.trim() === '')) {
+    return { ok: false, diagnostic: { code: 'PROJECT_ROOT_REQUIRED', message: 'A limpeza de logs e relatórios exige uma pasta raiz explícita e válida.' } };
+  }
   const application = await loadApplicationMetadata(projectRoot);
   if (request.command === 'version') return { ok: true, ...application };
   const persistent = await loadPersistent(projectRoot);
@@ -619,6 +623,19 @@ export async function runBridgeRequest(request, { projectRoot = resolveApplicati
   if (request.command === 'read-artifact') {
     try { return { ok: true, kind: request.kind, name: request.name, content: await readArtifact(projectRoot, request.kind, request.name) }; }
     catch (error) { return { ok: false, diagnostic: diagnostic(error) }; }
+  }
+  if (request.command === 'cleanup-artifacts') {
+    try {
+      if (request.confirmed === true) {
+        const candidates = request.candidates == null ? [] : (Array.isArray(request.candidates) ? request.candidates : [request.candidates]);
+        const result = await executeArtifactCleanup(projectRoot, request.kind, candidates);
+        return { ok: true, ...result };
+      }
+      const preview = await previewArtifactCleanup(projectRoot, request.kind);
+      return { ok: true, ...preview };
+    } catch (error) {
+      return { ok: false, diagnostic: diagnostic(error) };
+    }
   }
   if (request.command === 'storage-usage') {
     try { return await storageUsage(projectRoot, persistent); }
@@ -753,7 +770,7 @@ if (process.argv[2] === '--bridge') {
     process.exitCode = 2;
   }
   if (process.exitCode !== 2) {
-    const result = await runBridgeRequest(request);
+    const result = await runBridgeRequest(request, { projectRoot: resolveApplicationRoot() });
     console.log(JSON.stringify(result));
     if (!result.ok) process.exitCode = 1;
   }

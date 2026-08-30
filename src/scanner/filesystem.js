@@ -47,7 +47,7 @@ async function safeLinkTarget(filePath) {
   }
 }
 
-async function isReadonlyFile(filePath, stats) {
+export async function isReadonlyFile(filePath, stats) {
   const writeMask = typeof stats.mode === 'bigint' ? 0o222n : 0o222;
   const noWriteBits = typeof stats.mode === 'bigint' ? 0n : 0;
   if ((stats.mode & writeMask) === noWriteBits) return true;

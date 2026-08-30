@@ -108,6 +108,32 @@ function Show-Artefatos {
     Confirmar-Continuar
 }
 
+function Invoke-ArtifactCleanup {
+    param([ValidateSet('reports', 'logs')][string]$Kind)
+    $label = if ($Kind -eq 'reports') { 'relatórios operacionais' } else { 'logs técnicos' }
+    $title = if ($Kind -eq 'reports') { 'LIMPAR RELATÓRIOS' } else { 'LIMPAR LOGS TÉCNICOS' }
+    Show-AppScreen
+    Show-Mensagem $title Cyan
+    Show-Separador
+    $preview = Invoke-SelfMinifierBridge @{ command = 'cleanup-artifacts'; kind = $Kind; confirmed = $false }
+    if (-not $preview.ok) { Show-Mensagem "Limpeza bloqueada: $($preview.diagnostic.message)" Red; Confirmar-Continuar; return }
+    Show-Mensagem "Categoria: $label" White
+    Show-Mensagem "Candidatos à limpeza: $($preview.candidateCount)" White
+    Show-Mensagem "Total estimado: $(Format-StorageSize $preview.totalBytes)" White
+    if ($preview.candidateCount -eq 0) { Show-Mensagem 'Nenhum artefato elegível para limpeza.' Yellow; Confirmar-Continuar; return }
+    Show-Mensagem 'A exclusão é permanente e não pode ser desfeita.' Yellow
+    if (-not (Confirmar-Acao 'Confirmar a exclusão dos artefatos exibidos')) { Show-Mensagem 'Limpeza cancelada; nenhum arquivo foi alterado.' Yellow; return }
+    $result = Invoke-SelfMinifierBridge @{ command = 'cleanup-artifacts'; kind = $Kind; confirmed = $true; candidates = @($preview.candidates) }
+    if (-not $result.ok) { Show-Mensagem "Limpeza bloqueada: $($result.diagnostic.message)" Red; Confirmar-Continuar; return }
+    Show-Mensagem "Removidos: $($result.deletedCount)" Green
+    Show-Mensagem "Pulados: $($result.skippedCount)" Yellow
+    Show-Mensagem "Falhas: $($result.failedCount)" Red
+    foreach ($item in $result.deleted) { Show-Mensagem "- removido: $item" Green }
+    foreach ($item in $result.skipped) { Show-Mensagem "- pulado: $($item.name) ($($item.reason))" Yellow }
+    foreach ($item in $result.failed) { Show-Mensagem "- falha: $($item.name) ($($item.reason))" Red }
+    Confirmar-Continuar
+}
+
 function Format-StorageValue {
     param([double]$Value)
     $text = $Value.ToString('0.0', [System.Globalization.CultureInfo]::InvariantCulture)
@@ -1548,6 +1574,8 @@ function Start-SelfMinifierUi {
         Write-Host '4. Relatórios'
         Write-Host '5. Logs técnicos'
         Write-Host '6. Uso de armazenamento'
+        Write-Host '7. Limpar relatórios'
+        Write-Host '8. Limpar logs técnicos'
         Write-Host '0. Sair'
         $choice = (Read-Host 'Escolha').Trim()
         try {
@@ -1558,6 +1586,8 @@ function Start-SelfMinifierUi {
                 '4' { Show-Artefatos reports }
                 '5' { Show-Artefatos logs }
                 '6' { Show-StorageUsage }
+                '7' { Invoke-ArtifactCleanup reports }
+                '8' { Invoke-ArtifactCleanup logs }
                 '0' { return }
                 default { Show-Mensagem 'Opção inválida; nenhuma ação foi executada.' Yellow }
             }

@@ -278,11 +278,24 @@ test('UI D1 expõe tela de uso de armazenamento e item do menu principal', async
   assert.match(source, /command = 'storage-usage'/);
 });
 
+test('UI D2 expõe limpeza de relatórios e logs técnicos com confirmação', async () => {
+  const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
+  assert.match(source, /7\. Limpar relatórios/);
+  assert.match(source, /8\. Limpar logs técnicos/);
+  assert.match(source, /'7' \{ Invoke-ArtifactCleanup reports \}/);
+  assert.match(source, /'8' \{ Invoke-ArtifactCleanup logs \}/);
+  assert.match(source, /function Invoke-ArtifactCleanup/);
+  assert.match(source, /command = 'cleanup-artifacts'/);
+  assert.match(source, /Candidatos à limpeza:/);
+  assert.match(source, /A exclusão é permanente e não pode ser desfeita\./);
+  assert.match(source, /Confirmar a exclusão dos artefatos exibidos/);
+});
+
 test('todas as telas interativas identificadas usam o ciclo de tela comum', async () => {
   const source = await readFile(new URL('../src/app/ui.ps1', import.meta.url), 'utf8');
   const screens = [
     'Start-SelfMinifierUi', 'Invoke-MinifyProject', 'Show-ConfigurationMenu', 'Show-RestoreMenu',
-    'Show-Artefatos', 'Show-StorageUsage', 'Show-MissingConfigurationMenu', 'Show-InvalidConfigurationMenu',
+    'Show-Artefatos', 'Show-StorageUsage', 'Invoke-ArtifactCleanup', 'Show-MissingConfigurationMenu', 'Show-InvalidConfigurationMenu',
     'Invoke-EditProjectRoot', 'Invoke-KnownBackupRestoreSelection', 'Invoke-EditFileTypes',
     'Invoke-PersistentConfiguration', 'Invoke-EditOutputMode', 'Invoke-EditBackupRoot',
     'Invoke-EditExclusions', 'Invoke-EditIgnoredFolders', 'Invoke-EditIgnoredFiles',
