@@ -21,7 +21,7 @@ Este arquivo direciona cada área à sua fonte autoritativa. Leia somente os doc
 | Decisões aprovadas e pendentes | `Especificacoes/15-DECISOES.md` |
 | Evoluções estratégicas pendentes (DT-MP e DT-ME) | `Especificacoes/15-DECISOES.md`, `Especificacoes/04-ARQUITETURA.md`, `Especificacoes/07-MINIFICACAO-E-MOTORES.md` |
 
-A política de eficiência de tokens (AI-TOKEN-EFFICIENCY), o contrato de handoff obrigatório e as demais orientações a agentes ficam em `AGENTS.md`.
+A política de eficiência de tokens (AI-TOKEN-EFFICIENCY), a orientação de handoff sob necessidade e as demais orientações a agentes ficam em `AGENTS.md`.
 
 O mapa dos arquivos efetivamente implementados fica em `_ias/MAPA-CODIGO.md`.
 
