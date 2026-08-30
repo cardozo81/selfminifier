@@ -88,6 +88,80 @@ DT-ME — Engine compatibility
 
 Nenhum desses pontos deve ser preenchido com valor inventado; pertencem à futura fase de definição de requisitos.
 
+## Roadmap técnico diferido após 0.4.0
+
+A partir da stable `0.4.0`, as evoluções abaixo ficam deliberadamente **deferidas**. O objetivo imediato é colocar a `0.4.0` em uso controlado no Windows e coletar evidência real de defeitos, limitações e melhorias funcionais antes de ampliar novamente o produto.
+
+Esse registro define somente o escopo mínimo necessário para retomada futura por execução humana ou assistida por IA. Não autoriza implementação automática, não fixa versão futura e não transforma hipóteses em requisitos aprovados.
+
+### Uso controlado da 0.4.0
+
+- A `0.4.0` é a stable oficial para uso controlado no escopo Windows atualmente homologado.
+- Projetos relevantes devem manter proteção externa independente, como controle de versão e/ou backup apropriado ao contexto de uso.
+- Observações reais devem ser classificadas antes de qualquer correção como defeito reproduzível, melhoria funcional, melhoria de UX, oportunidade de desempenho ou watch item de ambiente/filesystem.
+- Uma ocorrência isolada sem reprodução não justifica alteração preventiva do core.
+- Evidência coletada em uso controlado pode repriorizar o roadmap, mas não deve provocar expansão automática de escopo.
+
+### D3/D4 — lifecycle histórico, remoção controlada e arquivamento
+
+**Objetivo mínimo:** permitir reduzir o custo físico de payloads históricos sem apagar sua existência lógica nem enfraquecer proveniência, recuperação ou auditabilidade.
+
+Fases mínimas para retomada:
+
+1. **Estudo e contrato:** inspecionar histórico, backup e recuperação atuais; definir invariantes, compatibilidade com registros antigos e semântica mínima para disponibilidade, arquivamento, remoção e indisponibilidade. Não assumir previamente tombstone, catálogo, ZIP, relocation ou novo schema.
+2. **Implementação controlada:** somente após contrato aprovado, introduzir as operações e persistência estritamente necessárias; preservar metadados históricos permanentes, registrar transições relevantes e provar integridade/localização de conteúdo arquivado quando aplicável.
+3. **Validação proporcional:** testes focados nas novas invariantes, compatibilidade histórica e safety gates afetados; full suite, packaging e smoke somente no gate de release, se houver publicação.
+
+Invariantes de partida: `RESTORED != INVALID`; remoção deliberada não pode ser indistinguível de desaparecimento inesperado; payload removido não apaga a existência histórica da execução.
+
+### F5 — progresso real baseado em eventos
+
+**Objetivo mínimo:** oferecer feedback de operações demoradas somente com unidades/eventos concretos, sem porcentagem artificial.
+
+Fases mínimas para retomada:
+
+1. **Contrato e implementação mínima:** mapear operações longas, definir eventos concretos entre Node, bridge e UI e manter progresso transitório separado de eventos históricos persistentes.
+2. **Validação proporcional:** testar emissão/ordem dos eventos e ausência de regressão funcional; executar full suite apenas no gate de release.
+
+Não criar fake progress, sleeps artificiais ou persistência histórica de telemetria apenas para alimentar a UI.
+
+### DT-ME — compatibilidade de motores
+
+**Objetivo mínimo:** desacoplar o núcleo de detalhes específicos do esbuild por contrato de adaptador, mantendo somente motores explicitamente homologados.
+
+Fases mínimas para retomada:
+
+1. **Contrato de engine:** definir capabilities, tipos de arquivo, entrada/saída, falhas, timeout, versão, configuração relevante, integração com Tag/SHA e proveniência. Não escolher motores adicionais por conveniência.
+2. **Implementação:** encapsular o esbuild no contrato aprovado e adicionar outro motor somente quando houver requisito e qualificação suficientes para provar a arquitetura multi-engine.
+3. **Qualificação:** testes de conformidade por adaptador, falhas fail-closed, integridade e matriz dos motores declarados como suportados.
+
+Não existe fallback implícito entre motores.
+
+### DT-MP — compatibilidade multiplataforma
+
+**Objetivo mínimo:** tornar o núcleo portável e suportar somente plataformas executadas e qualificadas em ambiente real, preservando integralmente as proteções de filesystem.
+
+Fases mínimas para retomada:
+
+1. **Auditoria de acoplamento ao Windows:** identificar paths, shell, PowerShell, atributos, reparse/junction, packaging e demais semânticas específicas; isolar contratos de plataforma sem regredir o Windows.
+2. **Qualificação Linux:** implementar apenas diferenças comprovadas e executar testes em ambiente Linux real antes de declarar suporte.
+3. **Qualificação macOS:** executar testes em ambiente macOS real antes de declarar suporte; desenvolvimento/orquestração pode continuar em Windows, mas simulação Windows não homologa macOS.
+4. **Matriz de suporte:** documentar explicitamente quais plataformas e versões foram de fato qualificadas.
+
+Windows pode continuar sendo o ambiente principal das IAs e do desenvolvimento; uma plataforma adicional só pode ser declarada suportada após execução e qualificação reais nessa plataforma.
+
+### H1 — hardening e preparação para 1.0
+
+**Objetivo mínimo:** consolidar o produto existente, sem usar o marco 1.0 como justificativa para adicionar funcionalidades não requeridas.
+
+Fases mínimas para retomada:
+
+1. **Auditoria final:** identificar blockers reais, drift documental, gaps de teste e divergências entre suporte declarado e comprovado.
+2. **Correções:** tratar somente blockers e inconsistências necessárias para a baseline 1.0.
+3. **Qualificação:** executar a matriz final aplicável de plataformas, motores, compatibilidade histórica, instalação limpa, backup/restauração, lifecycle e demais operações declaradas como suportadas.
+
+A versão `1.0.0` somente deve ser proposta depois que seu conjunto de requisitos estiver explicitamente fechado e comprovado.
+
 ## Dívida técnica de desempenho — listagem de backups (DT-BL) — implementada
 
 O diagnóstico H1-P1 encontrou validação profunda antes da seleção: aproximadamente 5 s para um backup com dois arquivos e 19 s para três backups, varreduras históricas de estilo O(N²) e provas físicas/reparse repetidas por candidato.
