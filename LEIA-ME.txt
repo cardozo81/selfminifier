@@ -1,4 +1,4 @@
-SelfMinifier 0.4.0
+SelfMinifier 0.4.1
 
 Ferramenta Windows para minificação controlada de JavaScript e CSS, com confirmação explícita, análise prévia, backup/restauração, histórico e integridade SHA-256.
 

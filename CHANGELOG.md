@@ -2,6 +2,11 @@
 
 ## Versões
 
+### 0.4.1
+
+- Consolidação definitiva da identidade do SelfMinifier: identidade persistida ativa `selfMinifierVersion`, manifesto `formatVersion: 3`, histórico e journal de execução `formatVersion: 2` e zero ocorrências do identificador anterior no tree atual.
+- Documentação offline de usuário e técnica profissionalizada: fontes Markdown autoritativas, HTML offline gerado e melhorias de governança documental.
+
 ### 0.4.0
 
 - Limpeza explícita e manual de logs técnicos (`Dados\Logs`) e relatórios operacionais (`Dados\Relatorios`) pelo menu principal.

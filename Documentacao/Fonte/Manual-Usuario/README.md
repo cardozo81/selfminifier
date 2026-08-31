@@ -1,6 +1,6 @@
 # Manual do Usuário — SelfMinifier
 
-Este manual descreve o uso seguro do SelfMinifier 0.4.0. As fontes Markdown em `Documentacao\Fonte` são autoritativas; o HTML em `Documentacao\Gerada` é uma cópia offline gerada pelo projeto.
+Este manual descreve o uso seguro do SelfMinifier 0.4.1. As fontes Markdown em `Documentacao\Fonte` são autoritativas; o HTML em `Documentacao\Gerada` é uma cópia offline gerada pelo projeto.
 
 ## 1. Requisitos, instalação e primeira execução
 

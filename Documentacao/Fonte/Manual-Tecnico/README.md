@@ -1,6 +1,6 @@
 # Manual Técnico e de Manutenção — SelfMinifier
 
-Este manual descreve a implementação atual do SelfMinifier 0.4.0, seus contratos persistidos e os gates de manutenção. Fontes autoritativas: Markdown em `Documentacao\Fonte` e especificações em `Especificacoes`; HTML é gerado e não é editável como autoridade.
+Este manual descreve a implementação atual do SelfMinifier 0.4.1, seus contratos persistidos e os gates de manutenção. Fontes autoritativas: Markdown em `Documentacao\Fonte` e especificações em `Especificacoes`; HTML é gerado e não é editável como autoridade.
 
 ## 1. Arquitetura e bootstrap
 

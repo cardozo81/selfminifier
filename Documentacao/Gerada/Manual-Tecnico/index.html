@@ -44,7 +44,7 @@ a:focus, a:hover { color: #043b60; }
 </head>
 <body>
 <h1>Manual Técnico e de Manutenção — SelfMinifier</h1>
-<p>Este manual descreve a implementação atual do SelfMinifier 0.4.0, seus contratos persistidos e os gates de manutenção. Fontes autoritativas: Markdown em <code>Documentacao\Fonte</code> e especificações em <code>Especificacoes</code>; HTML é gerado e não é editável como autoridade.</p>
+<p>Este manual descreve a implementação atual do SelfMinifier 0.4.1, seus contratos persistidos e os gates de manutenção. Fontes autoritativas: Markdown em <code>Documentacao\Fonte</code> e especificações em <code>Especificacoes</code>; HTML é gerado e não é editável como autoridade.</p>
 <h2>1. Arquitetura e bootstrap</h2>
 <p>O fluxo é <code>Executar.cmd → Executar.ps1 → PowerShell UI → Node CLI → núcleo</code>. A UI apresenta escolhas e confirmações; regras de scanner, configuração, minificação, integridade e transação permanecem fora do PowerShell. <code>src/app/bridge.mjs</code> coordena configuração, análise, execução, restauração, histórico, logs e relatórios por mensagens estruturadas. Stack traces não seguem para a UI.</p>
 <p><code>src/runtime/environment.js</code> valida Node, npm, <code>package.json</code>, lockfile, dependências locais e uma transformação funcional pelo esbuild empacotado. A política aceita explicitamente Node 24.x e 25.x, prefere 24 LTS e rejeita majors futuras. O bootstrap normal é offline: não executa <code>npm ci</code> nem <code>npm install</code>. A árvore de runtime do pacote é criada separadamente em staging por <code>npm ci --omit=dev</code>.</p>

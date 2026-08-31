@@ -44,9 +44,9 @@ function runProcess(file, args, { cwd, input = '', env = {}, shell = false } = {
 
 test('nomes de artefato derivam da versão e allowlist contém somente runtime necessário', async () => {
   const metadata = await getPackageMetadata(projectRoot);
-  assert.equal(metadata.version, '0.4.0');
-  assert.equal(metadata.packageName, 'SelfMinifier-0.4.0');
-  assert.match(metadata.zipPath, /SelfMinifier-0\.4\.0\.zip$/);
+  assert.equal(metadata.version, '0.4.1');
+  assert.equal(metadata.packageName, 'SelfMinifier-0.4.1');
+  assert.match(metadata.zipPath, /SelfMinifier-0\.4\.1\.zip$/);
   const files = await collectAllowedFiles(projectRoot);
   for (const required of ['Executar.cmd', 'Executar.ps1', 'LEIA-ME.txt', 'src/app/ui.ps1', 'resources/runtime-policy.json', 'Configuracao/configuracao.ini.example', 'Documentacao/Gerada/Manual-Usuario/index.html']) assert.ok(files.includes(required));
   assert.equal(files.some((file) => /^(?:test|Especificacoes|_ias|node_modules|Dados|_source_versions)\//.test(file)), false);
@@ -64,7 +64,10 @@ test('nomes de artefato derivam da versão e allowlist contém somente runtime n
   const powershellBytes = await readFile(join(projectRoot, 'Executar.ps1'));
   assert.deepEqual([...powershellBytes.subarray(0, 3)], [0xEF, 0xBB, 0xBF]);
   const readme = await readFile(join(projectRoot, 'LEIA-ME.txt'), 'utf8');
-  for (const guidance of ['Executar.cmd', 'configuracao.ini.example', 'Ajustar somente esta execução', 'Dados\\Relatorios']) assert.match(readme, new RegExp(guidance.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(readme, /Início:\s+execute\s+`Executar\.cmd`/);
+  assert.match(readme, /Manual do Usuário:\s*`Documentacao\\Gerada\\Manual-Usuario\\index\.html`/);
+  assert.match(readme, /Manual Técnico e de Manutenção:\s*`Documentacao\\Gerada\\Manual-Tecnico\\index\.html`/);
+  assert.doesNotMatch(readme, /configuracao\.ini\.example|Ajustar somente esta execução|Dados\\Relatorios/);
 });
 
 test('montagem valida documentação e falha com obrigatório ausente ou proibido presente', async () => {
@@ -108,7 +111,7 @@ test('pacote isolado resolve versão e inicia fora do repositório em caminho co
       assert.match(cmdStartup.stdout, /pol.tica de execu..o do Windows PowerShell n.o permite executar scripts locais/i);
     } else {
       assert.equal(cmdStartup.code, 0, `${cmdStartup.stdout}\n${cmdStartup.stderr}`);
-      assert.equal((cmdStartup.stdout.match(/SELFMINIFIER v0\.4\.0\b/g) ?? []).length, 1, `${cmdStartup.stdout}\n${cmdStartup.stderr}`);
+      assert.equal((cmdStartup.stdout.match(/SELFMINIFIER v0\.4\.1\b/g) ?? []).length, 1, `${cmdStartup.stdout}\n${cmdStartup.stderr}`);
     }
     assert.doesNotMatch(cmdStartup.stdout, /tlocal|não é reconhecido como um comando/i);
     let npmInvocations = [];
@@ -123,11 +126,11 @@ test('pacote isolado resolve versão e inicia fora do repositório em caminho co
     }
     const request = await runProcess(process.execPath, [join(metadata.packageRoot, 'src', 'app', 'bridge.mjs'), '--bridge'], { cwd, input: '{"command":"version"}' });
     assert.equal(request.code, 0);
-  assert.equal(JSON.parse(request.stdout).version, '0.4.0');
+  assert.equal(JSON.parse(request.stdout).version, '0.4.1');
     if (/^Restricted$/i.test(hostPolicy)) return;
     const startup = await runProcess(powershell, ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', join(metadata.packageRoot, 'Executar.ps1')], { cwd, input: '0\r\n' });
     assert.equal(startup.code, 0);
-    assert.equal((startup.stdout.match(/SELFMINIFIER v0\.4\.0\b/g) ?? []).length, 1);
+    assert.equal((startup.stdout.match(/SELFMINIFIER v0\.4\.1\b/g) ?? []).length, 1);
     assert.match(startup.stdout, /CONFIGURAÇÃO NECESSÁRIA/);
     assert.match(startup.stdout, /Criar configuração inicial/);
     assert.doesNotMatch(startup.stdout, /1\. Minificar projeto/);
@@ -195,8 +198,8 @@ test('ZIP contém raiz esperada e checksum SHA-256 corresponde', async () => {
 });
 
 test('limpeza fora de dist ou com nome inesperado é rejeitada', async () => {
-  assert.throws(() => assertSafeDistTarget(projectRoot, join(projectRoot, 'src'), 'SelfMinifier-0.4.0'));
-  assert.throws(() => assertSafeDistTarget(projectRoot, join(projectRoot, 'dist', 'outro'), 'SelfMinifier-0.4.0'));
+  assert.throws(() => assertSafeDistTarget(projectRoot, join(projectRoot, 'src'), 'SelfMinifier-0.4.1'));
+  assert.throws(() => assertSafeDistTarget(projectRoot, join(projectRoot, 'dist', 'outro'), 'SelfMinifier-0.4.1'));
 });
 
 test('publicar.cmd prepara dependências somente com confirmação e mantém o launcher visível', async () => {
