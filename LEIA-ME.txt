@@ -1,78 +1,13 @@
 SelfMinifier 0.4.0
 
-O SelfMinifier minifica arquivos JavaScript e CSS no Windows com análise prévia,
-confirmação explícita, mecanismos de backup/restauração e limpeza explícita de
-logs e relatórios.
+Ferramenta Windows para minificação controlada de JavaScript e CSS, com confirmação explícita, análise prévia, backup/restauração, histórico e integridade SHA-256.
 
-Como iniciar
-- Para uso normal, clique duas vezes em Executar.cmd.
-- Executar.ps1 é a alternativa técnica/direta.
-- O SelfMinifier 0.4.0 suporta Node.js 24.x (LTS recomendado) e 25.x. A major
-  mínima é 24; majors futuras não listadas não são aceitas automaticamente.
-- Na primeira execução, o programa valida o Node.js e as dependências. Se o
-  Node.js estiver ausente, a instalação homologada pode ser oferecida com sua
-  autorização explícita.
-- As dependências necessárias já acompanham a distribuição. Com Node.js
-  homologado presente, o início normal é offline e nunca executa npm ci ou npm
-  install. Dependência ausente ou inválida bloqueia e exige reextrair um pacote
-  íntegro.
-- A política de segurança do Windows PowerShell deve permitir scripts locais.
-  O SelfMinifier não usa Bypass nem altera essa política. Sob Restricted, o
-  Executar.cmd encerra com erro e mantém a orientação visível. Mudanças de
-  política, quando cabíveis, devem ser feitas explicitamente pelo usuário ou
-  administrador conforme as regras da máquina/organização.
+Início: execute `Executar.cmd`.
 
-Uso seguro
-- Use Minificar projeto para ajustar opcionalmente o modo desta operação, analisar,
-  conferir o resumo quantitativo e a prévia dos candidatos, iniciar a minificação e
-  receber o resultado. A impressão digital é revalidada antes da escrita. Nenhum
-  arquivo é alterado sem a sua confirmação explícita.
-- A análise sempre mostra risco determinístico da execução: Baixo, Moderado,
-  Alto ou Crítico. Se o risco não puder ser calculado, a execução é bloqueada;
-  não existe autorização para continuar sem essa classificação.
-- Criar backup e sobrescrever os arquivos originais é o modo persistente padrão;
-  ele valida um backup antes de substituir o original.
-- Preservar os arquivos originais e criar arquivos .min mantém a fonte e cria
-  .min.js ou .min.css ao lado dela; pode ser salvo como modo persistente.
-- O menu Configurações usa escolhas numeradas e confirmação explícita para
-  editar Origem do projeto, Tipos de arquivo, Exclusões, Perfil de minificação e
-  Comportamento; Ver configuração atual é somente leitura.
-- Ajustar somente esta execução existe apenas dentro de Minificar projeto, alcança
-  a análise e a execução, nunca altera configuracao.ini e desaparece ao encerrar
-  esse fluxo ou iniciar outro fluxo independente.
-- A prévia mostra total e lista sem controles de paginação para 1 a 10 candidatos.
-  Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo
-  válidos para a página atual.
-- Backups e restauração ficam disponíveis no menu. Relatórios ficam em
-  Dados\Relatorios e logs técnicos em Dados\Logs.
-- Limpar relatórios e Limpar logs técnicos removem exclusivamente artefatos
-  canônicos (tecnico-*.log, execucao-*.txt, execucao-*.csv) após prévia,
-  confirmação explícita e validação de segurança. Arquivos estrangeiros,
-  somente leitura e alterados após a prévia são preservados.
+Documentação:
+- Manual do Usuário: `Documentacao\Gerada\Manual-Usuario\index.html`
+- Manual Técnico e de Manutenção: `Documentacao\Gerada\Manual-Tecnico\index.html`
+- Fontes Markdown: `Documentacao\Fonte\`
+- Especificações: `Especificacoes\`
 
-Configuracao
-- Configuracao\configuracao.ini.example é apenas o modelo distribuído, sem
-  preferências pessoais.
-- Configuracao\configuracao.ini é sua configuração persistente. Ela não vem no
-  pacote, não deve ser enviada ao Git e só é criada mediante confirmação.
-- Configurações persistentes só são salvas por ações persistentes confirmadas.
-  Ajustar somente esta execução vale apenas em memória e nunca altera o INI.
-- Os formatos aceitos são V2 e V3, sempre com VersaoSchema=2 ou 3. V2 usa
-  backups internos em _source_versions; V3 acrescenta PastaBackups para
-  armazenamento externo. O INI define uma única raiz de projeto, tipos
-  CSS/JavaScript, exclusões relativas, perfil, modo de saída e motor
-  homologado. Formatos antigos não são inferidos nem migrados.
-- A interface é o modo recomendado. Edição manual é avançada: valor inválido
-  bloqueia a operação; o SelfMinifier não corrige nem escolhe alternativas.
-- Apagar configuracao.ini remove apenas preferências persistentes, não apaga
-  backups, estado, relatórios ou logs. Na próxima abertura a criação pode ser
-  oferecida explicitamente. Atualizações nunca sobrescrevem seu INI; qualquer
-  migração futura deverá ser explícita.
-
-Ajuda
-O manual offline do usuário está em Documentacao\Gerada\Manual-Usuario\index.html.
-Se houver configuração inválida, origem inacessível ou recovery-required, não
-force a operação: consulte o menu, os relatórios e os logs técnicos.
-Se o Windows PowerShell informar política Restricted ou bloqueio de scripts
-locais, consulte "Problemas comuns" no Manual do Usuário offline. O SelfMinifier
-não altera a política de segurança do computador.
+Para regenerar o HTML offline, execute `npm.cmd run build:docs`. Consulte os manuais para requisitos, configuração, segurança, restauração, relatórios, logs e problemas comuns.

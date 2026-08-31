@@ -5,36 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Manual do Usuário - SelfMinifier</title>
 <style>
-:root { color-scheme: light; font-family: "Segoe UI", Arial, sans-serif; line-height: 1.55; color: #17212b; background: #f6f8fa; }
-body { max-width: 920px; margin: 0 auto; padding: 2rem; background: #fff; }
-h1, h2, h3 { color: #005a9c; line-height: 1.2; }
-h1 { border-bottom: 2px solid #005a9c; padding-bottom: .5rem; }
-code, pre { font-family: Consolas, "Courier New", monospace; }
-code { background: unset; padding: .1rem .25rem; border-radius: 3px; }
-pre { background: #17212b; color: #f8f8f2; padding: 1rem; overflow-x: auto; border-radius: 4px; }
-ul { padding-left: 1.5rem; }
-a { color: #005a9c; }
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", Arial, sans-serif;
+  line-height: 1.6;
+  color: #17212b;
+  background: #e9eef3;
+}
 
+body {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: clamp(1rem, 4vw, 3rem);
+  background: #fff;
+  box-shadow: 0 0 2rem rgba(23, 33, 43, .12);
+}
+
+h1, h2, h3 { color: #064f86; line-height: 1.2; }
+h1 { margin-top: 0; padding-bottom: .65rem; border-bottom: 3px solid #0b6fae; }
+h2 { margin-top: 2.2rem; padding-bottom: .25rem; border-bottom: 1px solid #c9d6e2; }
+h3 { margin-top: 1.5rem; }
+p, ul, ol, pre { margin: 1rem 0; }
+ul, ol { padding-left: 1.6rem; }
+li + li { margin-top: .35rem; }
+code, pre { font-family: Consolas, "Courier New", monospace; }
+code { color: #173b59; background: #eef3f7; padding: .1rem .3rem; border-radius: .25rem; overflow-wrap: anywhere; }
+pre { color: #f7fbff; background: #17212b; padding: 1rem; overflow-x: auto; border: 1px solid #314657; border-radius: .45rem; }
+pre code { color: inherit; background: transparent; padding: 0; }
+a { color: #075f99; }
+a:focus, a:hover { color: #043b60; }
+@media (max-width: 640px) {
+  body { padding: 1rem; box-shadow: none; }
+  h1 { font-size: 1.65rem; }
+  h2 { font-size: 1.3rem; }
+  pre { margin-left: -.25rem; margin-right: -.25rem; border-radius: .25rem; font-size: .85rem; }
+}
 </style>
 </head>
 <body>
-<h1>Manual do Usuário - SelfMinifier</h1>
-<h2>Finalidade e segurança</h2>
-<p>O SelfMinifier minifica arquivos JavaScript e CSS no Windows. Toda alteração exige confirmação explícita, validação prévia e prova de integridade por SHA-256. Em dúvida, erro de configuração, origem inacessível ou estado técnico não comprovado, a operação é bloqueada.</p>
-<p>Não existe risco zero. O risco do perfil é exibido separadamente do risco estimado da execução, que sempre é calculado antes de uma execução válida. Se algum dado necessário não puder ser determinado, a execução é bloqueada sem autorização substituta.</p>
-<h2>Requisitos e primeira execução</h2>
-<ul>
-<li>Windows com Windows PowerShell.</li>
-<li>Node.js compatível: linha 24.x (LTS recomendada) ou 25.x; a major mínima é 24 e majors futuras não são aceitas automaticamente.</li>
-<li>Dependências locais do projeto.</li>
-</ul>
-<p>Para o uso normal, execute <code>Executar.cmd</code> com duplo clique na raiz. Ele apenas inicia <code>Executar.ps1</code> relativo ao pacote, sem alterar a política de execução do PowerShell. <code>Executar.ps1</code> é a alternativa técnica/direta. O bootstrap valida Node, npm, <code>package.json</code>, <code>package-lock.json</code> e dependências. Se Node estiver ausente ou não homologado, pode oferecer a instalação exata autorizada via winget. Recusar a instalação não altera o sistema.</p>
-<p>As dependências de runtime já acompanham a distribuição. Com Node homologado instalado, o início normal funciona offline e não executa <code>npm ci</code> nem <code>npm install</code>. Dependência ausente ou divergente bloqueia a abertura; reextraia uma distribuição íntegra.</p>
-<p>A política do Windows PowerShell precisa permitir scripts locais. O SelfMinifier não usa Bypass, não reduz e não altera permanentemente essa política. Sob <code>Restricted</code>, <code>Executar.cmd</code> mostra a restrição, aponta para este manual e termina com erro. Qualquer mudança apropriada de política deve ser decidida e executada explicitamente pelo usuário ou administrador conforme as regras da máquina ou organização.</p>
-<p>Após o bootstrap, o menu principal é:</p>
-<pre><code>SELFMINIFIER
-────────────────────────────────────
-1. Minificar projeto
+<h1>Manual do Usuário — SelfMinifier</h1>
+<p>Este manual descreve o uso seguro do SelfMinifier 0.4.0. As fontes Markdown em <code>Documentacao\Fonte</code> são autoritativas; o HTML em <code>Documentacao\Gerada</code> é uma cópia offline gerada pelo projeto.</p>
+<h2>1. Requisitos, instalação e primeira execução</h2>
+<p>O produto é suportado e testado no Windows 11 Pro x64, com Windows PowerShell 5.1 e Node.js 24.x ou 25.x. A linha 24 LTS é preferida; majors futuras não são aceitas automaticamente. Não há suporte declarado para Linux, macOS, ARM64, PowerShell 7/Core, nem requisitos mínimos validados de CPU, memória ou espaço em disco.</p>
+<p>Na distribuição, clique duas vezes em <code>Executar.cmd</code>. O launcher chama <code>Executar.ps1</code> a partir da própria instalação e não altera a Execution Policy. As dependências já acompanham o pacote: a inicialização normal é offline e não executa <code>npm ci</code> nem <code>npm install</code>. Node ausente ou não homologado, dependência ausente/divergente e PowerShell sob <code>Restricted</code> bloqueiam o início; a instalação autorizada oferecida pode usar exatamente Node <code>24.19.0</code> via winget.</p>
+<p>Na primeira execução, se <code>Configuracao\configuracao.ini</code> não existir, aparece <strong>CONFIGURAÇÃO NECESSÁRIA</strong>. Escolha <strong>Criar configuração inicial</strong>, informe explicitamente a <code>PastaRaiz</code> e revise o resumo. A configuração só é gravada após confirmação explícita. Backups, restauração e histórico permanecem acessíveis sem configuração operacional válida. Uma configuração existente inválida gera <strong>CONFIGURAÇÃO INVÁLIDA</strong> e nunca é corrigida ou substituída automaticamente.</p>
+<h2>2. Menu principal e segurança</h2>
+<p>Com a configuração válida, o menu oferece:</p>
+<pre><code>1. Minificar projeto
 2. Configurações
 3. Backups e restauração
 4. Relatórios
@@ -43,91 +60,47 @@ a { color: #005a9c; }
 7. Limpar relatórios
 8. Limpar logs técnicos
 0. Sair</code></pre>
-<p>Na primeira execução, ou sempre que <code>Configuracao\configuracao.ini</code> não existir, o menu operacional não é exibido. Em seu lugar aparece o menu restrito <strong>CONFIGURAÇÃO NECESSÁRIA</strong>, com <strong>Criar configuração inicial</strong>, <strong>Backups, restauração e histórico</strong> e <strong>Sair</strong>. A criação é guiada: o SelfMinifier solicita explicitamente a <code>PastaRaiz</code> (nunca infere o diretório atual), valida o caminho pelas regras de segurança existentes, mostra um resumo e só grava após confirmação explícita. Backups, restauração e histórico continuam acessíveis mesmo sem uma configuração operacional válida.</p>
-<p>Se o arquivo existir mas não puder ser validado, aparece <strong>CONFIGURAÇÃO INVÁLIDA</strong> com o motivo em linguagem compreensível. Nenhuma configuração é corrigida ou substituída automaticamente: o arquivo nunca é sobrescrito e o modelo <code>.example</code> nunca é copiado por cima. O menu normal só é liberado depois que a configuração é relida e validada pelo caminho normal.</p>
-<h2>Configuração</h2>
-<p>A configuração persistente é <code>Configuracao\configuracao.ini</code>; o modelo versionado é <code>Configuracao\configuracao.ini.example</code>. Se o arquivo real não existir, a primeira execução oferece <strong>Criar configuração inicial</strong>: o assistente solicita explicitamente a <code>PastaRaiz</code>, valida-a com as mesmas regras de caminho do projeto, mostra um resumo (caminho, tipos, perfil, modo de saída e pastas ignoradas) e exige confirmação explícita cuja resposta padrão é segura (<code>N</code>). A gravação usa o serializer oficial, relê o arquivo e o valida pelo caminho normal antes de liberar o menu. Ele nunca sobrescreve uma configuração existente.</p>
-<p>O modelo <code>.example</code> é distribuído sem preferências pessoais. O INI real é do usuário: não acompanha o pacote, não é versionado e só pode ser criado ou atualizado por uma ação persistente confirmada. A interface é o meio recomendado; edição manual é uma opção avançada. Valores manuais inválidos bloqueiam a operação, sem correção ou fallback silencioso.</p>
-<p>Apagar <code>configuracao.ini</code> remove apenas as preferências persistentes; não remove backups, estado, relatórios ou logs. Em uma abertura posterior, a ausência é detectada e a criação pode ser oferecida explicitamente. Atualizações do aplicativo nunca sobrescrevem um INI existente; qualquer migração futura deve ser explícita.</p>
-<p>Os formatos aceitos são os schemas V2 e V3. O V2 mantém exatamente a semântica existente, sempre com <code>VersaoSchema=2</code> e backups internos em <code>&lt;pasta da aplicação&gt;\_source_versions</code>:</p>
-<pre><code>[Configuracao]
-VersaoSchema=2
-Motor=esbuild
-Perfil=Padrao
-ModoSaida=BackupESobrescreverOriginais
-PastaRaiz=C:\Projetos\MeuSite
-TiposArquivo=CSS+JavaScript
-IgnorarPasta01=node_modules
-IgnorarPasta02=.git
-IgnorarArquivo01=src\config.js</code></pre>
-<p>Ao criar pela primeira vez, o assistente usa os padrões canônicos: <code>Motor=esbuild</code>, <code>Perfil=Padrao</code>, <code>ModoSaida=BackupESobrescreverOriginais</code>, <code>TiposArquivo=CSS+JavaScript</code> e as pastas ignoradas <code>node_modules</code>, <code>.git</code> e <code>vendor</code>.</p>
-<p><code>PastaRaiz</code> define uma única raiz de projeto, percorrida recursivamente. <code>TiposArquivo</code> aceita <code>CSS</code>, <code>JavaScript</code> ou <code>CSS+JavaScript</code>. Exclusões usam <code>IgnorarPastaNN</code> e <code>IgnorarArquivoNN</code> com caminhos relativos, sem curingas ou <code>..</code>.</p>
-<p>O V3 preserva todos esses campos e acrescenta <code>PastaBackups</code>. Ausente ou vazia, ela significa armazenamento interno; preenchida, deve indicar uma pasta externa absoluta, existente, acessível, gravável, fisicamente separada de <code>PastaRaiz</code> e sem symlink, junction, reparse point ou alias. Caminhos relativos, <code>..</code>, curingas e variáveis de ambiente são rejeitados.</p>
-<p>Configurações sem <code>VersaoSchema</code>, com versão diferente de 2 ou 3, com seções antigas <code>[Origem.xxx]</code>, com chaves <code>Incluir*</code>/<code>Excluir*</code> ou com estruturas misturadas são rejeitadas. <code>PastaBackups</code> em V2 também é rejeitada. O SelfMinifier não migra ao iniciar: V2 só passa a V3 quando o usuário altera explicitamente o local de backups em <strong>Configurações → Comportamento</strong>. Voltar ao armazenamento interno mantém V3 e não apaga nem move backups existentes.</p>
-<h3>Modos de saída e perfis</h3>
-<p>O modo persistente padrão é <strong>Criar backup e sobrescrever os arquivos originais</strong>. Ele cria e valida uma cópia compactada com GZIP (<code>.gz</code>) na raiz efetiva antes de substituir o original: <code>_source_versions</code> interno em V2/V3 sem pasta externa, ou <code>PastaBackups</code> em V3 externo. Backups legados não compactados continuam restauráveis. A alternativa é <strong>Preservar os arquivos originais e criar arquivos <code>.min</code></strong>, que conserva a fonte e cria um destino <code>.min.js</code> ou <code>.min.css</code> ao lado dela. O menu Configurações permite editar origem, tipos, exclusões, perfil, modo de saída e local de backups, sempre por escolhas e confirmações numéricas; <strong>Ver configuração atual</strong> distingue V2 interno, V3 interno e V3 externo e mostra o caminho efetivo.</p>
-<p>Os perfis disponíveis são <code>Conservador</code> (risco muito baixo), <code>Padrao</code> (baixo) e <code>Maximo</code> (moderado) e podem ser trocados pelo menu; <code>Personalizado</code> não é selecionável nesta versão. O motor homologado atual é esbuild para JavaScript e CSS, sem bundling.</p>
-<p>O risco estimado da execução é:</p>
+<p>Toda mutação exige análise, confirmação explícita e prova de integridade. O SelfMinifier bloqueia quando a origem, o destino, o caminho físico, a configuração, o risco ou o estado técnico não podem ser comprovados. A Tag identifica um artefato; o SHA-256 dos bytes finais completos comprova sua integridade.</p>
+<h2>3. Configuração e raiz do projeto</h2>
+<p>A configuração persistente fica em <code>Configuracao\configuracao.ini</code>; <code>configuracao.ini.example</code> é somente o modelo distribuído. Ela define <code>PastaRaiz</code>, tipos (<code>CSS</code>, <code>JavaScript</code> ou <code>CSS+JavaScript</code>), exclusões relativas, motor, perfil e modo de saída.</p>
+<p>São aceitos somente os schemas V2 e V3, com <code>VersaoSchema=2</code> ou <code>3</code>. V2 usa backups internos em <code>&lt;raiz da aplicação&gt;\_source_versions</code>. V3 acrescenta <code>PastaBackups</code>: uma pasta externa absoluta, existente, acessível, gravável, fisicamente separada da raiz do projeto e sem symlink, junction ou reparse point. V2 não aceita <code>PastaBackups</code>. Formatos antigos, seções <code>[Origem.xxx]</code>, chaves <code>Incluir*</code>/<code>Excluir*</code>, curingas, <code>..</code> e estruturas misturadas são rejeitados.</p>
+<p>A interface é o caminho recomendado para editar. A alteração do local de backups é a única transição explícita V2→V3; voltar ao armazenamento interno mantém V3 e não move nem apaga backups. Excluir o INI remove apenas preferências, nunca dados, backups, histórico, relatórios ou logs.</p>
+<h2>4. Análise, perfis e modos de saída</h2>
+<p>Em <strong>Minificar projeto</strong>, confira a raiz, tipos, perfil e modo efetivos. A análise é somente leitura e mostra escopo, arquivos candidatos, já minificados, ignorados, tamanhos e motivos de exclusão. Enquanto trabalha, a tela informa <strong>Analisando o projeto... Aguarde.</strong>. A prévia lista até 10 itens por página somente quando há 11 ou mais candidatos.</p>
+<p>Os perfis são <code>Conservador</code>, <code>Padrao</code> e <code>Maximo</code>; <code>Personalizado</code> não está disponível. O motor homologado é esbuild, sem bundling. O risco determinístico é separado da quantidade de arquivos:</p>
 <ul>
-<li>Preservar originais e criar <code>.min</code>: Conservador = Baixo; Padrao = Moderado; Maximo = Alto.</li>
-<li>Criar backup e sobrescrever originais: Conservador = Moderado; Padrao = Alto; Maximo = Crítico.</li>
+<li>preservar originais e criar <code>.min</code>: Conservador <strong>Baixo</strong>, Padrao <strong>Moderado</strong>, Maximo <strong>Alto</strong>;</li>
+<li>criar backup e sobrescrever originais: Conservador <strong>Moderado</strong>, Padrao <strong>Alto</strong>, Maximo <strong>Crítico</strong>.</li>
 </ul>
-<p>No modo <code>.min</code>, destinos preexistentes são listados, preservados e ignorados; não existe autorização para sobrescrevê-los. A quantidade de arquivos é mostrada separadamente como escopo da operação e não muda o nível em 0.1.0. Bloqueios de integridade nunca são convertidos em risco nem relaxados por essa classificação.</p>
-<h2>Analisar e minificar</h2>
-<p>Escolha <strong>Minificar projeto</strong> para ver a raiz do projeto, os tipos efetivos, o perfil e o modo de saída efetivo e, então, <strong>Analisar projeto</strong> ou <strong>Ajustar somente esta execução</strong>. A análise mostra o título <strong>ANÁLISE CONCLUÍDA</strong> com o caminho do projeto, agrupada em <strong>Escopo</strong> (CSS e JavaScript encontrados), <strong>Resultado</strong> (arquivos candidatos, já minificados, ignorados e tamanho dos candidatos em KB) e <strong>Motivos de exclusão</strong>, e permite <strong>Ver arquivos que serão minificados</strong> ou <strong>Iniciar minificação</strong>. Enquanto a análise está em andamento, a interface exibe <strong>Analisando o projeto... Aguarde.</strong>, sem inventar percentuais de progresso. Com 1 a 10 candidatos, a prévia mostra total e lista sem controles de paginação. Com 11 ou mais, usa páginas de 10 e exibe somente os controles anterior/próximo válidos. A análise não modifica arquivos.</p>
-<p><strong>Iniciar minificação</strong> reutiliza a execução V2 validada, que refaz a pré-análise e valida a impressão digital imediatamente antes de escrever. Se o projeto mudou após a análise, a execução é bloqueada e o usuário deve analisar novamente.</p>
-<p>Enquanto a minificação está em andamento, a interface exibe <strong>Minificação em andamento...</strong>. Ao concluir, a interface apresenta <strong>MINIFICAÇÃO CONCLUÍDA</strong> com o status humanizado (<strong>Concluída</strong>), o modo de saída, o grupo <strong>Arquivos</strong> (planejados, processados com sucesso, minificados e conflitos <code>.min</code> preservados) e o grupo <strong>Volume</strong> (tamanho antes, tamanho após, redução e redução percentual). O resultado permanece visível até o usuário pressionar Enter para continuar. A redução pode ser negativa quando a saída final for maior que a origem; isso não é tratado como falha e não existe limiar mínimo de redução.</p>
-<p>Cada nova saída contém uma <code>SelfMinifier-Tag</code> ligada à identidade histórica do artefato. A Tag sozinha não comprova integridade: o SelfMinifier também compara o SHA-256 do arquivo completo. Uma saída renomeada ou copiada sem alterações continua reconhecida como já minificada. Tag conhecida com conteúdo alterado, Tag desconhecida, inválida ou repetida é reportada e não é minificada automaticamente.</p>
-<p>Se não houver arquivos a minificar ou se houver bloqueios, a interface explica o resultado e não oferece minificação; nenhum arquivo é alterado.</p>
-<p>Se um destino <code>.min</code> já existir, ele é listado, preservado e ignorado. A execução V2 nunca o sobrescreve.</p>
-<h2>Ajustes temporários</h2>
-<p><strong>Configurações persistentes</strong> são gravadas em <code>configuracao.ini</code> somente por uma ação persistente com confirmação explícita. Elas contêm a raiz do projeto, tipos CSS/JavaScript, exclusões relativas, perfil, modo de saída e motor homologado.</p>
-<p><strong>Ajustar somente esta execução</strong> está integrado ao fluxo <strong>Minificar projeto</strong> e apresenta exatamente: 1 para manter o modo persistente, 2 para usar backup e sobrescrita, 3 para preservar originais e criar <code>.min</code>, e 0 para cancelar. As escolhas 1/2/3 terminam a seleção sem etapa adicional e retornam ao fluxo de minificação. O modo fica apenas em memória, alcança análise e execução e desaparece quando o fluxo termina ou quando outro fluxo independente é iniciado; 0 preserva o ajuste anterior do fluxo corrente, descarta somente a seleção em andamento e nunca modifica o INI.</p>
-<h2>Backups e restauração manual</h2>
-<p>No modo de sobrescrita, a restauração combina backups internos legados com a proveniência persistida em <code>Dados\Historico</code>. A lista inicial mostra candidatos descobertos como <strong>aguarda validação após seleção</strong>: ela não declara que o backup está íntegro ou restaurável. Ao selecionar um candidato, o SelfMinifier valida manifesto, histórico, cópia, hashes, caminhos, identidade física e estado técnico antes de formar um plano. A raiz registrada na execução é a autoridade, mesmo depois de a configuração atual mudar; nunca há fallback para a raiz atual ou para <code>_source_versions</code>.</p>
-<p>Se o arquivo atual ainda corresponde ao hash minificado registrado, basta a confirmação normal. Se foi alterado ou está ausente, há uma confirmação adicional; recusá-la preserva esse item. O arquivo minificado atual não recebe backup durante a restauração.</p>
-<p>No modo <code>.min</code>, a opção restaura somente a última execução concluída removendo exatamente saídas que foram criadas nela. Saídas <code>.min</code> preexistentes e sobrescritas não são removidas nem restauradas. Uma saída já ausente é apenas reportada; uma saída alterada após a criação exige confirmação adicional antes da exclusão.</p>
-<p>Uma restauração interrompida ou ambígua entra em <code>recovery-required</code>. Nesse estado, não force nova minificação ou restauração: preserve os arquivos, consulte os logs e corrija o estado somente por um procedimento comprovado.</p>
-<h2>Pesquisa e recuperação histórica</h2>
-<p>Escolha <strong>3. Backups e restauração</strong> no menu principal. O submenu mantém separadas duas áreas:</p>
+<p>Existem exatamente dois modos:</p>
 <ul>
-<li><strong>Restauração normal:</strong> lista backups conhecidos, aceita uma pasta de backup informada deliberadamente e restaura a última execução <code>.min</code> usando a transação gerenciada existente. Essa operação pode repor ou remover arquivos nos caminhos atuais conforme o plano exibido e as confirmações.</li>
-<li><strong>Recuperação histórica:</strong> pesquisa o histórico imutável e, quando há backup comprovado, exporta o original para outro arquivo. Ela não restaura no lugar e não modifica a origem ou a saída atual.</li>
+<li><strong>Criar backup e sobrescrever os originais:</strong> valida uma cópia GZIP (<code>.gz</code>) antes de substituir cada fonte;</li>
+<li><strong>Preservar os originais e criar <code>.min</code>:</strong> cria <code>.min.js</code> ou <code>.min.css</code> ao lado da fonte.</li>
 </ul>
-<p>Use <strong>Pesquisar SelfMinifier-Tag</strong> e informe os 24 caracteres da Tag ou o marcador completo, por exemplo <code>/*! SelfMinifier-Tag: 7F31A2C82A884E91B04F22D7 */</code>. Se não houver registro autoritativo, a interface informa que a Tag não foi encontrada sem declarar corrupção. Registros conflitantes bloqueiam a operação e nenhum deles é escolhido automaticamente.</p>
-<p>Use <strong>Consultar histórico por arquivo ou caminho</strong> para procurar ocorrências em <code>sourcePath</code> e <code>outputPath</code>. Os resultados aparecem do mais recente para o mais antigo e são numerados para inspeção. Cada resultado continua sendo um artefato independente; caminhos iguais não formam uma cadeia de revisões nem provam continuidade de identidade.</p>
-<p>A tela de detalhes separa <strong>Dado histórico persistido</strong> de <strong>Estado verificado agora</strong>. Ela mostra Tag, data, execução, versão, caminhos, modo, motor/perfil, hashes técnicos, backup histórico e capacidade de recuperação. Para verificar um arquivo atual, selecione-o explicitamente. A interface apresenta esses estados com rótulos amigáveis em pt-BR, preservando os códigos técnicos internos. Os estados significam:</p>
+<p>No modo <code>.min</code>, destinos preexistentes são mostrados, preservados e ignorados; nunca são sobrescritos. A redução pode ser negativa e isso não é falha.</p>
+<p><strong>Ajustar somente esta execução</strong> oferece 1 para manter o modo persistente, 2 para backup e sobrescrita, 3 para preservar originais e criar <code>.min</code>, e 0 para cancelar. O ajuste alcança análise e execução, fica apenas em memória e nunca altera o INI.</p>
+<h2>5. Execução e resultado</h2>
+<p>Ao iniciar, o SelfMinifier refaz a pré-análise e compara a impressão digital do plano confirmado. Mudança de escopo, hash, destino, conflito ou condição de segurança bloqueia e exige nova análise. A execução é transacional e pode entrar em <code>recovery-required</code> se o estado não puder ser comprovado.</p>
+<p>A tela <strong>MINIFICAÇÃO CONCLUÍDA</strong> separa arquivos planejados, processados, minificados e conflitos preservados, além de tamanho antes, tamanho depois, redução e percentual. Uma Tag conhecida com SHA-256 coincidente identifica uma saída já minificada mesmo após cópia ou renomeação. Tag ausente, inválida, desconhecida, repetida ou com conteúdo alterado não é minificada automaticamente.</p>
+<h2>6. Backups, restauração e recuperação histórica</h2>
+<p><strong>Restauração normal</strong> valida o candidato selecionado, manifesto, histórico, caminhos, identidade física, hashes e estado técnico antes de formar o plano. A raiz registrada na execução é a autoridade; não há fallback para a configuração atual ou outra pasta. Se o arquivo atual foi alterado ou está ausente, uma confirmação adicional é exigida. O arquivo minificado atual não recebe backup durante a restauração.</p>
+<p>No modo <code>.min</code>, a restauração da última execução concluída remove somente saídas criadas por ela. Saídas preexistentes não são removidas. Item ausente é reportado; item alterado exige confirmação adicional. Interrupção ou ambiguidade leva a <code>recovery-required</code>: preserve os arquivos, consulte logs e não force nova mutação.</p>
+<p><strong>Recuperação histórica</strong> é diferente: pesquisa registros imutáveis em <code>Dados\Historico</code> por SelfMinifier-Tag ou caminho e exporta a origem comprovada para outro arquivo. Não restaura no lugar, não escolhe o destino automaticamente e não modifica origem ou saída atual. Informe um caminho absoluto ainda inexistente e confirme.</p>
+<p>A Tag usa exatamente 24 caracteres hexadecimais no marcador <code>/*! SelfMinifier-Tag: 7F31A2C82A884E91B04F22D7 */</code>. <code>MATCH</code> significa Tag e SHA-256 coincidentes; <code>CONTENT_CHANGED</code>, <code>TAG_MISMATCH</code>, <code>TAG_MISSING</code>, <code>TAG_INVALID</code> e <code>FILE_UNAVAILABLE</code> descrevem estados distintos. Backup <code>AVAILABLE</code> pode ser recuperado; raiz indisponível, payload ausente, manifesto inválido, hash divergente e <code>UNSUPPORTED_FORMAT</code> bloqueiam sem substituição.</p>
+<h2>7. Armazenamento, relatórios, logs e limpeza</h2>
+<p><strong>Uso de armazenamento</strong> diagnostica <code>Dados</code>, backups internos ou externos, histórico, restauração, temporários, logs e relatórios. O diagnóstico é somente leitura. Não existe retenção automática.</p>
+<p>Logs técnicos ficam em <code>Dados\Logs</code>; relatórios TXT/CSV ficam em <code>Dados\Relatorios</code>. A visualização é somente leitura. Relatórios mantêm totais, motivos de itens ignorados, resultados e falhas; detalhes técnicos podem permanecer nos logs.</p>
+<p><strong>Limpar relatórios</strong> e <strong>Limpar logs técnicos</strong> fazem uma prévia e exigem confirmação. Só são candidatos <code>tecnico-*.log</code>, <code>execucao-*.txt</code> e <code>execucao-*.csv</code>. Antes de cada exclusão, o caminho físico, o SHA-256, o atributo somente leitura e a identidade do arquivo são revalidados. Arquivo alterado, ausente, inseguro, somente leitura ou estrangeiro é preservado e reportado. Backups, histórico, estado e configuração não são afetados.</p>
+<h2>8. Problemas comuns e exemplos</h2>
 <ul>
-<li><code>MATCH</code>: Tag e SHA-256 completos correspondem ao artefato histórico;</li>
-<li><code>CONTENT_CHANGED</code>: a Tag é conhecida, mas os bytes atuais diferem; isso não determina a causa;</li>
-<li><code>TAG_MISMATCH</code>: o arquivo selecionado contém outra Tag;</li>
-<li><code>TAG_MISSING</code>: a Tag esperada está ausente;</li>
-<li><code>TAG_INVALID</code>: o marcador reservado é inválido ou inconsistente;</li>
-<li><code>FILE_UNAVAILABLE</code>: o histórico existe, mas o arquivo atual não pôde ser inspecionado.</li>
+<li><strong>Configuração ausente:</strong> use <strong>Criar configuração inicial</strong> e informe a raiz; o arquivo existente nunca é sobrescrito.</li>
+<li><strong>Configuração inválida:</strong> corrija somente os campos inválidos de forma deliberada; não espere migração automática.</li>
+<li><strong>Node ou dependências inválidos:</strong> use Node 24.x/25.x e reextraia uma distribuição íntegra; a abertura não baixa dependências.</li>
+<li><strong>PowerShell bloqueado:</strong> não contorne a política; consulte o administrador e a seção de requisitos.</li>
+<li><strong>Origem inacessível, link ou somente leitura:</strong> o item será ignorado ou a execução será bloqueada conforme a prova disponível.</li>
+<li><strong>Destino <code>.min</code> existente:</strong> ele será preservado e ignorado.</li>
+<li><strong><code>recovery-required</code>:</strong> pare, preserve o estado e use logs e procedimento comprovado.</li>
 </ul>
-<p>A disponibilidade do backup histórico também é apresentada sem agrupar situações distintas: <code>AVAILABLE</code> permite seguir para recuperação; <code>NOT_AVAILABLE</code> indica que a execução não criou backup; <code>ROOT_UNAVAILABLE</code> indica local histórico inacessível; <code>PAYLOAD_MISSING</code> indica conteúdo esperado ausente; <code>MANIFEST_MISSING_OR_INVALID</code> indica metadados inválidos; <code>HASH_MISMATCH</code> indica divergência da prova histórica; e <code>UNSUPPORTED_FORMAT</code> indica formato não suportado. Somente <code>AVAILABLE</code> oferece a ação de recuperação.</p>
-<p>Para <strong>Recuperar original histórico para outro arquivo</strong>, primeiro inspecione um artefato recuperável. A interface explica que não se trata de restauração normal, solicita um caminho completo e explícito, mostra esse destino e exige confirmação numérica. O destino não é escolhido automaticamente e deve ainda não existir. Se já existir, nada é sobrescrito: escolha outro arquivo. No sucesso, a interface mostra destino, Tag, execução e SHA-256 exportado e confirma que origem e saída atuais não foram modificadas.</p>
-<p>Históricos do modo <code>.min</code> continuam pesquisáveis e inspecionáveis. Quando <code>backup.available=false</code>, a interface informa que aquela execução não criou backup histórico da origem, não trata a fonte atual como substituta e não oferece recuperação.</p>
-<h2>Relatórios e logs</h2>
-<p>Após análise, execução, restauração ou operação histórica, o SelfMinifier registra rastreabilidade técnica UTF-8 em <code>Dados\Logs</code>; os fluxos operacionais aplicáveis também podem gerar relatórios TXT/CSV em <code>Dados\Relatorios</code>. O menu permite listar e visualizar esses arquivos em modo somente leitura.</p>
-<p>Relatórios mostram totais, itens ignorados com motivo, resultados de restauração e falhas. Logs técnicos podem conter caminhos, diagnósticos e stack traces; eles não são exibidos como mensagem normal do menu.</p>
-<h2>Limpeza de relatórios e logs</h2>
-<p>O menu oferece <strong>Limpar relatórios</strong> e <strong>Limpar logs técnicos</strong> para remover explicitamente artefatos canônicos gerados pelo SelfMinifier. A limpeza segue dois passos:</p>
-<ol>
-<li><strong>Prévia:</strong> o SelfMinifier lista os candidatos elegíveis, mostrando a quantidade e o tamanho total. Somente arquivos com nomes canônicos (<code>tecnico-*.log</code>, <code>execucao-*.txt</code>, <code>execucao-*.csv</code>) são candidatos; arquivos estrangeiros não são tocados.</li>
-<li><strong>Confirmação explícita:</strong> após revisar a prévia, confirme a exclusão. A exclusão é permanente e não pode ser desfeita.</li>
-</ol>
-<p>Antes de cada exclusão, o SelfMinifier revalida o caminho e o conteúdo do arquivo. Se o arquivo foi alterado, se tornou somente leitura ou se foi substituído por um link simbólico, junction ou reparse point após a prévia, ele é preservado e reportado como pulado. O resultado da limpeza lista separadamente os arquivos excluídos, pulados e com falha.</p>
-<p>A limpeza não afeta backups, histórico, configuração ou qualquer outro dado do projeto.</p>
-<h2>Problemas comuns</h2>
-<ul>
-<li><strong>Configuração ausente ou inválida:</strong> se ausente, use <strong>Criar configuração inicial</strong> e informe explicitamente a <code>PastaRaiz</code>; se inválida, corrija <code>Configuracao\configuracao.ini</code> manualmente. Nenhuma configuração é sobrescrita ou substituída automaticamente.</li>
-<li><strong>Origem inacessível, link ou arquivo somente leitura:</strong> o scanner informa o motivo e bloqueia quando o escopo não pode ser comprovado.</li>
-<li><strong>Destino <code>.min</code> preexistente:</strong> revise a lista; o arquivo é preservado e ignorado, sem sobrescrita.</li>
-<li><strong>Node não homologado:</strong> instale uma linha LTS homologada; não use versões Current, EOL ou globais.</li>
-<li><strong>PowerShell bloqueia scripts locais/Restricted:</strong> o SelfMinifier não contorna a política. Consulte o administrador ou a política da organização; qualquer alteração deve ser explícita e apropriada ao ambiente.</li>
-<li><strong>Dependências internas ausentes ou inválidas:</strong> reextraia um pacote íntegro. A inicialização não baixa nem reinstala dependências.</li>
-<li><strong><code>recovery-required</code>:</strong> não tente contornar o bloqueio; consulte o log técnico e preserve o estado para recuperação comprovada.</li>
-</ul>
+<p>Para testar sem alterar a fonte, configure o modo de preservação, analise o projeto, revise a lista e confirme somente depois da impressão digital permanecer válida. Para substituir originais, escolha o modo de backup, confira a raiz efetiva de backups e revise o plano de restauração antes de qualquer confirmação.</p>
 </body>
 </html>

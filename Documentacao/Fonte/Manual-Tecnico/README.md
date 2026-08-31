@@ -1,114 +1,77 @@
-# Manual Técnico - SelfMinifier
+# Manual Técnico e de Manutenção — SelfMinifier
 
-## Arquitetura implementada
+Este manual descreve a implementação atual do SelfMinifier 0.4.0, seus contratos persistidos e os gates de manutenção. Fontes autoritativas: Markdown em `Documentacao\Fonte` e especificações em `Especificacoes`; HTML é gerado e não é editável como autoridade.
 
-O fluxo de dependências é `PowerShell → Node CLI → núcleo`. `Executar.ps1` executa o bootstrap e carrega `src/app/ui.ps1`; a interface chama `src/app/bridge.mjs` por JSON. A camada PowerShell apresenta escopo e confirmações, mas não aplica regras de scanner, minificação, integridade ou transação.
+## 1. Arquitetura e bootstrap
 
-O bridge coordena configuração, análise, execução, restauração, logs e relatórios. Diagnósticos estruturados são retornados sem stack traces para a interface; detalhes técnicos seguem para logs.
+O fluxo é `Executar.cmd → Executar.ps1 → PowerShell UI → Node CLI → núcleo`. A UI apresenta escolhas e confirmações; regras de scanner, configuração, minificação, integridade e transação permanecem fora do PowerShell. `src/app/bridge.mjs` coordena configuração, análise, execução, restauração, histórico, logs e relatórios por mensagens estruturadas. Stack traces não seguem para a UI.
 
-A UI consolida análise e execução em **Minificar projeto**. Cada entrada nesse fluxo cria uma tabela local de ajustes temporários; o override de `outputMode` alcança análise e execução, mas é descartado ao sair. A prévia usa lotes de 10 somente quando há 11 ou mais candidatos e expõe apenas controles de navegação válidos. A execução revalida o fingerprint apresentado antes de qualquer mutação.
+`src/runtime/environment.js` valida Node, npm, `package.json`, lockfile, dependências locais e uma transformação funcional pelo esbuild empacotado. A política aceita explicitamente Node 24.x e 25.x, prefere 24 LTS e rejeita majors futuras. O bootstrap normal é offline: não executa `npm ci` nem `npm install`. A árvore de runtime do pacote é criada separadamente em staging por `npm ci --omit=dev`.
 
-`Start-SelfMinifierUi` distingue configuração ausente (`CONFIGURAÇÃO NECESSÁRIA`) de inválida (`CONFIGURAÇÃO INVÁLIDA`) e só libera o menu operacional depois de reler e validar a configuração pelo caminho normal. Nos menus restritos, **Backups, restauração e histórico** permanecem acessíveis sem depender de configuração operacional. Resultados de análise e minificação permanecem visíveis até o usuário continuar; status técnicos são apresentados com rótulos humanos e o feedback de espera é factual, sem percentuais de progresso inventados.
+`Start-SelfMinifierUi` distingue configuração ausente de inválida e mantém backups, restauração e histórico nos menus restritos. O feedback da UI é factual, sem percentuais inventados; análise e resultado permanecem visíveis até continuação do usuário.
 
-## Configuração e domínio
+## 2. Configuração e schemas
 
-`src/configuration` lê UTF-8 estrito, aceita exatamente `VersaoSchema=2` e `VersaoSchema=3`, detecta chaves duplicadas e rejeita V1, versões desconhecidas e estruturas mistas. V2 conserva a raiz interna `<applicationRoot>\_source_versions`; V3 acrescenta `backupRoot`, correspondente a `PastaBackups`, como caminho externo validado ou `null` para semântica interna. `deriveEffectiveConfiguration()` aceita somente o override temporário de `outputMode`.
+`src/configuration` lê INI UTF-8, rejeita duplicidades, versões desconhecidas e estruturas mistas, e aceita somente `VersaoSchema=2` ou `3`. V2 usa `_source_versions`; V3 acrescenta `backupRoot` (`PastaBackups`) ou `null`. `deriveEffectiveConfiguration()` aceita apenas o override temporário de `outputMode`.
 
-Edições de raiz/tipos/exclusões/perfil e de `outputMode` preservam o schema carregado. O bridge `update-backup-root` é a única transição V2→V3: valida o caminho externo, grava atomicamente, relê e comprova que campos não relacionados permaneceram iguais. Limpar a raiz mantém V3 com `backupRoot=null`; não há migração automática nem downgrade silencioso.
+`update-backup-root` é a única transição V2→V3: valida caminho externo, grava atomicamente, relê e prova que campos não relacionados permaneceram iguais. `resolveEffectiveBackupRoot()` é a autoridade única para raiz interna ou externa. Não há migração, correção ou fallback silencioso.
 
-`resolveEffectiveBackupRoot()` é a autoridade única: V2 e V3 interno resolvem para a pasta controlada pela aplicação; V3 externo resolve para `backupRoot`. O INI real permanece em `Configuracao\configuracao.ini`; o modelo V2 fica em `Configuracao\configuracao.ini.example`. Não há fallback silencioso para dados inválidos.
+A criação inicial exige `projectRoot` explícito, valida diretório físico e grava padrões canônicos por `writeV2Configuration`; depois relê e valida pelo caminho normal. INI existente e modelo `.example` nunca são sobrescritos automaticamente.
 
-Na primeira execução, a ausência do INI é distinta da invalidação. O bridge `create-configuration` exige `projectRoot` (`PastaRaiz`) explícito, valida-o lexicalmente por `validateV2Configuration` e como diretório físico existente por `assertPhysicalPath(..., { requireDirectory: true })`, monta os padrões canônicos (motor homologado `esbuild`, `Padrao`, `BackupESobrescreverOriginais`, `CSS+JavaScript`, pastas ignoradas `node_modules`, `.git` e `vendor`), grava com `writeV2Configuration`, relê e revalida pelo caminho normal. Um INI existente nunca é sobrescrito e o `.example` nunca é copiado por cima; falha pós-escrita fecha fechado.
+## 3. Scanner, motores e minificação
 
-## Scanner e minificação
+`src/scanner` percorre a raiz em modo read-only, aplica seleção fechada CSS/JavaScript, exclusões técnicas, deduplicação de identidade física e rejeição de links/reparse points conforme o contrato. `src/minifiers` define o contrato neutro e o registry atual contém somente o adapter esbuild, sem bundling. Os perfis `Conservador`, `Padrao` e `Maximo` são intenções traduzidas pelo adapter; `Personalizado` falha fechado.
 
-`src/scanner` percorre a raiz V2 em modo read-only, aplica a seleção fechada CSS/JavaScript, deduplica identidades físicas e reporta links, readonly e exclusões técnicas. `src/minifiers` define o contrato neutro e compõe o registry homologado com o adapter esbuild. O adapter suporta JavaScript e CSS; perfis `Conservador`, `Padrao` e `Maximo` são traduzidos internamente. `Personalizado` falha fechado porque seu schema ainda não existe.
+O planner cria uma pré-análise imutável, com fingerprint, escopo, hashes, destinos, conflitos e risco. Antes de escrever, o bridge reanalisa e exige equivalência com o plano confirmado. Destinos `.min` preexistentes usam `skip-existing` e nunca são sobrescritos.
 
-## Integridade, backup e execução
+## 4. Execução transacional, Tag e SHA-256
 
-`src/integrity` fornece SHA-256, JSON UTF-8 atômico, estado técnico, manifesto e cópias de backup validadas. O modo de sobrescrita grava em `<effectiveBackupRoot>/<executionId>/<originId>/<relativePath>.gz` e mantém `manifest.json` (formato 3) na pasta da execução. O payload é compactado com GZIP e a prova de integridade continua sendo o SHA-256 do conteúdo descompactado, que deve coincidir com o SHA-256 da origem. A raiz é provada antes do plano e revalidada por caminho canônico e identidade física antes de cada backup; desaparecimento ou troca bloqueia sem fallback.
+No modo de sobrescrita, a sequência é: hash da fonte, criação e validação do backup, minificação temporária, validação do resultado, alocação do `artifactId`, inserção da Tag, hash dos bytes finais e substituição segura no mesmo caminho. No modo `.min`, o rollback remove somente destinos criados e registrados.
 
-`src/execution/planner.js` cria uma pré-análise imutável. `src/execution/executor.js` usa journal write-ahead em `Dados\Restauracao\ultima-execucao.bkp`: plano, intenção, mutação, hash final, estado e conclusão. Para `.min`, destinos preexistentes são preservados por `skip-existing`; o rollback remove somente caminhos exatos criados e registrados. `recovery-required` é usado quando o rollback não pode ser comprovado sem adivinhação.
+`src/execution/executor.js` mantém journal write-ahead em `Dados\Restauracao\ultima-execucao.bkp`, persistido por temporário durável e rename antes das mutações. Interrupção, divergência ou rollback não comprovável leva a `recovery-required` e bloqueia nova mutação.
 
-`src/integrity/history.js` mantém a autoridade histórica em `Dados\Historico\<executionId>.json`, um registro UTF-8 `formatVersion: 2` por execução concluída e sem índice global. Cada artefato produzido recebe `artifactId` de 96 bits por `crypto.randomBytes(12)`, em hexadecimal maiúsculo. Estado atual, journal e manifesto novos podem referenciar essa identidade.
+`src/integrity/selfminifier-tag.js` aplica `/*! SelfMinifier-Tag: <artifactId> */`, depois de shebang JavaScript ou `@charset` CSS quando presente. `artifactId` tem 96 bits aleatórios, é hexadecimal maiúsculo e aparece no histórico. A Tag é identidade, não prova de integridade: o SHA-256 é calculado sobre os bytes finais completos, incluindo a Tag. Tag conhecida com hash divergente, desconhecida, múltipla ou inválida fica fora da execução automática.
 
-`src/integrity/selfminifier-tag.js` controla a sintaxe fechada `/*! SelfMinifier-Tag: <artifactId> */`, sua inspeção e a inserção depois de shebang JavaScript ou `@charset` CSS. O planner consulta sequencialmente `Dados\Historico` pelo `artifactId`: Tag conhecida e SHA-256 completo coincidente é classificada como já minificada mesmo após rename/cópia; conteúdo divergente, Tag desconhecida, múltipla ou inválida fica fora da execução automática. Sem Tag, a compatibilidade legada por estado/caminho/hash permanece.
+Contratos novos registram `selfMinifierVersion`. Histórico e journal de execução usam `formatVersion: 2`; manifesto GZIP usa `formatVersion: 3`; estado e journal de restauração permanecem em `formatVersion: 1`. O manifesto grava o hash da fonte e o payload GZIP comprova o conteúdo descompactado.
 
-O executor aloca o `artifactId` somente na fase segura de execução, insere a Tag na saída minificada e calcula `outputHash` sobre os bytes finais completos, sem retirar ou normalizar a Tag. `expectedOutputHash`, `minifiedHash`, `outputHash` e `minifiedSha256` recebem o mesmo valor onde aplicáveis. O histórico também conserva os hashes, a raiz efetiva e o caminho relativo do backup, com `compression: gzip`. O manifesto GZIP usa `formatVersion: 3`, e histórico e journal de execução usam `formatVersion: 2`; estado e journal de restauração permanecem em `formatVersion: 1`. Histórico, manifesto e journal de execução registram a versão do produto em `selfMinifierVersion`.
+## 5. Backups, histórico e proveniência
 
-A publicação `0.4.0` permanece imutável. O uso controlado deve começar somente após a qualificação da versão corretiva que adota esse contrato persistido do SelfMinifier.
+`src/integrity/history.js` mantém um JSON UTF-8 imutável por execução concluída em `Dados\Historico\<executionId>.json`, sem índice global. O registro conserva versão, execução, artefato, Tag, caminhos, hashes, modo, motor/perfil e raiz efetiva de backup. `Dados\estado.json` é somente estado técnico atual e não substitui o histórico.
 
-## Pesquisa e recuperação histórica
+`src/restore/index.js` lista candidatos por snapshot histórico efêmero, sem abrir manifesto, payload ou montar plano profundo. A validação profunda ocorre após seleção e reconfirma autoridade, manifesto, mapeamento, hashes, identidade física, destino e estado imediatamente antes da mutação. Backups internos legados podem ser descobertos, mas formatos históricos não comprovados não recebem fallback.
 
-`src/history/index.js` implementa os casos de uso read-only `searchHistoryByTag`, `searchHistoryByPath`, `inspectHistoricalArtifact` e a mutação separada `recoverHistoricalOriginal`. A autoridade continua sendo a varredura sequencial de `Dados\Historico\<executionId>.json`; não existe índice persistente. A busca por caminho ordena explicitamente por data, execução e `artifactId`, sem fabricar revisão ou continuidade de identidade.
+A raiz e o caminho relativo gravados pela execução são a autoridade histórica. A configuração atual e `PastaBackups` atual não substituem essa proveniência. Somente manifesto `formatVersion: 3` com GZIP é suportado para recuperação histórica; ausência, raiz indisponível, manifesto inválido, payload ausente, hash divergente e formato não suportado são estados distintos.
 
-A inspeção separa fatos persistidos de observações atuais. Arquivo atual deliberadamente informado passa por prova física, inspeção da Tag e SHA-256 dos bytes completos. A disponibilidade do backup usa `backupRoot` e `backupRelativePath` históricos, cruza manifesto e histórico, aceita somente manifesto `formatVersion: 3` com GZIP e não consulta `PastaBackups` atual como fallback. Outros formatos são reportados como não suportados.
+## 6. Restauração e recuperação histórica
 
-`recoverHistoricalOriginal` exige `inputHash === backup.originalHash`, payload íntegro, pai físico seguro e destino absoluto inexistente. A criação exclusiva reutiliza `createNewFileExact` e confirma o hash final. Origem e saída históricas são destinos proibidos; nenhum estado, journal ou arquivo atual é modificado. `backup.available=false` bloqueia com `HISTORICAL_BACKUP_UNAVAILABLE`.
+A restauração normal planeja e executa reposição de fontes ou remoção da última saída `.min` criada. Operações `replace-output` são não aplicáveis à restauração `.min`; ausências, alterações, recusas, sucessos e falhas continuam rastreadas. `restauracao-em-andamento.bkp` mantém progresso manual.
 
-O bridge expõe `search-history-by-tag`, `search-history-by-path`, `inspect-historical-artifact` e `recover-historical-original`. Cada chamada registra no logger técnico existente comando, duração, status, código de bloqueio e metadados compactos; conteúdo de arquivos não é registrado. Falha de logging não altera o contrato funcional nem mascara o diagnóstico original.
+`src/history/index.js` implementa `searchHistoryByTag`, `searchHistoryByPath`, `inspectHistoricalArtifact` e `recoverHistoricalOriginal`. A pesquisa varre `Dados\Historico` sequencialmente e ordena caminhos do mais recente para o mais antigo sem fabricar cadeia de revisões. A recuperação exige hash de entrada compatível, backup GZIP íntegro, pai físico seguro e destino absoluto inexistente; usa `createNewFileExact`, não sobrescreve e não altera origem, saída, estado ou journal.
 
-`src/app/ui.ps1` apresenta essas operações no submenu do item principal **Backups e restauração**, sem renumerar o menu. As opções de restauração normal continuam chamando `plan-restore`/`execute-restore`; pesquisa por Tag e por caminho conduz a uma inspeção que separa o registro persistido das observações atuais. A recuperação só aparece quando `recoveryCapability=true`, exige destino explícito inexistente e confirmação numérica, e chama `recover-historical-original` como exportação separada. Cancelar ou voltar não dispara operação.
+## 7. Segurança do filesystem e observabilidade
 
-## Restauração manual
+Caminhos de projeto, backup, destino e limpeza são provados lexical e fisicamente. Symlink, junction, reparse point, alias, troca de identidade, readonly inesperado e raiz inacessível bloqueiam ou preservam o item. Cada mutação confirmada tem rastreamento recuperável.
 
-`src/restore/index.js` combina diretórios internos legados e registros históricos. `listKnownBackups` cria um contexto histórico efêmero, validado e imutável por operação, deriva a autoridade do snapshot e devolve candidatos `unverified` sem montar planos ou abrir manifesto, estado e payload. Uma raiz externa indisponível continua sendo bloqueada somente no plano profundo, sem substituição. `createBackupRestorePlan` cruza histórico, manifesto, `artifactId`, hash, caminho original, mapeamento de origem e estado; a execução revalida raiz física e payload antes da mutação.
+`src/observability/index.mjs` grava logs em `Dados\Logs` e relatórios TXT/CSV em `Dados\Relatorios`. As operações históricas reutilizam `writeTechnicalLog`; falha de logging não mascara o diagnóstico funcional e conteúdo de arquivos não é registrado.
 
-A restauração `.min` lê somente a última execução concluída e remove apenas operações `create-output`. Operações `replace-output` são registradas como não aplicáveis. Saídas ausentes, alteradas, recusadas, restauradas ou excluídas permanecem rastreadas. O progresso manual é persistido em `Dados\Restauracao\restauracao-em-andamento.bkp`; um estado incompleto ou `recovery-required` bloqueia nova mutação.
+`previewArtifactCleanup` produz snapshot somente em memória com nome canônico, tamanho e SHA-256. `executeArtifactCleanup` revalida identidade física, arquivo regular, hash e readonly antes de `removeExactFile`. Só entram `tecnico-*.log`, `execucao-*.txt` e `execucao-*.csv`; o resultado é `completed` ou `partial`. Não há retenção automática de histórico, backups, logs ou relatórios.
 
-## Logs, relatórios e diretórios de dados
+Diretórios relevantes: `Dados\Historico` (metadados), `Dados\Restauracao` (journals e temporários de transação), `Dados\Temporarios` (exclusão técnica do scanner), `_source_versions` (backup interno) e `PastaBackups` (raiz externa V3, sem índice global).
 
-`src/observability/index.mjs` produz logs técnicos em `Dados\Logs` e relatórios TXT/CSV em `Dados\Relatorios`. As quatro operações históricas reutilizam `writeTechnicalLog` para sucesso e bloqueio, sem criar outro subsistema. Relatórios não expõem stack traces e preservam motivos de itens ignorados ou pulados. A visualização pelo menu é read-only.
+## 8. Documentação, testes e qualidade
 
-`src/observability/cleanup.js` implementa a limpeza explícita de logs e relatórios. `previewArtifactCleanup` enumera artefatos canônicos (`tecnico-*.log`, `execucao-*.txt`, `execucao-*.csv`), calcula SHA-256 e tamanho por arquivo e retorna um snapshot imutável. `executeArtifactCleanup` recebe o snapshot confirmado pelo usuário e, para cada candidato: revalida o caminho físico (symlinks, junctions, reparse points), inspeciona o arquivo regular, compara o SHA-256 atual com o snapshot, verifica readonly e só então remove com `removeExactFile`. Candidatos alterados, ausentes, inseguros, readonly ou com falha de exclusão são pulados ou reportados como falha; o status final é `completed` ou `partial`. O bridge expõe `cleanup-artifacts` com `confirmed: false` para prévia e `confirmed: true` com o array de candidatos para execução. A limpeza não afeta backups, histórico, estado nem configuração.
+As fontes ficam em `Documentacao\Fonte\Manual-Usuario\README.md` e `Documentacao\Fonte\Manual-Tecnico\README.md`. `npm.cmd run build:docs` lê essas fontes, incorpora `Documentacao\Assets\manual.css` e gera HTML offline com `lang="pt-BR"`, charset UTF-8 e viewport. O gerador é deliberadamente leve; não há CDN, fonte externa, analytics ou dependência remota.
 
-Diretórios técnicos relevantes:
+Use testes focados com `npm.cmd test -- test/docs.test.js` e os testes diretamente afetados. `scripts/quality/check-encoding.mjs` verifica UTF-8, mojibake e CRLF dos launchers. O build não deve editar Markdown nem ser substituído por patch manual no HTML.
 
-- `Dados\estado.json`: registros de fontes e saídas comprovadas.
-- `Dados\Historico`: metadados históricos imutáveis por execução concluída; não contém payload de backup.
-- `Dados\Temporarios`: área técnica excluída pelo scanner.
-- `Dados\Restauracao`: journal de execução, journal de restauração e cópias transitórias.
-- `_source_versions`: raiz interna compatível para backups V2 e V3 sem pasta externa.
-- `PastaBackups`: raiz física externa opcional em V3; não contém índice global e não recebe migração automática.
+## 9. Qualificação, empacotamento e publicação estável
 
-Não há política automática de retenção ou remoção histórica. A limpeza explícita de logs e relatórios está disponível desde 0.4.0.
+`publicar.cmd` delega a `scripts\release\publicar.ps1`. O pipeline valida ambiente, versão única de `package.json`, lockfile, dependências, UTF-8, testes, documentação e allowlist de conteúdo, então monta `dist\SelfMinifier-<version>`, ZIP e SHA-256. O pacote contém runtime produzido em staging limpo e uma única raiz versionada; não inclui dados locais, testes, especificações, `_ias` ou dependências de desenvolvimento.
 
-## Runtime e bootstrap
+Qualificação, commit, push, pacote, tag e release são gates separados. Esta documentação não altera versão, tag, release ou artefato. A publicação estável deve reutilizar exatamente o artefato localmente validado e manter a identidade `package.json.version = pasta = ZIP = checksum = tag`.
 
-`src/runtime/environment.js` valida Node, npm, package/lock, dependências locais e uma transformação funcional curta pelo esbuild empacotado. A política em `resources/runtime-policy.json` exige major mínima 24 e aceita explicitamente Node 24.x e 25.x; 24 é a linha LTS preferida, 25 é suportada sem preferência, e majors futuras não listadas falham fechado. A instalação interativa aprovada continua sendo `24.19.0` por winget. O bootstrap nunca executa `npm ci`/`npm install`: dependência ausente, divergente ou runtime de plataforma inoperante bloqueia. A publicação produz `node_modules` de runtime por `npm ci --omit=dev` em staging descartável e a inicialização normal usa essa árvore offline.
+## 10. Limites atuais e roadmap diferido
 
-A confirmação da UI carrega a impressão digital SHA-256 do plano mostrado. O bridge refaz a pré-análise imediatamente antes de executar e bloqueia se escopo, hashes, destinos, conflitos ou demais condições confirmáveis divergirem.
+O suporte atual é Windows x64, Windows PowerShell 5.1, Node 24/25 e esbuild para JavaScript/CSS. Não há fallback implícito de motor, suporte multiplataforma, perfil Personalizado, retenção automática, arquivamento histórico ou limiar mínimo de redução.
 
-O risco de execução é calculado deterministicamente por modo e perfil antes da confirmação. Destinos `.min` preexistentes são preservados e ignorados, portanto não elevam o risco V2; escopo de arquivos é metadado separado. Não existe autorização substituta para risco indeterminado.
-
-Use `npm.cmd` no PowerShell para evitar bloqueio de `npm.ps1` pela política de execução.
-
-## Plataforma suportada
-
-A plataforma suportada e testada nesta RC é Windows. A validação usou Windows 11 Pro x64 (arquitetura AMD64/x64), Node.js v24.17.0 e Windows PowerShell 5.1. O produto e os testes exercitam Windows PowerShell 5.1; PowerShell 7/Core não é assumido equivalente automaticamente e não foi validado como substituto. A prova de reparse point no Windows usa `fsutil.exe`. A instalação autorizada de Node pode usar `winget`.
-
-A política de Node exige major mínima 24 e aceita as linhas 24.x e 25.x, com 24 LTS preferida. Não há, nesta RC, validação ou suporte declarado para: versão mínima do Windows, RAM mínima, CPU mínima, espaço em disco mínimo, ARM64, Linux ou macOS. Esses pontos não foram validados e não devem ser assumidos como suportados.
-
-## UTF-8, qualidade e desenvolvimento
-
-Texto humano e artefatos documentais usam UTF-8. `scripts/quality/check-encoding.mjs` valida arquivos textuais, exige fisicamente finais de linha CRLF nos launchers `.cmd` do working tree (rejeitando LF isolado, CR isolado e misturas) e detecta sequências conhecidas de mojibake; o A-circunflexo isolado é aceito como legítimo, e só é caracterizado como mojibake CP1252 quando seguido de caractere não ASCII. O projeto usa `node:test` com fixtures temporárias para configuração, scanner, execução, integridade, observabilidade e restauração.
-
-O desenvolvimento ocorre diretamente em `main`, com commits validados e allowlist explícita de arquivos ao preparar um checkpoint. Não use `git add .`, force-push, fallback silencioso ou exclusão por curingas.
-
-## Documentação offline
-
-As fontes autoritativas ficam em `Documentacao\Fonte`. Execute `npm.cmd run build:docs` para gerar HTML local em `Documentacao\Gerada`. O build não acessa a rede, não modifica o Markdown e usa `Documentacao\Assets\manual.css`; o HTML gerado não substitui as fontes Markdown nem as especificações.
-
-## Empacotamento local
-
-`publicar.cmd` delega para `scripts\release\publicar.ps1`. O pipeline valida ambiente, versão `package.json`, package/lock, dependências, UTF-8, testes e documentação antes de montar uma allowlist em `dist\SelfMinifier-<version>`. Em seguida valida o conteúdo, cria um ZIP com uma única raiz versionada e grava o SHA-256 correspondente.
-
-O pacote inclui launcher, manifestos npm, `src`, `resources`, modelo de configuração, HTML offline e `node_modules` de runtime gerado de forma limpa. Exclui testes, especificações, `_ias`, scripts de desenvolvimento, dados locais, configuração pessoal, backups, `node_modules` do checkout e `dist` anterior. O `Executar.cmd` empacotado é validado em CRLF e respeita a Execution Policy, bloqueando sob `Restricted` sem bypass. O empacotamento não publica GitHub Release.
-
-## Dívida futura (não implementada)
-
-Os itens a seguir são registrados como planejamento futuro e não estão implementados nesta RC.
-
-- Linux e macOS: prioridade futura Linux, depois macOS se viável. A arquitetura desejada é um núcleo SelfMinifier compartilhado com adaptador por plataforma. Não há implementação nem suporte parcial declarado nesta RC.
-- Retenção automática: estudo futuro sobre metadados históricos, backups e gestão de espaço. A prioridade de preservação é metadados de proveniência sobre payloads grandes de backup. Não há limpeza automática nesta versão. A limpeza explícita e manual de logs e relatórios está implementada desde 0.4.0.
-- Arquivamento/remoção histórica: se dados históricos ou payload de backup forem arquivados, compactados ou removidos, a pesquisa por SelfMinifier-Tag não deve transformar silenciosamente um artefato conhecido em UNKNOWN. Uma solução futura deve reportar, quando aplicável: artefato existiu, artifactId/SelfMinifier-Tag, execução original, ação de retenção, timestamp da ação, status atual, local do arquivo/ZIP, disponibilidade de recuperação e perda explícita do payload quando removido. Arquiteturas futuras possíveis: (A) preservar o JSON histórico e remover somente o payload grande; (B) arquivar registros históricos completos e deixar catálogo/tombstone; (C) deixar tombstone reduzido em `Dados\Historico`; (D) catálogo de retenção explícito. Nada de índice persistente, tombstone, formato de arquivo ou fluxo de limpeza é implementado agora.
+Permanecem diferidos: compatibilidade de plataforma (DT-MP), compatibilidade de motores (DT-ME), lifecycle/arquivamento histórico (D3/D4), progresso real baseado em eventos (F5) e hardening para 1.0 (H1). Nenhum item autoriza schema, fallback, migração, índice, tombstone, motor ou plataforma novos sem requisitos e qualificação explícitos.
